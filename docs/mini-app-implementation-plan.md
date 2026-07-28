@@ -23,7 +23,7 @@ The result is a pnpm-workspace monorepo with a NestJS backend, a React + Vite fr
 | Frontend | React + Vite, TanStack Query, shadcn/ui, Framer Motion, Telegram Mini App APIs. Deploy as a separate HTTPS static web service; the initial default is a Railway web service. |
 | API contracts | Nest Swagger/OpenAPI DTOs are the single REST-contract source. Orval generates TypeScript types and TanStack Query hooks into `packages/api-client`. Do not maintain duplicate HTTP DTOs by hand. |
 | Database | Start from an empty PostgreSQL database. There is no SQLite data migration, but there must be a versioned PostgreSQL baseline migration. |
-| Environments | Test and production are fully isolated: Railway environment, PostgreSQL database, bot token, webhook secret, owner/group/topic IDs, Mini App URL, and web deployment. |
+| Environments | There are only two environments: local and production. Local uses a developer machine, local PostgreSQL, and the test Telegram group; production uses Railway and the original group. There is no Railway staging/test environment. Local and production configuration, data, tokens, webhook URLs, and group/topic IDs must never be shared. |
 
 ## 3. Product behavior to preserve
 
@@ -80,7 +80,7 @@ flowchart LR
 3. A Nest guard validates the Telegram HMAC, validates `auth_date` freshness, and requires `user.id === TELEGRAM_OWNER_USER_ID`.
 4. The guard rejects every request that fails validation. Never trust `initDataUnsafe` for identity or authorization, and never log raw `initData`.
 
-Use a configurable maximum init-data age with a safe default of 24 hours. If it expires, the UI tells the owner to reopen the Mini App. For local development, use a script that generates correctly signed fixture `initData` with a test bot token; do not add a production authentication bypass.
+Use a configurable maximum init-data age with a safe default of 24 hours. If it expires, the UI tells the owner to reopen the Mini App. For local development, use a script that generates correctly signed fixture `initData` with a local-development bot token or test fixture; do not add a production authentication bypass.
 
 Only `GET /health`, the Telegram webhook, and the Cron entrypoint bypass the Mini App guard. CORS must allow only the exact `WEB_ORIGIN` for the current environment and the required headers; do not use `*`.
 
@@ -175,16 +175,18 @@ The public-card preview must use the same backend/domain formatter as actual Tel
 
 The visual direction is compact, dark, Telegram-native, and mobile-first: `Matches`, `Players`, and `History` are the primary bottom tabs; blue is the primary action color; green communicates fulfilled roster/state rather than being the default action; red is reserved for cancellation/destructive actions. Use shadcn primitives for accessible controls and Framer Motion only for restrained screen/card transitions. Use initials or available Telegram profile data in the real UI, not synthetic profile photos.
 
-The visual concept has been explored but its image assets are not committed to the repository. Before pixel-level frontend implementation, obtain the owner's approval for the design direction or a supplied design reference. The functional screen contract above is already approved.
+The owner has approved this visual direction. The exploratory image assets are not committed to the repository; implement the documented screen contract and visual rules rather than relying on those images.
 
 ## 9. Railway topology and configuration
 
-Create separate services in each Railway environment:
+Create these services in the production Railway environment:
 
 1. **API service** — persistent NestJS process, listening on `0.0.0.0:$PORT`, with health checks and graceful shutdown.
 2. **PostgreSQL service** — Railway-managed database connected through `DATABASE_URL`.
 3. **Cron service** — same codebase, running a short `jobs:run` command every five minutes or another validated schedule. It acquires a database lock, drains retryable outbox work, runs due weather work, then exits.
 4. **Web service** — Vite static production build exposed at an HTTPS URL. Keep `VITE_API_BASE_URL` public and build-time only; never put bot credentials in Vite variables.
+
+Local development runs the API, Vite app, job command, and PostgreSQL on the developer machine. Automated Telegram integration tests use mocks. If a manual live webhook check is needed, expose the local API with a temporary HTTPS tunnel and use only the local test group plus a non-production bot configuration. Never point the production bot's webhook at a local tunnel, and never connect local code to the production database.
 
 Required API-side configuration is expected to include:
 
@@ -204,7 +206,7 @@ LOG_LEVEL
 
 Validate all values at startup, log variable names rather than secret values, and remove `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `TELEGRAM_STATUS_USER_ID`, and `CONFIRM_MATCH_CREATION` from the new configuration.
 
-For each test and production environment, provision independent values for every item above. Set the webhook only after the target API has a stable HTTPS domain; set the Mini App URL and menu/Main Mini App in BotFather for that environment. The owner opens the app from the bot's Mini App entry point, not through a private command flow.
+Provision independent local and production values for the applicable settings above. Register the production webhook only after the production API has a stable HTTPS domain; configure the production Mini App URL and menu/Main Mini App in BotFather. The owner opens the app from the bot's Mini App entry point, not through a private command flow.
 
 ## 10. Orchestration protocol
 
@@ -228,8 +230,9 @@ Do not attempt a partial production cutover. Complete each phase with its checks
 ### Phase 0 — Confirm scope and prepare the branch
 
 - Confirm the explicit removal of the private `Доп. игроки` flow and any remaining private bot messages.
-- Confirm the visual direction before fine-grained frontend styling.
-- Record the test group, production group, owner IDs, topic IDs, and deployment domains outside the repository.
+- Use the approved visual direction in section 8.
+- Record the local test-group and production-group identifiers, owner IDs, topic IDs, and production deployment domain outside the repository when those values are needed. Do not store secrets in Git.
+- Decide the local live-Telegram strategy only when required: a non-production bot through a temporary HTTPS tunnel, or automated mocks only. The production webhook must remain production-only.
 - Preserve the existing dirty worktree; do not reset or overwrite unrelated user changes.
 
 **Exit criterion:** the decisions in sections 2 and 8 are accepted and no legacy data needs exporting.
@@ -271,11 +274,10 @@ Do not attempt a partial production cutover. Complete each phase with its checks
 
 **Exit criterion:** the frontend builds using only generated API types/hooks; no handwritten duplicate REST types exist.
 
-### Phase 5 — Deploy test, accept, and cut over
+### Phase 5 — Local acceptance and production cutover
 
-- Deploy API, Postgres, Cron, and Web services in the test Railway environment.
-- Apply the baseline migration, configure the test webhook and Mini App URL, and run the manual test matrix below in the test group.
-- Repeat provisioning for production with separate secrets and database. Register the production webhook only when production is accepted.
+- Run the full automated acceptance suite locally against local PostgreSQL. Run the manual Telegram matrix from the local environment against the test group only when live local integration is configured.
+- Provision the API, Postgres, Cron, and Web services in production Railway; apply the baseline migration and configure the production Mini App URL and webhook only after production acceptance is authorized.
 - Remove obsolete SQLite source, migrations, dependencies, scripts, parser/OpenRouter code, private-command handlers, and legacy tests in one final coherent change. Rewrite the root README and legacy documentation to describe the Mini App architecture.
 
 **Exit criterion:** production is running the new stack, the current SQLite database is no longer referenced, and all maintained docs describe the new system.
@@ -296,7 +298,7 @@ Automated checks must cover at least:
 
 Run the root equivalent of `pnpm lint`, `pnpm test`, `pnpm typecheck`, `pnpm build`, and `pnpm api:contracts:check` in CI.
 
-Manual test in the Telegram test group:
+Manual test from the local environment in the Telegram test group:
 
 1. Open the Mini App as the owner, create a structured draft, inspect its public-card preview, and publish exactly one card in `General`.
 2. Verify that a group member can choose each vote option and the card refreshes without a private chat interaction.
@@ -305,7 +307,7 @@ Manual test in the Telegram test group:
 5. Confirm, complete, and cancel suitable matches; verify public-card deletion and retained history.
 6. Trigger the weather job with a controlled clock/match and verify idempotency across repeated runs.
 7. Attempt access from a non-owner account, an expired Mini App session, and a browser outside Telegram; all must fail closed.
-8. Verify test and production use different bot/webhook/database identities before production cutover.
+8. Verify that no local tunnel, local database, or local bot configuration can replace the production webhook or production database before cutover.
 
 ## 13. Explicit non-goals for this migration
 

@@ -36,7 +36,7 @@ The implementation plan is the source of truth for product and architecture deci
 - Preserve the user's existing worktree changes. Never use destructive Git commands unless explicitly authorized.
 - Use `pnpm`, not npm or yarn.
 - Keep TypeScript strict and all code comments/documentation in English.
-- Treat test and production Telegram/Railway resources as separate. Do not deploy, mutate webhooks, rotate secrets, or change production without explicit owner authorization.
+- Treat local/test-group resources and production resources as separate. There is no Railway staging environment. Do not point a production webhook at a local tunnel, connect local code to the production database, deploy, mutate webhooks, rotate secrets, or change production without explicit owner authorization.
 - Do not introduce back SQLite, long polling, private-command management, OpenRouter, or handwritten duplicate REST contracts.
 - Require evidence for every completion claim: command output, reviewed diff, deployed URL, Telegram test result, or equivalent.
 
@@ -49,7 +49,7 @@ Follow the phases in `docs/mini-app-implementation-plan.md` in order:
 3. PostgreSQL/domain persistence.
 4. NestJS API, webhook, and jobs.
 5. OpenAPI/Orval and the Mini App.
-6. Test deployment, acceptance, and production cutover.
+6. Local acceptance and production cutover.
 
 At each gate, update `work-log.md` before asking the owner for an external decision or starting the next phase.
 
