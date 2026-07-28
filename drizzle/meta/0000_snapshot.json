@@ -1,0 +1,681 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "bc246a34-3f50-4f14-8e13-7dbf33708b38",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "tables": {
+    "chat_settings": {
+      "name": "chat_settings",
+      "columns": {
+        "chat_id": {
+          "name": "chat_id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "general_topic_id": {
+          "name": "general_topic_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "chat_topic_id": {
+          "name": "chat_topic_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "timezone": {
+          "name": "timezone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "default_threshold": {
+          "name": "default_threshold",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 10
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "chat_settings_chat_topic_idx": {
+          "name": "chat_settings_chat_topic_idx",
+          "columns": [
+            "chat_topic_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "chat_settings_default_threshold_positive": {
+          "name": "chat_settings_default_threshold_positive",
+          "value": "\"chat_settings\".\"default_threshold\" >= 1"
+        }
+      }
+    },
+    "external_participants": {
+      "name": "external_participants",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "match_id": {
+          "name": "match_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "added_by_telegram_user_id": {
+          "name": "added_by_telegram_user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_update_id": {
+          "name": "source_update_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "external_participants_source_update_unique": {
+          "name": "external_participants_source_update_unique",
+          "columns": [
+            "source_update_id"
+          ],
+          "isUnique": true
+        },
+        "external_participants_match_idx": {
+          "name": "external_participants_match_idx",
+          "columns": [
+            "match_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "external_participants_match_id_matches_id_fk": {
+          "name": "external_participants_match_id_matches_id_fk",
+          "tableFrom": "external_participants",
+          "tableTo": "matches",
+          "columnsFrom": [
+            "match_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "external_participants_source_update_non_negative": {
+          "name": "external_participants_source_update_non_negative",
+          "value": "\"external_participants\".\"source_update_id\" >= 0"
+        },
+        "external_participants_quantity_non_zero": {
+          "name": "external_participants_quantity_non_zero",
+          "value": "\"external_participants\".\"quantity\" <> 0"
+        }
+      }
+    },
+    "match_messages": {
+      "name": "match_messages",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "match_id": {
+          "name": "match_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "message_id": {
+          "name": "message_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "chat_id": {
+          "name": "chat_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "topic_id": {
+          "name": "topic_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "match_messages_match_kind_unique": {
+          "name": "match_messages_match_kind_unique",
+          "columns": [
+            "match_id",
+            "kind"
+          ],
+          "isUnique": true
+        },
+        "match_messages_chat_topic_idx": {
+          "name": "match_messages_chat_topic_idx",
+          "columns": [
+            "chat_id",
+            "topic_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "match_messages_match_id_matches_id_fk": {
+          "name": "match_messages_match_id_matches_id_fk",
+          "tableFrom": "match_messages",
+          "tableTo": "matches",
+          "columnsFrom": [
+            "match_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "match_messages_kind_valid": {
+          "name": "match_messages_kind_valid",
+          "value": "\"match_messages\".\"kind\" in ('public_card', 'admin_panel')"
+        },
+        "match_messages_message_id_positive": {
+          "name": "match_messages_message_id_positive",
+          "value": "\"match_messages\".\"message_id\" > 0"
+        }
+      }
+    },
+    "matches": {
+      "name": "matches",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "chat_id": {
+          "name": "chat_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "scheduled_at": {
+          "name": "scheduled_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "location": {
+          "name": "location",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "field_price_rubles": {
+          "name": "field_price_rubles",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "required_players": {
+          "name": "required_players",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'draft'"
+        },
+        "creator_telegram_user_id": {
+          "name": "creator_telegram_user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "matches_id_chat_unique": {
+          "name": "matches_id_chat_unique",
+          "columns": [
+            "id",
+            "chat_id"
+          ],
+          "isUnique": true
+        },
+        "matches_chat_status_idx": {
+          "name": "matches_chat_status_idx",
+          "columns": [
+            "chat_id",
+            "status"
+          ],
+          "isUnique": false
+        },
+        "matches_scheduled_at_idx": {
+          "name": "matches_scheduled_at_idx",
+          "columns": [
+            "scheduled_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "matches_chat_id_chat_settings_chat_id_fk": {
+          "name": "matches_chat_id_chat_settings_chat_id_fk",
+          "tableFrom": "matches",
+          "tableTo": "chat_settings",
+          "columnsFrom": [
+            "chat_id"
+          ],
+          "columnsTo": [
+            "chat_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "matches_required_players_positive": {
+          "name": "matches_required_players_positive",
+          "value": "\"matches\".\"required_players\" >= 1"
+        },
+        "matches_location_not_empty": {
+          "name": "matches_location_not_empty",
+          "value": "\"matches\".\"location\" is null or length(trim(\"matches\".\"location\")) > 0"
+        },
+        "matches_field_price_non_negative": {
+          "name": "matches_field_price_non_negative",
+          "value": "\"matches\".\"field_price_rubles\" is null or \"matches\".\"field_price_rubles\" >= 0"
+        },
+        "matches_status_valid": {
+          "name": "matches_status_valid",
+          "value": "\"matches\".\"status\" in ('draft', 'active', 'confirmed', 'completed', 'cancelled')"
+        }
+      }
+    },
+    "notifications": {
+      "name": "notifications",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "match_id": {
+          "name": "match_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "notification_type": {
+          "name": "notification_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "transition_key": {
+          "name": "transition_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sent_at": {
+          "name": "sent_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "notifications_idempotency_key": {
+          "name": "notifications_idempotency_key",
+          "columns": [
+            "match_id",
+            "notification_type",
+            "transition_key"
+          ],
+          "isUnique": true
+        },
+        "notifications_match_idx": {
+          "name": "notifications_match_idx",
+          "columns": [
+            "match_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "notifications_match_id_matches_id_fk": {
+          "name": "notifications_match_id_matches_id_fk",
+          "tableFrom": "notifications",
+          "tableTo": "matches",
+          "columnsFrom": [
+            "match_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "notifications_type_valid": {
+          "name": "notifications_type_valid",
+          "value": "\"notifications\".\"notification_type\" in ('threshold_reached', 'withdrawal', 'match_confirmed', 'match_cancelled')"
+        }
+      }
+    },
+    "processed_updates": {
+      "name": "processed_updates",
+      "columns": {
+        "update_id": {
+          "name": "update_id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "match_id": {
+          "name": "match_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "telegram_user_id": {
+          "name": "telegram_user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "processed_updates_match_idx": {
+          "name": "processed_updates_match_idx",
+          "columns": [
+            "match_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "processed_updates_match_id_matches_id_fk": {
+          "name": "processed_updates_match_id_matches_id_fk",
+          "tableFrom": "processed_updates",
+          "tableTo": "matches",
+          "columnsFrom": [
+            "match_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "processed_updates_update_id_non_negative": {
+          "name": "processed_updates_update_id_non_negative",
+          "value": "\"processed_updates\".\"update_id\" >= 0"
+        }
+      }
+    },
+    "votes": {
+      "name": "votes",
+      "columns": {
+        "match_id": {
+          "name": "match_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "telegram_user_id": {
+          "name": "telegram_user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "username_snapshot": {
+          "name": "username_snapshot",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "display_name_snapshot": {
+          "name": "display_name_snapshot",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "option": {
+          "name": "option",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "votes_match_option_idx": {
+          "name": "votes_match_option_idx",
+          "columns": [
+            "match_id",
+            "option"
+          ],
+          "isUnique": false
+        },
+        "votes_telegram_user_idx": {
+          "name": "votes_telegram_user_idx",
+          "columns": [
+            "telegram_user_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "votes_match_id_matches_id_fk": {
+          "name": "votes_match_id_matches_id_fk",
+          "tableFrom": "votes",
+          "tableTo": "matches",
+          "columnsFrom": [
+            "match_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {
+        "votes_match_id_telegram_user_id_pk": {
+          "columns": [
+            "match_id",
+            "telegram_user_id"
+          ],
+          "name": "votes_match_id_telegram_user_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "votes_option_valid": {
+          "name": "votes_option_valid",
+          "value": "\"votes\".\"option\" in ('going', 'not_going', 'maybe')"
+        }
+      }
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}
