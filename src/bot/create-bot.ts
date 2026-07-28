@@ -7,6 +7,11 @@ import {
   type RenameUserCommand,
 } from "../application/user-renaming.js";
 import {
+  parseRemoveVoteCommand,
+  REMOVE_VOTE_USAGE,
+  type RemoveVoteCommand,
+} from "../application/vote-removal.js";
+import {
   type AppConfig,
   type StartupConfig,
   type TelegramConfig,
@@ -21,6 +26,7 @@ export interface BotDependencies {
   onMatch?: (ctx: Context) => void | Promise<void>;
   onMatchEdit?: (ctx: Context) => void | Promise<void>;
   onMatchInfo?: (ctx: Context) => void | Promise<void>;
+  onRemoveVote?: (ctx: Context, command: RemoveVoteCommand) => void | Promise<void>;
   onRenameUser?: (ctx: Context, command: RenameUserCommand) => void | Promise<void>;
   onCallbackQuery?: (ctx: Context) => void | Promise<void>;
   isCommandAuthorized?: (telegramUserId: number) => boolean | Promise<boolean>;
@@ -31,6 +37,7 @@ export const HELP_TEXT = [
   "/match — создать матч и опубликовать карточку в теме general.",
   "/editmatch #v32 — изменить опубликованный матч.",
   "/matchinfo [#v32] — показать участников и дополнительных игроков.",
+  "/remove_vote #v32 @username — убрать голос игрока.",
   "/rename_user @username Имя — закрепить понятное имя пользователя.",
   "Кнопка «Доп. игроки» в карточке — открыть меню дополнительных игроков.",
 ].join("\n");
@@ -138,6 +145,21 @@ export function createBot(
     }
 
     await context.reply("Команда /matchinfo принята.");
+  });
+
+  bot.command("remove_vote", privateCommandMiddleware, async (context) => {
+    const command = parseRemoveVoteCommand(context.msg?.text ?? "");
+    if (command === undefined) {
+      await context.reply(REMOVE_VOTE_USAGE);
+      return;
+    }
+
+    if (dependencies.onRemoveVote !== undefined) {
+      await dependencies.onRemoveVote(context, command);
+      return;
+    }
+
+    await context.reply("Команда /remove_vote принята.");
   });
 
   bot.command("rename_user", privateCommandMiddleware, async (context) => {

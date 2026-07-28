@@ -20,6 +20,7 @@ The group uses two topics:
 7. External participants can be added privately as a quantity with an optional source name.
 8. An administrator can assign readable names to Telegram usernames for participant lists.
 9. The creator can update the details of an active or confirmed match without replacing its card, votes, or ID.
+10. The creator can remove a stale vote from an active or confirmed match.
 
 ## Commands
 
@@ -74,6 +75,17 @@ For an `active` or `confirmed` match, the creator presses `Редактиров�
 
 The creator sends the updated full form in a private chat. The command is parsed like `/match` and updates the same `#v32` record and public card. It preserves votes, external participants, and the current `active` or `confirmed` status. The field-price line is optional and can be omitted to clear the price. Editing is limited to the match creator who is still a group administrator; completed and cancelled matches cannot be edited.
 
+### Remove a stale vote
+
+The creator can completely withdraw a player's current vote from a private administrator chat:
+
+```text
+/remove_vote #v32 @username
+/remove_vote #v32 123456789
+```
+
+The command accepts a stored vote username or an exact Telegram user ID. If a username is ambiguous, use the ID shown by `/matchinfo #v32`. The operation is available only while the match is `active` or `confirmed`, refreshes the public card and administrator panel, and sends the usual threshold-lost notification when removing a `Участвую` vote takes the confirmed count below the minimum.
+
 ### Vote from the card
 
 Users press one of these buttons:
@@ -92,6 +104,7 @@ The creator receives a private admin panel. The creator must still be a group ad
 - `Матч будет` changes the status to `confirmed`, keeps voting and external-player changes available, and replaces the panel with `Редактировать`, `Завершить`, and `Отменить`;
 - `Завершить` changes the status to `completed`, deletes the public card from `General`, and freezes the match record;
 - `Отменить` asks for a reason: `Недостаточно игроков` or `Плохая погода`. The selected reason changes the status to `cancelled`, deletes the public card from `General`, and is included in the notification to `Chat`.
+- `/remove_vote #v32 @username` or `/remove_vote #v32 123456789` removes one current player vote. Only the match creator, who must still be a group administrator, can use it.
 
 The creator can recreate the panel by sending `/matchinfo #v32` privately. It is also the private history view for completed and cancelled matches after their public cards have been removed.
 

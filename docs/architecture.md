@@ -29,6 +29,8 @@ grammY handlers, private authorization, and topic routing
       |
       +--> /editmatch --> shared parser --> atomic same-match update --> card refresh
       |
+      +--> /remove_vote --> target resolution --> atomic vote removal --> card refresh/notification
+      |
       +--> /rename_user --> user alias and vote snapshot update --> card refresh
       |
       +--> callback_query --> MatchActionService or external-player flow
@@ -45,7 +47,7 @@ grammY handlers, private authorization, and topic routing
 
 ## Topic routing
 
-- `/match`, `/editmatch`, `/help`, `/matchinfo`, and `/rename_user` are accepted only in private conversations from authorized group administrators;
+- `/match`, `/editmatch`, `/help`, `/matchinfo`, `/remove_vote`, and `/rename_user` are accepted only in private conversations from authorized group administrators;
 - public match cards are sent to the configured `General` topic;
 - the `Доп. игроки` card callback opens a private menu; add/remove callbacks are accepted only from that private menu;
 - status notifications are sent to the configured `Chat` topic;
@@ -73,6 +75,10 @@ When confirmation is disabled, successful parsing continues directly with public
 The creator can request a copyable `/editmatch #v<ID>` full-replacement template from the private admin panel. The command is accepted only from that creator in a private conversation, after the creator's current group-administrator permission has been checked. It is available only while the match is `active` or `confirmed`.
 
 The command body is adapted to the same parser used by `/match`. A successful atomic update replaces the schedule, location, venue type, field price, required-player threshold, and derived title on the same match row, then refreshes the existing public card. The match ID, current lifecycle status, votes, and external-participant entries are not replaced. The Telegram update ID is stored with the edit so repeated delivery is idempotent.
+
+## Vote removal
+
+`/remove_vote` is restricted to the match creator, who must still be a group administrator. The command resolves a username within the selected match or uses an exact Telegram user ID. The repository removes the current vote and claims the Telegram update in one SQLite transaction. Active and confirmed matches are supported; completed and cancelled matches are unchanged. A successful removal refreshes both stored card messages and reuses the threshold-lost notification flow when the confirmed count crosses below the minimum.
 
 ## Callback actions
 
@@ -103,7 +109,7 @@ The current operating model assumes one organizer changes external participants 
 - `chat_settings` — chat IDs, topic IDs, timezone, and threshold;
 - `matches` — schedule, title, location, venue type, price, status, threshold, cancellation reason, and creator;
 - `match_messages` — public-card and private-panel message references;
-- `processed_updates` — callback-action and match-edit command deduplication;
+- `processed_updates` — callback-action, match-edit, and vote-removal command deduplication;
 - `votes` — one current choice per Telegram user and match;
 - `user_aliases` — administrator-defined readable names keyed by normalized Telegram username;
 - `external_participants` — signed quantity changes, optional historical source labels, and nullable display-name snapshots;

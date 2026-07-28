@@ -95,6 +95,35 @@ function fixture(externalCount = 0): Fixture {
         processed.add(input.updateId);
         return { status: "changed", match };
       },
+      removeVote: (input) => {
+        if (processed.has(input.updateId)) {
+          return { status: "duplicate", processedMatchId: input.matchId };
+        }
+        if (match.status !== "active" && match.status !== "confirmed") {
+          return { status: "inactive_match", match };
+        }
+        const index = votes.findIndex(
+          (vote) => vote.matchId === input.matchId && vote.telegramUserId === input.targetTelegramUserId,
+        );
+        const removedVote = index === -1 ? undefined : votes[index];
+        if (removedVote === undefined) return { status: "vote_not_found" };
+
+        const goingCountBefore =
+          votes.filter((vote) => vote.matchId === input.matchId && vote.option === "going").length +
+          externalCount;
+        votes.splice(index, 1);
+        processed.add(input.updateId);
+        return {
+          status: "removed",
+          match,
+          removedVote,
+          goingCountBefore,
+          goingCountAfter:
+            votes.filter((vote) => vote.matchId === input.matchId && vote.option === "going").length +
+            externalCount,
+          externalCount,
+        };
+      },
     },
     matches: {
       findById: (matchId) => (matchId === match.id ? match : undefined),
@@ -109,6 +138,21 @@ function fixture(externalCount = 0): Fixture {
         }
         return undefined;
       },
+    },
+    votes: {
+      find: (matchId, telegramUserId) => votes.find(
+        (vote) => vote.matchId === matchId && vote.telegramUserId === telegramUserId,
+      ),
+      findByMatchIdAndUsername: (matchId, username) => {
+        const normalized = username.replace(/^@+/u, "").toLowerCase();
+        return votes.filter(
+          (vote) => vote.matchId === matchId &&
+            vote.usernameSnapshot?.replace(/^@+/u, "").toLowerCase() === normalized,
+        );
+      },
+    },
+    processedUpdates: {
+      findByUpdateId: (updateId) => (processed.has(updateId) ? { matchId: match.id } : undefined),
     },
     notifications: {
       claim: (input) => {
@@ -191,6 +235,102 @@ describe("match callback actions", () => {
     expect(result).not.toHaveProperty("answer");
     expect(test.votes[0]?.option).toBe("going");
     expect(test.refreshed).toEqual([1]);
+  });
+
+  it("removes a vote, refreshes the card, and announces threshold loss once", async () => {
+    const test = fixture();
+    const service = serviceFor(test);
+
+    await service.process(update(1, 10, "going"));
+    await service.process(update(2, 11, "going"));
+
+    const removed = await service.removeVote({
+      updateId: 3,
+      chatId: -100,
+      matchId: 1,
+      requesterTelegramUserId: 7,
+      target: { kind: "telegram_user_id", telegramUserId: 10 },
+    });
+    const duplicate = await service.removeVote({
+      updateId: 3,
+      chatId: -100,
+      matchId: 1,
+      requesterTelegramUserId: 7,
+      target: { kind: "telegram_user_id", telegramUserId: 10 },
+    });
+
+    expect(removed).toMatchObject({
+      status: "removed",
+      answer: "Голос игрока «Иван» в матче #v1 удалён.",
+    });
+    expect(duplicate).toEqual({ status: "ignored", answer: "Это удаление уже обработано" });
+    expect(test.votes.map((vote) => vote.telegramUserId)).toEqual([11]);
+    expect(test.refreshed).toEqual([1, 1, 1]);
+    expect(test.sent).toEqual([
+      "#v1 «27.07.2026 20:00 — СОК Олимпийский» — Набралось 2/2 игроков — можно играть!",
+      "#v1 «27.07.2026 20:00 — СОК Олимпийский» — Игроков снова меньше минимума. Сейчас: 1/2",
+    ]);
+  });
+
+  it("resolves a username only within the match and rejects ambiguous matches", async () => {
+    const test = fixture();
+    const service = serviceFor(test);
+
+    await service.process(update(1, 10, "maybe"));
+    const firstVote = test.votes[0];
+    if (firstVote === undefined) throw new Error("Expected a fixture vote");
+    test.votes.push({ ...firstVote, telegramUserId: 11 });
+
+    const ambiguous = await service.removeVote({
+      updateId: 2,
+      chatId: -100,
+      matchId: 1,
+      requesterTelegramUserId: 7,
+      target: { kind: "username", username: "IVAN" },
+    });
+
+    expect(ambiguous).toEqual({
+      status: "ignored",
+      answer: "По username @IVAN найдено несколько голосов в матче #v1. Используйте Telegram ID.",
+    });
+    expect(test.votes).toHaveLength(2);
+    expect(test.refreshed).toEqual([1]);
+  });
+
+  it("enforces creator, administrator, and match-status checks", async () => {
+    const test = fixture();
+    const service = serviceFor(test);
+    await service.process(update(1, 10, "going"));
+
+    await expect(service.removeVote({
+      updateId: 2,
+      chatId: -100,
+      matchId: 1,
+      requesterTelegramUserId: 10,
+      target: { kind: "telegram_user_id", telegramUserId: 10 },
+    })).resolves.toEqual({
+      status: "ignored",
+      answer: "Управлять голосованием может только его создатель",
+    });
+
+    const unauthorized = serviceFor(test, false);
+    await expect(unauthorized.removeVote({
+      updateId: 3,
+      chatId: -100,
+      matchId: 1,
+      requesterTelegramUserId: 7,
+      target: { kind: "telegram_user_id", telegramUserId: 10 },
+    })).resolves.toEqual({ status: "ignored", answer: "Недостаточно прав" });
+
+    test.match.status = "completed";
+    await expect(service.removeVote({
+      updateId: 4,
+      chatId: -100,
+      matchId: 1,
+      requesterTelegramUserId: 7,
+      target: { kind: "telegram_user_id", telegramUserId: 10 },
+    })).resolves.toEqual({ status: "ignored", answer: "Матч уже завершён" });
+    expect(test.votes).toHaveLength(1);
   });
 
   it("announces every transition across the minimum player threshold", async () => {

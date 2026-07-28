@@ -63,6 +63,17 @@ For an `active` or `confirmed` match, the creator can press `Редактиро�
 
 The creator edits the fields and sends the complete form back to the bot privately. It is parsed using the same labelled format as `/match` and updates the existing match and its public card: the `#v` ID, votes, external participants, and current lifecycle status are retained. The optional `Цена поля` line may be omitted to clear the field price. Only the match creator, while still a group administrator, can edit a match; completed and cancelled matches cannot be edited.
 
+### `/remove_vote`
+
+The match creator can remove a player's current vote from a private administrator chat while the match is `active` or `confirmed`:
+
+```text
+/remove_vote #v32 @username
+/remove_vote #v32 123456789
+```
+
+Use the Telegram ID when the player has no username or when a username matches more than one stored vote. Removing a vote completely withdraws the player's response, refreshes the public card and administrator panel, and can send the normal threshold-lost notification when a `Участвую` vote was removed. Completed and cancelled matches cannot be changed.
+
 ### Match card
 
 The card is a regular Telegram message, not a native poll. It is edited in place after every vote or external-player change. Participants are grouped by their current choice. Telegram usernames are displayed when available; otherwise the name is rendered as a clickable Telegram mention.

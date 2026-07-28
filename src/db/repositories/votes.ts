@@ -41,6 +41,15 @@ export class VotesRepository {
       .all();
   }
 
+  public findByMatchIdAndUsername(matchId: number, username: string): Vote[] {
+    return this.db
+      .select()
+      .from(votes)
+      .where(and(eq(votes.matchId, matchId), usernameCondition(username)))
+      .orderBy(asc(votes.telegramUserId))
+      .all();
+  }
+
   public findTelegramUserIdsByUsername(username: string): number[] {
     const rows = this.db
       .select({ telegramUserId: votes.telegramUserId })

@@ -155,6 +155,55 @@ describe("persistence repositories", () => {
     expect(repositories.processedUpdates.findByUpdateId(88)).toBeDefined();
   });
 
+  it("removes one vote and its callback claim atomically", () => {
+    const match = repositories.matches.create({
+      chatId: -1001234567890,
+      scheduledAt: new Date("2026-08-01T17:00:00.000Z"),
+      location: "Synthetic Stadium",
+      requiredPlayers: 3,
+      creatorTelegramUserId: 101,
+      status: "active",
+    });
+    repositories.votes.upsert({
+      matchId: match.id,
+      telegramUserId: 555,
+      usernameSnapshot: "synthetic_user",
+      displayNameSnapshot: "Synthetic User",
+      option: "going",
+    });
+    repositories.votes.upsert({
+      matchId: match.id,
+      telegramUserId: 556,
+      usernameSnapshot: null,
+      displayNameSnapshot: "Another User",
+      option: "going",
+    });
+
+    const input = {
+      updateId: 89,
+      matchId: match.id,
+      telegramUserId: 101,
+      targetTelegramUserId: 555,
+    };
+    const first = repositories.matchActions.removeVote(input);
+    const duplicate = repositories.matchActions.removeVote(input);
+
+    expect(first).toMatchObject({
+      status: "removed",
+      goingCountBefore: 2,
+      goingCountAfter: 1,
+      removedVote: { telegramUserId: 555 },
+    });
+    expect(duplicate).toEqual({ status: "duplicate", processedMatchId: match.id });
+    expect(repositories.votes.find(match.id, 555)).toBeUndefined();
+    expect(repositories.votes.find(match.id, 556)).toBeDefined();
+    expect(repositories.processedUpdates.findByUpdateId(89)).toMatchObject({
+      matchId: match.id,
+      action: "vote:remove:555",
+      telegramUserId: 101,
+    });
+  });
+
   it("upserts a vote by match and Telegram user", () => {
     const match = repositories.matches.create({
       chatId: -1001234567890,

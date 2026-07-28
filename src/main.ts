@@ -409,6 +409,27 @@ function createRuntimeBot(config: StartupConfig): Bot {
       }
       await context.reply(`Матч #v${matchId ?? ""} не найден.`);
     },
+    onRemoveVote: async (context, command) => {
+      const requester = context.from;
+      if (requester === undefined) {
+        await context.reply("Не удалось определить автора команды.");
+        return;
+      }
+
+      try {
+        const result = await matchAction.removeVote({
+          updateId: context.update.update_id,
+          chatId,
+          matchId: command.matchId,
+          requesterTelegramUserId: requester.id,
+          target: command.target,
+        });
+        await context.reply(result.answer);
+      } catch (error) {
+        console.error(`Vote removal failed (${errorKind(error)}): ${errorDetails(error)}`);
+        await context.reply("Не удалось убрать голос. Попробуйте ещё раз.");
+      }
+    },
     onCallbackQuery: async (context) => {
       const callback = context.callbackQuery;
       const message = callback?.message;

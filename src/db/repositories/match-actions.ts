@@ -35,6 +35,27 @@ export type ApplyVoteResult =
       externalCount: number;
     };
 
+export interface RemoveVoteInput {
+  updateId: number;
+  matchId: number;
+  telegramUserId: number;
+  targetTelegramUserId: number;
+}
+
+export type RemoveVoteResult =
+  | { status: "duplicate"; processedMatchId: number }
+  | { status: "missing_match" }
+  | { status: "inactive_match"; match: Match }
+  | { status: "vote_not_found" }
+  | {
+      status: "removed";
+      match: Match;
+      removedVote: Vote;
+      goingCountBefore: number;
+      goingCountAfter: number;
+      externalCount: number;
+    };
+
 export interface ChangeMatchStatusInput {
   updateId: number;
   matchId: number;
@@ -154,6 +175,68 @@ export class MatchActionsRepository {
         status: "applied",
         match,
         previousVote,
+        goingCountBefore,
+        goingCountAfter,
+        externalCount,
+      };
+    });
+  }
+
+  public removeVote(input: RemoveVoteInput): RemoveVoteResult {
+    return this.db.transaction((tx) => {
+      const processed = tx
+        .select()
+        .from(processedUpdates)
+        .where(eq(processedUpdates.updateId, input.updateId))
+        .get();
+      if (processed !== undefined) {
+        return { status: "duplicate", processedMatchId: processed.matchId };
+      }
+
+      const match = tx.select().from(matches).where(eq(matches.id, input.matchId)).get();
+      if (match === undefined) return { status: "missing_match" };
+      if (match.status !== "active" && match.status !== "confirmed") {
+        return { status: "inactive_match", match };
+      }
+
+      const removedVote = tx
+        .select()
+        .from(votes)
+        .where(
+          and(
+            eq(votes.matchId, input.matchId),
+            eq(votes.telegramUserId, input.targetTelegramUserId),
+          ),
+        )
+        .get();
+      if (removedVote === undefined) return { status: "vote_not_found" };
+
+      const externalCount = countExternal(tx, input.matchId);
+      const goingCountBefore = countGoing(tx, input.matchId) + externalCount;
+      tx.delete(votes)
+        .where(
+          and(
+            eq(votes.matchId, input.matchId),
+            eq(votes.telegramUserId, input.targetTelegramUserId),
+          ),
+        )
+        .run();
+      const goingCountAfter = countGoing(tx, input.matchId) + externalCount;
+
+      tx.insert(processedUpdates)
+        .values({
+          updateId: input.updateId,
+          matchId: input.matchId,
+          action: `vote:remove:${input.targetTelegramUserId}`,
+          telegramUserId: input.telegramUserId,
+          createdAt: new Date(),
+        })
+        .run();
+
+      return {
+        status: "removed",
+        match,
+        removedVote,
         goingCountBefore,
         goingCountAfter,
         externalCount,

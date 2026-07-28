@@ -1,4 +1,4 @@
-import type { Match, NotificationType, VoteOption } from "../db/schema.js";
+import type { Match, NotificationType, Vote, VoteOption } from "../db/schema.js";
 import { evaluateVoteTransition } from "../domain/votes.js";
 import {
   formatConfirmationNotification,
@@ -9,7 +9,10 @@ import {
 import type {
   ApplyVoteResult,
   ChangeMatchStatusResult,
+  RemoveVoteInput,
+  RemoveVoteResult as RemoveVoteRepositoryResult,
 } from "../db/repositories/match-actions.js";
+import type { RemoveVoteTarget } from "./vote-removal.js";
 import {
   type MatchAction,
   type MatchCallbackUpdate,
@@ -35,6 +38,7 @@ export interface MatchActionRepositories {
       cancellationReason?: string | null;
       allowedCurrentStatuses: readonly Match["status"][];
     }): ChangeMatchStatusResult;
+    removeVote(input: RemoveVoteInput): RemoveVoteRepositoryResult;
   };
   matches: {
     findById(matchId: number): Match | undefined;
@@ -53,6 +57,13 @@ export interface MatchActionRepositories {
       transitionKey: string;
     }): { id: number } | undefined;
     delete(id: number): boolean;
+  };
+  votes: {
+    find(matchId: number, telegramUserId: number): Vote | undefined;
+    findByMatchIdAndUsername(matchId: number, username: string): Vote[];
+  };
+  processedUpdates: {
+    findByUpdateId(updateId: number): { matchId: number } | undefined;
   };
 }
 
@@ -73,6 +84,10 @@ export type MatchActionResult =
   | { status: "invalid_action"; answer: string }
   | { status: "ignored"; answer: string }
   | { status: "processed"; answer?: string; action: MatchAction };
+
+export type VoteRemovalResult =
+  | { status: "removed"; answer: string; vote: Vote }
+  | { status: "ignored"; answer: string };
 
 function voteOption(option: MatchVoteOption): VoteOption {
   return option;
@@ -130,6 +145,116 @@ export class MatchActionService {
 
   public static parseCallbackData(data: string): MatchAction | undefined {
     return parseMatchAction(data);
+  }
+
+  public async removeVote(input: {
+    updateId: number;
+    chatId: number;
+    matchId: number;
+    requesterTelegramUserId: number;
+    target: RemoveVoteTarget;
+  }): Promise<VoteRemovalResult> {
+    const match = this.options.repositories.matches.findById(input.matchId);
+    if (match === undefined || match.chatId !== input.chatId) {
+      return { status: "ignored", answer: `Матч #v${input.matchId} не найден.` };
+    }
+    if (match.creatorTelegramUserId !== input.requesterTelegramUserId) {
+      return { status: "ignored", answer: "Управлять голосованием может только его создатель" };
+    }
+    if (!(await this.options.isAdmin(input.requesterTelegramUserId))) {
+      return { status: "ignored", answer: "Недостаточно прав" };
+    }
+    if (this.options.repositories.processedUpdates.findByUpdateId(input.updateId) !== undefined) {
+      return { status: "ignored", answer: "Это удаление уже обработано" };
+    }
+    if (match.status !== "active" && match.status !== "confirmed") {
+      return { status: "ignored", answer: alreadyInactive(match) };
+    }
+
+    const targetLabel = input.target.kind === "username"
+      ? `@${input.target.username}`
+      : `ID ${input.target.telegramUserId}`;
+    let targetTelegramUserId: number;
+    if (input.target.kind === "username") {
+      const matches = this.options.repositories.votes.findByMatchIdAndUsername(
+        match.id,
+        input.target.username,
+      );
+      if (matches.length === 0) {
+        return {
+          status: "ignored",
+          answer: `Голос игрока ${targetLabel} в матче #v${match.id} не найден.`,
+        };
+      }
+      if (matches.length > 1) {
+        return {
+          status: "ignored",
+          answer: `По username ${targetLabel} найдено несколько голосов в матче #v${match.id}. Используйте Telegram ID.`,
+        };
+      }
+      targetTelegramUserId = matches[0]?.telegramUserId as number;
+    } else {
+      if (this.options.repositories.votes.find(match.id, input.target.telegramUserId) === undefined) {
+        return {
+          status: "ignored",
+          answer: `Голос игрока ${targetLabel} в матче #v${match.id} не найден.`,
+        };
+      }
+      targetTelegramUserId = input.target.telegramUserId;
+    }
+
+    const result = this.options.repositories.matchActions.removeVote({
+      updateId: input.updateId,
+      matchId: match.id,
+      telegramUserId: input.requesterTelegramUserId,
+      targetTelegramUserId,
+    });
+    if (result.status === "duplicate") {
+      return { status: "ignored", answer: "Это удаление уже обработано" };
+    }
+    if (result.status === "missing_match") {
+      return { status: "ignored", answer: `Матч #v${input.matchId} не найден.` };
+    }
+    if (result.status === "inactive_match") {
+      return { status: "ignored", answer: alreadyInactive(result.match) };
+    }
+    if (result.status === "vote_not_found") {
+      return {
+        status: "ignored",
+        answer: `Голос игрока ${targetLabel} в матче #v${match.id} не найден.`,
+      };
+    }
+
+    const transition = evaluateVoteTransition({
+      previousOption: result.removedVote.option,
+      nextOption: null,
+      goingCountBefore: result.goingCountBefore,
+      threshold: result.match.requiredPlayers,
+      eventKey: String(input.updateId),
+    });
+    await this.sendClaimedNotification(
+      transition.thresholdLostNotificationKey === undefined
+        ? undefined
+        : {
+            matchId: result.match.id,
+            notificationType: "threshold_lost",
+            transitionKey: transition.thresholdLostNotificationKey,
+            text: formatThresholdLostNotification(
+              result.match.id,
+              result.match.title,
+              transition.goingCountAfter,
+              result.match.requiredPlayers,
+            ),
+          },
+    );
+    await this.options.refreshCard(result.match.id);
+
+    const displayName = result.removedVote.displayNameSnapshot.trim() || "Игрок";
+    return {
+      status: "removed",
+      answer: `Голос игрока «${displayName}» в матче #v${result.match.id} удалён.`,
+      vote: result.removedVote,
+    };
   }
 
   private async processVote(

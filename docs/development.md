@@ -60,14 +60,16 @@ The current MVP uses a clean inline-card baseline. If the local database contain
 15. Press `Редактировать`, update the full `/editmatch #v<ID>` template with a different time or location, and send it privately. Verify that the existing public card is edited in place while its ID, votes, external participants, and active status remain unchanged.
 16. Press `➖ Убрать игрока` once and verify that only the same user's contribution decreases. Try removing from another user's menu and verify that another user's players cannot be removed. Use `/matchinfo #v<ID>` and verify the grouped contributions and current status.
 17. Send `/rename_user @<voter_username> Иван Петров` privately as an administrator and verify that the current card and `/matchinfo` show the alias in the participant list; vote again from that account and verify that the alias remains applied.
-18. Verify that a non-creator cannot use the admin actions or edit the match.
-19. Press `Матч будет`, verify that the card says the match will happen, voting remains available, and the panel changes to `Редактировать`, `Завершить`, and `Отменить`.
-20. Use `Редактировать` again while the match is confirmed. Verify that its card changes without reverting the status or removing votes and external participants.
-21. Press `Завершить`, verify that the public card is deleted from `General` immediately after the action and `/matchinfo #v<ID>` still shows the frozen match history. The deletion must follow the button press, not a scheduled expiry.
-22. Create another match, press `Отменить`, select `Недостаточно игроков` or `Плохая погода`, and verify that the public card is deleted, the cancellation notification shows the selected reason, and `/matchinfo #v<ID>` retains the reason.
-23. Create an outdoor exact-time active or confirmed match about 16 hours ahead (or use a controlled clock), and verify that the scheduler sends one Minsk weather forecast to `Chat`; verify that an indoor match and a second outdoor match on the same Minsk day do not send duplicates.
-24. Stop and restart the bot, verify the shutdown/startup notifications in the status recipient's private dialog, and confirm that messages sent while it was offline are not processed after restart.
-25. Repeat callback deliveries in tests and verify that no duplicate vote, cancellation, match edit, or notification is created.
+18. Send `/remove_vote #v<ID> @<voter_username>` privately and verify that the selected vote disappears from the public card and `/matchinfo`; repeat with the exact Telegram ID when the username is unavailable or ambiguous.
+19. Remove a `Участвую` vote that takes the match below the minimum and verify the threshold-lost notification; remove a non-going vote and verify that no threshold notification is sent.
+20. Verify that a non-creator cannot use the admin actions, edit the match, or remove a vote, and that a creator who is no longer a group administrator is rejected.
+21. Press `Матч будет`, verify that the card says the match will happen, voting remains available, and the panel changes to `Редактировать`, `Завершить`, and `Отменить`.
+22. Use `Редактировать` again while the match is confirmed. Verify that its card changes without reverting the status or removing votes and external participants.
+23. Press `Завершить`, verify that the public card is deleted from `General` immediately after the action and `/matchinfo #v<ID>` still shows the frozen match history. The deletion must follow the button press, not a scheduled expiry.
+24. Create another match, press `Отменить`, select `Недостаточно игроков` or `Плохая погода`, and verify that the public card is deleted, the cancellation notification shows the selected reason, and `/matchinfo #v<ID>` retains the reason.
+25. Create an outdoor exact-time active or confirmed match about 16 hours ahead (or use a controlled clock), and verify that the scheduler sends one Minsk weather forecast to `Chat`; verify that an indoor match and a second outdoor match on the same Minsk day do not send duplicates.
+26. Stop and restart the bot, verify the shutdown/startup notifications in the status recipient's private dialog, and confirm that messages sent while it was offline are not processed after restart.
+27. Repeat callback and `/remove_vote` deliveries in tests and verify that no duplicate vote removal, cancellation, match edit, or notification is created.
 
 ## Troubleshooting
 
