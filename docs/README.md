@@ -9,5 +9,7 @@ This directory contains the maintained project documentation.
 - [Project structure](project-structure.md) — source tree and the responsibility of each directory.
 - [Development guide](development.md) — local setup, configuration, commands, testing, migrations, and Telegram acceptance.
 - [Telegram Mini App implementation plan](mini-app-implementation-plan.md) — approved target architecture and an execution plan for the migration.
+- [Migration work log](../work-log.md) — the live phase status, decisions, verification, and blockers.
+- [Orchestrator prompt](../prompt.md) — mandatory operating instructions for the implementation agent.
 
 The repository root [README.md](../README.md) remains the short project overview. Keep product behavior and operational instructions synchronized when either document changes.

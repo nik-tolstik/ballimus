@@ -42,6 +42,8 @@ The following legacy behavior is intentionally removed: creator-specific private
 ## 4. Target layout
 
 ```text
+prompt.md                         Mandatory prompt for the migration orchestrator
+work-log.md                       Live migration phase log
 apps/
   api/                         NestJS API, Telegram webhook, jobs
   web/                         React + Vite Telegram Mini App
@@ -204,7 +206,22 @@ Validate all values at startup, log variable names rather than secret values, an
 
 For each test and production environment, provision independent values for every item above. Set the webhook only after the target API has a stable HTTPS domain; set the Mini App URL and menu/Main Mini App in BotFather for that environment. The owner opens the app from the bot's Mini App entry point, not through a private command flow.
 
-## 10. Implementation sequence
+## 10. Orchestration protocol
+
+The implementation agent is an **orchestrator**, not an individual implementer. It must manage the migration through bounded subagents and phase gates.
+
+- Read [`prompt.md`](../prompt.md), this plan, and [`work-log.md`](../work-log.md) before starting or resuming work.
+- Do not directly implement application code, database migrations, tests, deployment configuration, or generated clients. Delegate every implementation and verification task to an appropriate subagent.
+- The orchestrator may update `work-log.md` and coordination documentation, inspect changes, assign work, resolve dependencies, and report phase status.
+- Give each subagent one bounded outcome, relevant file ownership, a validation command, and an explicit instruction not to overwrite unrelated work. Do not assign overlapping file edits concurrently.
+- Use subagents proactively for independent work. At least one separate subagent must verify each phase's acceptance criteria before the orchestrator starts the next phase.
+- Keep at most one phase in progress. Record every handoff, decision, test result, commit, deployment result, and blocker in `work-log.md` as it occurs.
+- Do not advance a phase merely because implementation looks complete. Advance only after its exit criterion, required verification, and user authorization for any external-state change are satisfied.
+- Escalate only genuine product choices, credentials, or deployment authority to the owner. Do not make an irreversible infrastructure or production change without explicit authorization.
+
+`prompt.md` is the copyable starting instruction for that orchestrator. `work-log.md` is the durable state that lets a later agent resume without reconstructing the migration from chat history.
+
+## 11. Implementation sequence
 
 Do not attempt a partial production cutover. Complete each phase with its checks before moving on.
 
@@ -263,7 +280,7 @@ Do not attempt a partial production cutover. Complete each phase with its checks
 
 **Exit criterion:** production is running the new stack, the current SQLite database is no longer referenced, and all maintained docs describe the new system.
 
-## 11. Required automated and manual acceptance checks
+## 12. Required automated and manual acceptance checks
 
 Automated checks must cover at least:
 
@@ -290,7 +307,7 @@ Manual test in the Telegram test group:
 7. Attempt access from a non-owner account, an expired Mini App session, and a browser outside Telegram; all must fail closed.
 8. Verify test and production use different bot/webhook/database identities before production cutover.
 
-## 12. Explicit non-goals for this migration
+## 13. Explicit non-goals for this migration
 
 - Migrating existing SQLite records or native poll records.
 - Supporting multiple groups, multiple owners, or participant access to administrative REST operations.
