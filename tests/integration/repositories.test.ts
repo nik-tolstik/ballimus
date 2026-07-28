@@ -231,6 +231,59 @@ describe("persistence repositories", () => {
     expect(repositories.externalParticipants.countByMatchId(match.id)).toBe(0);
   });
 
+  it("stores external-player attribution and counts each source separately", () => {
+    const match = repositories.matches.create({
+      chatId: -1001234567890,
+      scheduledAt: new Date("2026-08-01T17:00:00.000Z"),
+      location: "Synthetic Stadium",
+      requiredPlayers: 3,
+      creatorTelegramUserId: 101,
+    });
+
+    const nikita = repositories.externalParticipants.add({
+      matchId: match.id,
+      addedByTelegramUserId: 555,
+      sourceUpdateId: 710,
+      sourceLabel: "Никиты",
+      quantity: 3,
+    });
+    repositories.externalParticipants.add({
+      matchId: match.id,
+      addedByTelegramUserId: 555,
+      sourceUpdateId: 711,
+      sourceLabel: "Алексея",
+      quantity: 2,
+    });
+    repositories.externalParticipants.add({
+      matchId: match.id,
+      addedByTelegramUserId: 555,
+      sourceUpdateId: 712,
+      quantity: 1,
+    });
+
+    expect(nikita).toMatchObject({ sourceLabel: "Никиты", quantity: 3 });
+    expect(repositories.externalParticipants.countByMatchIdAndSourceLabel(match.id, "Никиты"))
+      .toBe(3);
+    expect(repositories.externalParticipants.countByMatchIdAndSourceLabel(match.id, "Алексея"))
+      .toBe(2);
+    expect(repositories.externalParticipants.countByMatchIdWithoutSourceLabel(match.id)).toBe(1);
+    expect(repositories.externalParticipants.countByMatchId(match.id)).toBe(6);
+
+    const removed = repositories.externalParticipants.add({
+      matchId: match.id,
+      addedByTelegramUserId: 555,
+      sourceUpdateId: 713,
+      sourceLabel: "Никиты",
+      quantity: -1,
+    });
+
+    expect(removed).toMatchObject({ sourceLabel: "Никиты", quantity: -1 });
+    expect(repositories.externalParticipants.countByMatchIdAndSourceLabel(match.id, "Никиты"))
+      .toBe(2);
+    expect(repositories.externalParticipants.countByMatchIdWithoutSourceLabel(match.id)).toBe(1);
+    expect(repositories.externalParticipants.countByMatchId(match.id)).toBe(5);
+  });
+
   it("enforces notification idempotency for a transition key", () => {
     const match = repositories.matches.create({
       chatId: -1001234567890,

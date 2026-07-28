@@ -1,10 +1,10 @@
-import type { Match, VoteOption } from "../db/schema.js";
+import type { Match, NotificationType, VoteOption } from "../db/schema.js";
 import { evaluateVoteTransition } from "../domain/votes.js";
 import {
   formatConfirmationNotification,
   formatCancellationNotification,
+  formatThresholdLostNotification,
   formatThresholdNotification,
-  formatWithdrawalNotification,
 } from "../domain/notifications.js";
 import type {
   ApplyVoteResult,
@@ -32,6 +32,7 @@ export interface MatchActionRepositories {
       matchId: number;
       telegramUserId: number;
       status: "confirmed" | "completed" | "cancelled";
+      cancellationReason?: string | null;
       allowedCurrentStatuses: readonly Match["status"][];
     }): ChangeMatchStatusResult;
   };
@@ -46,20 +47,9 @@ export interface MatchActionRepositories {
     ): { matchId: number; chatId: number; messageId: number; kind: "public_card" | "admin_panel" } | undefined;
   };
   notifications: {
-    listByMatchId(matchId: number): Array<{
-      notificationType:
-        | "threshold_reached"
-        | "withdrawal"
-        | "match_confirmed"
-        | "match_cancelled";
-    }>;
     claim(input: {
       matchId: number;
-      notificationType:
-        | "threshold_reached"
-        | "withdrawal"
-        | "match_confirmed"
-        | "match_cancelled";
+      notificationType: NotificationType;
       transitionKey: string;
     }): { id: number } | undefined;
     delete(id: number): boolean;
@@ -74,27 +64,17 @@ export interface MatchActionOptions {
   repositories: MatchActionRepositories;
   notifier: MatchActionNotifier;
   refreshCard: (matchId: number) => Promise<void>;
+  showCancellationPrompt?: (match: Match) => Promise<void>;
   isAdmin: (telegramUserId: number) => boolean | Promise<boolean>;
 }
 
 export type MatchActionResult =
   | { status: "invalid_action"; answer: string }
   | { status: "ignored"; answer: string }
-  | { status: "processed"; answer: string; action: MatchAction };
+  | { status: "processed"; answer?: string; action: MatchAction };
 
 function voteOption(option: MatchVoteOption): VoteOption {
   return option;
-}
-
-function voteAnswer(option: MatchVoteOption): string {
-  switch (option) {
-    case "going":
-      return "Ваш выбор сохранён: участвую";
-    case "maybe":
-      return "Ваш выбор сохранён: под вопросом";
-    case "not_going":
-      return "Ваш выбор сохранён: не смогу";
-  }
 }
 
 function alreadyInactive(match: Match): string {
@@ -103,24 +83,18 @@ function alreadyInactive(match: Match): string {
     : `Матч уже ${match.status === "confirmed" ? "подтверждён" : match.status === "completed" ? "завершён" : "недоступен"}`;
 }
 
-function hasReachedThreshold(
-  notifications: readonly {
-    notificationType:
-      | "threshold_reached"
-      | "withdrawal"
-      | "match_confirmed"
-      | "match_cancelled";
-  }[],
-): boolean {
-  return notifications.some((item) => item.notificationType === "threshold_reached");
+function isCancellationReasonAction(
+  action: MatchAction["kind"],
+): action is "cancel_insufficient_players" | "cancel_bad_weather" {
+  return action === "cancel_insufficient_players" || action === "cancel_bad_weather";
 }
 
-function participantIdentity(update: MatchCallbackUpdate) {
-  return {
-    telegramUserId: update.telegramUserId,
-    username: update.username,
-    displayName: update.displayName,
-  };
+function cancellationReasonForAction(
+  action: "cancel_insufficient_players" | "cancel_bad_weather",
+): string {
+  return action === "cancel_insufficient_players"
+    ? "Недостаточно игроков"
+    : "Плохая погода";
 }
 
 export class MatchActionService {
@@ -165,9 +139,6 @@ export class MatchActionService {
       return { status: "ignored", answer: alreadyInactive(match) };
     }
 
-    const thresholdWasReached = hasReachedThreshold(
-      this.options.repositories.notifications.listByMatchId(match.id),
-    );
     const result = this.options.repositories.matchActions.applyVote({
       updateId: update.updateId,
       matchId: match.id,
@@ -192,37 +163,34 @@ export class MatchActionService {
       nextOption: update.action.option,
       goingCountBefore: result.goingCountBefore,
       threshold: match.requiredPlayers,
-      thresholdWasReached,
       eventKey: String(update.updateId),
-      telegramUserId: update.telegramUserId,
     });
 
-    const thresholdNotificationKey =
-      !thresholdWasReached && result.goingCountAfter >= match.requiredPlayers
-        ? `threshold:${match.id}:${match.requiredPlayers}`
-        : undefined;
-
     await this.sendClaimedNotification(
-      thresholdNotificationKey === undefined
+      transition.thresholdReachedNotificationKey === undefined
         ? undefined
         : {
             matchId: match.id,
             notificationType: "threshold_reached",
-            transitionKey: thresholdNotificationKey,
-            text: formatThresholdNotification(match.id, match.title, match.requiredPlayers),
+            transitionKey: transition.thresholdReachedNotificationKey,
+            text: formatThresholdNotification(
+              match.id,
+              match.title,
+              result.goingCountAfter,
+              match.requiredPlayers,
+            ),
           },
     );
     await this.sendClaimedNotification(
-      transition.withdrawalNotificationKey === undefined
+      transition.thresholdLostNotificationKey === undefined
         ? undefined
         : {
             matchId: match.id,
-            notificationType: "withdrawal",
-            transitionKey: transition.withdrawalNotificationKey,
-            text: formatWithdrawalNotification(
+            notificationType: "threshold_lost",
+            transitionKey: transition.thresholdLostNotificationKey,
+            text: formatThresholdLostNotification(
               match.id,
               match.title,
-              participantIdentity(update),
               transition.goingCountAfter,
               match.requiredPlayers,
             ),
@@ -232,7 +200,6 @@ export class MatchActionService {
     await this.options.refreshCard(match.id);
     return {
       status: "processed",
-      answer: voteAnswer(update.action.option),
       action: update.action,
     };
   }
@@ -247,22 +214,35 @@ export class MatchActionService {
     if (!(await this.options.isAdmin(update.telegramUserId))) {
       return { status: "ignored", answer: "Недостаточно прав" };
     }
-    if (update.action.kind === "cancel" && match.status === "cancelled") {
+
+    if (update.action.kind === "cancel") {
+      if (match.status !== "active" && match.status !== "confirmed") {
+        return { status: "ignored", answer: alreadyInactive(match) };
+      }
+      await this.options.showCancellationPrompt?.(match);
+      return { status: "processed", action: update.action };
+    }
+    if (update.action.kind === "cancel_back") {
+      await this.options.refreshCard(match.id);
+      return { status: "processed", action: update.action };
+    }
+
+    if (isCancellationReasonAction(update.action.kind) && match.status === "cancelled") {
       await this.sendClaimedNotification({
         matchId: match.id,
         notificationType: "match_cancelled",
         transitionKey: "status:cancelled",
-        text: formatCancellationNotification(match.id, match.title),
+        text: formatCancellationNotification(match.id, match.title, match.cancellationReason),
       });
       await this.options.refreshCard(match.id);
       return { status: "ignored", answer: "Матч уже отменён" };
     }
-    const status = update.action.kind === "cancel"
+    const status = isCancellationReasonAction(update.action.kind)
       ? "cancelled"
       : update.action.kind === "confirm"
         ? "confirmed"
         : "completed";
-    const allowedCurrentStatuses = update.action.kind === "cancel"
+    const allowedCurrentStatuses = isCancellationReasonAction(update.action.kind)
       ? (["active", "confirmed"] as const)
       : update.action.kind === "confirm"
         ? (["active"] as const)
@@ -275,11 +255,17 @@ export class MatchActionService {
           : alreadyInactive(match),
       };
     }
+    const cancellationReason = isCancellationReasonAction(update.action.kind)
+      ? cancellationReasonForAction(update.action.kind)
+      : undefined;
     const result = this.options.repositories.matchActions.changeStatus({
       updateId: update.updateId,
       matchId: match.id,
       telegramUserId: update.telegramUserId,
       status,
+      ...(cancellationReason === undefined
+        ? {}
+        : { cancellationReason }),
       allowedCurrentStatuses,
     });
     if (result.status === "duplicate") return { status: "ignored", answer: "Это действие уже обработано" };
@@ -300,7 +286,11 @@ export class MatchActionService {
         matchId: match.id,
         notificationType: "match_cancelled",
         transitionKey: "status:cancelled",
-        text: formatCancellationNotification(match.id, match.title),
+        text: formatCancellationNotification(
+          match.id,
+          match.title,
+          result.match.cancellationReason,
+        ),
       });
     }
     await this.options.refreshCard(match.id);
@@ -318,11 +308,7 @@ export class MatchActionService {
 
   private async sendClaimedNotification(input: {
     matchId: number;
-    notificationType:
-      | "threshold_reached"
-      | "withdrawal"
-      | "match_confirmed"
-      | "match_cancelled";
+    notificationType: NotificationType;
     transitionKey: string;
     text: string;
   } | undefined): Promise<void> {

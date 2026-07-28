@@ -12,6 +12,7 @@ const draft: MatchDraft = {
   date: "2026-07-27",
   time: "20:00",
   location: "СОК Олимпийский",
+  venueType: "outdoor",
   requiredPlayers: 3,
 };
 
@@ -31,6 +32,8 @@ function fixture() {
         const value = {
           id: nextMatchId++,
           ...input,
+          venueType: input.venueType ?? null,
+          cancellationReason: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         } as Match;
@@ -44,6 +47,7 @@ function fixture() {
         matches[matches.indexOf(match)] = updated;
         return updated;
       },
+      findById: (id) => matches.find((item) => item.id === id),
       delete: (id) => {
         const index = matches.findIndex((item) => item.id === id);
         if (index === -1) return false;
@@ -57,6 +61,13 @@ function fixture() {
         messages.push(value);
         return value;
       },
+      findByChatAndMessageId: (chatId, messageId, kind) =>
+        messages.find(
+          (message) =>
+            message.chatId === chatId &&
+            message.messageId === messageId &&
+            (kind === undefined || message.kind === kind),
+        ),
     },
   };
 
@@ -92,11 +103,106 @@ function fixture() {
 }
 
 describe("match creation service", () => {
+  it("creates a private preview without publishing a public card", async () => {
+    const test = fixture();
+    const service = new MatchCreationService({
+      repositories: test.repositories,
+      cardPublisher: test.cardPublisher,
+    });
+
+    const result = await service.createDraft({
+      idempotencyKey: "preview-1",
+      chatId: -100,
+      generalTopicId: 2,
+      timezone: "Europe/Minsk",
+      creatorTelegramUserId: 7,
+      draft,
+    });
+
+    expect(result.match.status).toBe("draft");
+    expect(result.previewMessage.messageId).toBe(20);
+    expect(test.publicCards).toHaveLength(0);
+    expect(test.adminPanels).toHaveLength(1);
+    expect(test.adminPanels[0]?.text).toContain("Предпросмотр матча #v1");
+    expect(test.adminPanels[0]?.text).toContain("Формат: на улице");
+    expect(test.adminPanels[0]?.text).toContain("Место: СОК Олимпийский");
+    expect(test.adminPanels[0]?.text).toContain("Сумма: не указана");
+    expect(test.messages.map((message) => message.kind)).toEqual(["admin_panel"]);
+  });
+
+  it("publishes a draft only after its creator confirms the preview", async () => {
+    const test = fixture();
+    const service = new MatchCreationService({
+      repositories: test.repositories,
+      cardPublisher: test.cardPublisher,
+      now: () => new Date("2026-07-26T12:00:00.000Z"),
+    });
+    const preview = await service.createDraft({
+      idempotencyKey: "preview-publish",
+      chatId: -100,
+      generalTopicId: 2,
+      timezone: "Europe/Minsk",
+      creatorTelegramUserId: 7,
+      draft,
+    });
+
+    const result = await service.processDraftAction({
+      telegramUserId: 7,
+      chatId: 7,
+      messageId: preview.previewMessage.messageId,
+      generalTopicId: 2,
+      action: { kind: "publish", matchId: preview.match.id },
+    });
+
+    expect(result.status).toBe("published");
+    expect(test.matches[0]?.status).toBe("active");
+    expect(test.publicCards).toHaveLength(1);
+    expect(test.publicCards[0]?.text).toContain("#v1");
+    expect(test.edits).toHaveLength(1);
+    expect(test.messages.map((message) => message.kind)).toEqual([
+      "admin_panel",
+      "public_card",
+    ]);
+  });
+
+  it("discards a draft when the creator chooses to edit it", async () => {
+    const test = fixture();
+    const service = new MatchCreationService({
+      repositories: test.repositories,
+      cardPublisher: test.cardPublisher,
+    });
+    const preview = await service.createDraft({
+      idempotencyKey: "preview-edit",
+      chatId: -100,
+      generalTopicId: 2,
+      timezone: "Europe/Minsk",
+      creatorTelegramUserId: 7,
+      draft,
+    });
+
+    const result = await service.processDraftAction({
+      telegramUserId: 7,
+      chatId: 7,
+      messageId: preview.previewMessage.messageId,
+      generalTopicId: 2,
+      action: { kind: "edit", matchId: preview.match.id },
+    });
+
+    expect(result).toMatchObject({
+      status: "discarded",
+      answer: "Черновик удалён. Отправьте новый /match с исправленными данными.",
+    });
+    expect(test.matches).toHaveLength(0);
+    expect(test.publicCards).toHaveLength(0);
+    expect(test.deletedMessages).toEqual([{ chatId: 7, messageId: 20 }]);
+  });
+
   it("creates a public card and a private admin panel", async () => {
     const test = fixture();
     const service = new MatchCreationService({
       repositories: test.repositories,
       cardPublisher: test.cardPublisher,
+      now: () => new Date("2026-07-26T12:00:00.000Z"),
     });
 
     const result = await service.create({
@@ -111,8 +217,11 @@ describe("match creation service", () => {
     expect(result.publicMessage.messageId).toBe(20);
     expect(result.adminMessage.messageId).toBe(21);
     expect(result.match.status).toBe("active");
+    expect(result.match.title).toBe("27.07.2026 20:00 — СОК Олимпийский");
     expect(test.publicCards[0]?.text).toContain("#v1");
-    expect(test.publicCards[0]?.text).toContain("27.07.2026 20:00 — СОК Олимпийский");
+    expect(test.publicCards[0]?.text).toContain("27.07.2026 20:00");
+    expect(test.publicCards[0]?.text).toContain("Сумма: не указана");
+    expect(test.publicCards[0]?.text).toContain("Место: СОК Олимпийский");
     expect(test.adminPanels[0]?.text).toContain("Управление матчем #v1");
     expect(test.edits).toHaveLength(2);
     expect(test.messages.map((message) => message.kind)).toEqual([
@@ -164,7 +273,29 @@ describe("match creation service", () => {
       },
     });
 
-    expect(test.publicCards[0]?.text).toContain("Четверг 20:00-21:30 (BOX365, 100 рублей)");
+    expect(test.publicCards[0]?.text).toContain("Четверг 20:00-21:30");
+    expect(test.publicCards[0]?.text).toContain("Сумма: 100 рублей");
+    expect(test.publicCards[0]?.text).toContain("Место: BOX365");
+  });
+
+  it("uses Today in the public card for a match held today", async () => {
+    const test = fixture();
+    const service = new MatchCreationService({
+      repositories: test.repositories,
+      cardPublisher: test.cardPublisher,
+      now: () => new Date("2026-07-27T12:00:00.000Z"),
+    });
+
+    await service.create({
+      idempotencyKey: "today",
+      chatId: -100,
+      generalTopicId: 2,
+      timezone: "Europe/Minsk",
+      creatorTelegramUserId: 7,
+      draft,
+    });
+
+    expect(test.publicCards[0]?.text).toContain("Сегодня 20:00");
   });
 
   it("returns the cached result for a duplicate idempotency key", async () => {
@@ -200,6 +331,7 @@ describe("match creation service", () => {
     const failingRepositories: MatchCreationRepositories = {
       ...test.repositories,
       matchMessages: {
+        ...test.repositories.matchMessages,
         upsert: () => {
           throw new Error("database unavailable");
         },

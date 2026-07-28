@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 
 import type { AppDatabase } from "../client.js";
 import {
@@ -6,12 +6,14 @@ import {
   matchStatuses,
   type Match,
   type MatchStatus,
+  type VenueType,
 } from "../schema.js";
 
 export interface CreateMatchInput {
   chatId: number;
   scheduledAt: Date | null;
   location: string | null;
+  venueType?: VenueType | null;
   fieldPriceRubles?: number | null;
   title?: string | null;
   requiredPlayers: number;
@@ -25,6 +27,8 @@ export interface UpdateMatchInput {
   location?: string;
   requiredPlayers?: number;
   status?: MatchStatus;
+  venueType?: VenueType | null;
+  cancellationReason?: string | null;
 }
 
 export class MatchesRepository {
@@ -56,6 +60,22 @@ export class MatchesRepository {
       .all();
   }
 
+  /** Returns publishable matches that start within an inclusive time window. */
+  public listScheduledBetween(start: Date, end: Date): Match[] {
+    return this.db
+      .select()
+      .from(matches)
+      .where(
+        and(
+          inArray(matches.status, ["active", "confirmed"]),
+          gte(matches.scheduledAt, start),
+          lte(matches.scheduledAt, end),
+        ),
+      )
+      .orderBy(matches.scheduledAt)
+      .all();
+  }
+
   public create(input: CreateMatchInput): Match {
     const now = new Date();
     const record = this.db
@@ -64,6 +84,7 @@ export class MatchesRepository {
         chatId: input.chatId,
         scheduledAt: input.scheduledAt,
         location: input.location,
+        venueType: input.venueType ?? null,
         fieldPriceRubles: input.fieldPriceRubles ?? null,
         title: input.title ?? null,
         requiredPlayers: input.requiredPlayers,
@@ -88,6 +109,8 @@ export class MatchesRepository {
       location?: string;
       requiredPlayers?: number;
       status?: MatchStatus;
+      venueType?: VenueType | null;
+      cancellationReason?: string | null;
       updatedAt: Date;
     } = { updatedAt: new Date() };
 
@@ -95,6 +118,8 @@ export class MatchesRepository {
     if (input.location !== undefined) values.location = input.location;
     if (input.requiredPlayers !== undefined) values.requiredPlayers = input.requiredPlayers;
     if (input.status !== undefined) values.status = input.status;
+    if (input.venueType !== undefined) values.venueType = input.venueType;
+    if (input.cancellationReason !== undefined) values.cancellationReason = input.cancellationReason;
 
     return this.db.update(matches).set(values).where(eq(matches.id, id)).returning().get();
   }

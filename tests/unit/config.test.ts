@@ -8,6 +8,7 @@ describe("configuration", () => {
 
     expect(config.groupTimezone).toBe("Europe/Minsk");
     expect(config.defaultPlayersNeeded).toBe(10);
+    expect(config.confirmMatchCreation).toBe(true);
     expect(config.openrouter.model).toBe("openai/gpt-4.1-mini");
     expect(config.telegram.botToken).toBeUndefined();
   });

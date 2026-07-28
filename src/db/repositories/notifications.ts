@@ -79,6 +79,25 @@ export class NotificationsRepository {
       .get();
   }
 
+  /** Claims the one daily weather forecast shared by all matches in a chat. */
+  public claimWeatherForecastDay(input: {
+    matchId: number;
+    transitionKey: string;
+    sentAt?: Date;
+  }): Notification | undefined {
+    return this.db
+      .insert(notifications)
+      .values({
+        matchId: input.matchId,
+        notificationType: "weather_forecast",
+        transitionKey: input.transitionKey,
+        sentAt: input.sentAt ?? new Date(),
+      })
+      .onConflictDoNothing()
+      .returning()
+      .get();
+  }
+
   public createIfAbsent(input: CreateNotificationInput): Notification | undefined {
     return this.claim(input);
   }

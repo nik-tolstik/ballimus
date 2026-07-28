@@ -1,6 +1,6 @@
 import { DateTime } from "luxon";
 
-import type { Match, MatchStatus, Vote } from "../db/schema.js";
+import type { ExternalParticipant, Match, MatchStatus, Vote } from "../db/schema.js";
 
 export interface MatchInfoRepositories {
   matches: {
@@ -12,6 +12,7 @@ export interface MatchInfoRepositories {
   };
   externalParticipants: {
     countByMatchId(matchId: number): number;
+    listByMatchId?(matchId: number): ExternalParticipant[];
   };
 }
 
@@ -25,6 +26,7 @@ export interface MatchInfoFoundResult {
   match: Match;
   votes: Vote[];
   externalCount: number;
+  externalParticipants: ExternalParticipant[];
 }
 
 export interface MatchInfoNotFoundResult {
@@ -73,6 +75,7 @@ export class MatchInfoService {
       match,
       votes: this.repositories.votes.listByMatchId(match.id),
       externalCount: this.repositories.externalParticipants.countByMatchId(match.id),
+      externalParticipants: this.repositories.externalParticipants.listByMatchId?.(match.id) ?? [],
     };
   }
 }
@@ -126,6 +129,32 @@ function matchStatusLabel(status: Match["status"]): string {
   }
 }
 
+function venueLabel(venueType: Match["venueType"]): string {
+  switch (venueType) {
+    case "outdoor":
+      return "на улице";
+    case "indoor":
+      return "в здании";
+    default:
+      return "не указан";
+  }
+}
+
+function namedExternalParticipantLines(
+  participants: readonly ExternalParticipant[],
+): string[] {
+  const totals = new Map<string, number>();
+  for (const participant of participants) {
+    const label = participant.sourceLabel?.trim();
+    if (label === undefined || label === "") continue;
+    totals.set(label, (totals.get(label) ?? 0) + participant.quantity);
+  }
+  return [...totals.entries()]
+    .filter(([, quantity]) => quantity !== 0)
+    .sort(([left], [right]) => left.localeCompare(right, "ru"))
+    .map(([label, quantity]) => `- От ${label}: ${quantity}`);
+}
+
 function formatParticipants(votes: readonly Vote[], option: Vote["option"]): string[] {
   const participants = votes
     .filter((vote) => vote.option === option)
@@ -137,21 +166,27 @@ export function formatMatchInfo(
   result: MatchInfoFoundResult,
   timezone: string,
 ): string {
-  const { match, votes, externalCount } = result;
+  const { match, votes, externalCount, externalParticipants } = result;
   const fieldPriceRubles = match.fieldPriceRubles ?? null;
+  const cancellationReason = match.cancellationReason?.trim();
   const scheduledAt =
     match.scheduledAt === null
       ? "время уточняется"
       : DateTime.fromJSDate(match.scheduledAt, { zone: timezone }).toFormat("dd.LL.yyyy HH:mm");
   const goingCount = votes.filter((vote) => vote.option === "going").length + externalCount;
   const lines = [
-    `⚽ Матч #v${match.id}`,
+    `Матч #v${match.id}`,
     `Дата: ${scheduledAt}`,
     `Место: ${match.location ?? "место уточняется"}`,
+    `Формат: ${venueLabel(match.venueType)}`,
     `Цена поля: ${fieldPriceRubles === null ? "не указана" : `${fieldPriceRubles} рублей`}`,
     `Статус: ${matchStatusLabel(match.status)}`,
     `Участники: ${goingCount}/${match.requiredPlayers}`,
     `Дополнительные игроки: ${externalCount}`,
+    ...(cancellationReason === undefined || cancellationReason === ""
+      ? []
+      : [`Причина отмены: ${cancellationReason}`]),
+    ...namedExternalParticipantLines(externalParticipants),
     "",
   ];
 

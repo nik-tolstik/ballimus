@@ -50,7 +50,7 @@ const DEFAULT_OPENROUTER_MODEL = "openai/gpt-4.1-mini";
 const DEFAULT_DATABASE_URL = "file:./data/football-bot.db";
 const DEFAULT_GROUP_TIMEZONE = "Europe/Minsk";
 const DEFAULT_PLAYERS_NEEDED = 10;
-const DEFAULT_CONFIRM_MATCH_CREATION = false;
+const DEFAULT_CONFIRM_MATCH_CREATION = true;
 const DEFAULT_LOG_LEVEL: LogLevel = "info";
 const LOG_LEVELS: readonly LogLevel[] = ["debug", "info", "warn", "error"];
 

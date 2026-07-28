@@ -76,7 +76,7 @@ describe("match parser request", () => {
         schema: expect.objectContaining({
           type: "object",
           additionalProperties: false,
-          required: ["date", "time", "location", "requiredPlayers"],
+          required: ["date", "time", "location", "requiredPlayers", "venueType"],
         }),
       },
     });
@@ -91,6 +91,108 @@ describe("match parser request", () => {
 });
 
 describe("Russian /match parsing", () => {
+  it("parses the labelled template without calling the language model", async () => {
+    const parser = new MatchParser({
+      timezone: "Europe/Minsk",
+      now: REFERENCE_NOW,
+    });
+
+    await expect(
+      parser.parse(
+        [
+          "/match",
+          "Дата: 03.08.2026",
+          "Время: 20:00",
+          "Место: Ракета",
+          "Формат: на улице",
+          "Нужно игроков: 10",
+          "Цена поля: 100 рублей",
+        ].join("\n"),
+      ),
+    ).resolves.toEqual({
+      status: "ok",
+      draft: {
+        date: "2026-08-03",
+        time: "20:00",
+        location: "Ракета",
+        venueType: "outdoor",
+        requiredPlayers: 10,
+        fieldPriceRubles: 100,
+      },
+    });
+  });
+
+  it("accepts an indoor venue in the labelled template", async () => {
+    const parser = new MatchParser({
+      timezone: "Europe/Minsk",
+      now: REFERENCE_NOW,
+    });
+
+    await expect(
+      parser.parse(
+        [
+          "/match",
+          "Дата: 03.08.2026",
+          "Время: 20:00",
+          "Место: Манеж",
+          "Формат: в здании",
+        ].join("\n"),
+      ),
+    ).resolves.toEqual({
+      status: "ok",
+      draft: {
+        date: "2026-08-03",
+        time: "20:00",
+        location: "Манеж",
+        venueType: "indoor",
+        requiredPlayers: DEFAULT_REQUIRED_PLAYERS,
+      },
+    });
+  });
+
+  it("asks for the venue format when the labelled template omits it", async () => {
+    const parser = new MatchParser({
+      timezone: "Europe/Minsk",
+      now: REFERENCE_NOW,
+    });
+
+    const result = await parser.parse(
+      [
+        "/match",
+        "Дата: 03.08.2026",
+        "Время: 20:00",
+        "Место: Ракета",
+      ].join("\n"),
+    );
+
+    expect(result).toMatchObject({
+      status: "clarification",
+      reasons: [{ field: "venueType", kind: "missing" }],
+    });
+  });
+
+  it("rejects an unknown venue format in the labelled template", async () => {
+    const parser = new MatchParser({
+      timezone: "Europe/Minsk",
+      now: REFERENCE_NOW,
+    });
+
+    const result = await parser.parse(
+      [
+        "/match",
+        "Дата: 03.08.2026",
+        "Время: 20:00",
+        "Место: Ракета",
+        "Формат: на крыше",
+      ].join("\n"),
+    );
+
+    expect(result).toMatchObject({
+      status: "clarification",
+      reasons: [{ field: "venueType", kind: "invalid" }],
+    });
+  });
+
   it("parses the canonical command", async () => {
     const { parser } = mockedParser({
       date: "2026-07-27",

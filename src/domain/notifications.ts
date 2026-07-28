@@ -1,9 +1,3 @@
-export interface ParticipantIdentity {
-  telegramUserId: number;
-  username?: string | null;
-  displayName: string;
-}
-
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -12,49 +6,46 @@ function escapeHtml(value: string): string {
     .replaceAll('"', "&quot;");
 }
 
-export function formatParticipantMention(identity: ParticipantIdentity): string {
-  const username = identity.username?.trim().replace(/^@+/, "");
-  if (username !== undefined && username !== "") return `@${username}`;
-
-  const displayName = identity.displayName.trim() || "Игрок";
-  return `<a href="tg://user?id=${identity.telegramUserId}">${escapeHtml(displayName)}</a>`;
-}
-
 function formatMatchContext(matchId: number, title: string | null | undefined): string {
   const normalizedTitle = title?.trim();
   return normalizedTitle === undefined || normalizedTitle === ""
     ? `#v${matchId}`
-    : `#v${matchId} «${normalizedTitle}»`;
+    : `#v${matchId} «${escapeHtml(normalizedTitle)}»`;
 }
 
 export function formatThresholdNotification(
   matchId: number,
   title: string | null | undefined,
-  threshold: number,
-): string {
-  return `⚽ ${formatMatchContext(matchId, title)} — Набралось ${threshold} игроков — можно играть!`;
-}
-
-export function formatWithdrawalNotification(
-  matchId: number,
-  title: string | null | undefined,
-  identity: ParticipantIdentity,
   goingCount: number,
   threshold: number,
 ): string {
-  return `⚠️ ${formatMatchContext(matchId, title)} — ${formatParticipantMention(identity)} отменил участие. Сейчас: ${goingCount}/${threshold}`;
+  return `${formatMatchContext(matchId, title)} — Набралось ${goingCount}/${threshold} игроков — можно играть!`;
+}
+
+export function formatThresholdLostNotification(
+  matchId: number,
+  title: string | null | undefined,
+  goingCount: number,
+  threshold: number,
+): string {
+  return `${formatMatchContext(matchId, title)} — Игроков снова меньше минимума. Сейчас: ${goingCount}/${threshold}`;
 }
 
 export function formatCancellationNotification(
   matchId: number,
   title: string | null | undefined,
+  reason: string | null | undefined,
 ): string {
-  return `🚫 ${formatMatchContext(matchId, title)} — матч отменён.`;
+  const normalizedReason = reason?.trim();
+  const reasonText = normalizedReason === undefined || normalizedReason === ""
+    ? ""
+    : ` Причина: ${escapeHtml(normalizedReason)}.`;
+  return `${formatMatchContext(matchId, title)} — матч отменён.${reasonText}`;
 }
 
 export function formatConfirmationNotification(
   matchId: number,
   title: string | null | undefined,
 ): string {
-  return `✅ ${formatMatchContext(matchId, title)} — матч состоится.`;
+  return `${formatMatchContext(matchId, title)} — матч состоится.`;
 }

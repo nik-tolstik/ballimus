@@ -66,9 +66,10 @@ describe("match info", () => {
     expect(result.status).toBe("found");
     if (result.status !== "found") return;
     expect(formatMatchInfo(result, "Europe/Minsk")).toBe(
-      "⚽ Матч #v2\n" +
+      "Матч #v2\n" +
         "Дата: 27.07.2026 20:00\n" +
        "Место: Ракета\n" +
+        "Формат: не указан\n" +
         "Цена поля: не указана\n" +
         "Статус: Голосование открыто\n" +
         "Участники: 3/5\n" +

@@ -15,6 +15,8 @@ const baseMatch = {
   title: "27.07.2026 20:00 — СОК Олимпийский",
   requiredPlayers: 2,
   status: "active",
+  venueType: "outdoor",
+  cancellationReason: null,
   creatorTelegramUserId: 7,
   createdAt: new Date("2026-07-26T00:00:00.000Z"),
   updatedAt: new Date("2026-07-26T00:00:00.000Z"),
@@ -27,6 +29,7 @@ interface Fixture {
   notifications: Notification[];
   sent: string[];
   refreshed: number[];
+  cancellationPrompts: number[];
 }
 
 function fixture(externalCount = 0): Fixture {
@@ -36,6 +39,7 @@ function fixture(externalCount = 0): Fixture {
   const processed = new Set<number>();
   const sent: string[] = [];
   const refreshed: number[] = [];
+  const cancellationPrompts: number[] = [];
 
   const repositories: MatchActionRepositories = {
     matchActions: {
@@ -83,6 +87,9 @@ function fixture(externalCount = 0): Fixture {
           return { status: "inactive_match", match };
         }
         match.status = input.status;
+        if (input.cancellationReason !== undefined) {
+          match.cancellationReason = input.cancellationReason;
+        }
         processed.add(input.updateId);
         return { status: "changed", match };
       },
@@ -102,7 +109,6 @@ function fixture(externalCount = 0): Fixture {
       },
     },
     notifications: {
-      listByMatchId: (matchId) => notifications.filter((item) => item.matchId === matchId),
       claim: (input) => {
         const exists = notifications.some(
           (item) =>
@@ -130,7 +136,7 @@ function fixture(externalCount = 0): Fixture {
     },
   };
 
-  return { repositories, match, votes, notifications, sent, refreshed };
+  return { repositories, match, votes, notifications, sent, refreshed, cancellationPrompts };
 }
 
 function update(
@@ -162,6 +168,9 @@ function serviceFor(test: Fixture, admin = true) {
     refreshCard: async (matchId) => {
       test.refreshed.push(matchId);
     },
+    showCancellationPrompt: async (match) => {
+      test.cancellationPrompts.push(match.id);
+    },
     isAdmin: () => admin,
   });
 }
@@ -173,26 +182,30 @@ describe("match callback actions", () => {
 
     const result = await service.process(update(1, 10, "going"));
 
-    expect(result).toMatchObject({ status: "processed", answer: "Ваш выбор сохранён: участвую" });
+    expect(result).toMatchObject({ status: "processed", action: { kind: "vote", matchId: 1, option: "going" } });
+    expect(result).not.toHaveProperty("answer");
     expect(test.votes[0]?.option).toBe("going");
     expect(test.refreshed).toEqual([1]);
   });
 
-  it("announces threshold once and warns about a confirmed withdrawal", async () => {
+  it("announces every transition across the minimum player threshold", async () => {
     const test = fixture();
     const service = serviceFor(test);
 
     await service.process(update(10, 10, "going"));
     const threshold = await service.process(update(11, 11, "going"));
-    const withdrawal = await service.process(update(12, 10, "maybe"));
-    const duplicate = await service.process(update(12, 10, "maybe"));
+    const loss = await service.process(update(12, 10, "maybe"));
+    const thresholdAgain = await service.process(update(13, 10, "going"));
+    const duplicate = await service.process(update(13, 10, "going"));
 
     expect(threshold).toMatchObject({ status: "processed" });
-    expect(withdrawal).toMatchObject({ status: "processed" });
+    expect(loss).toMatchObject({ status: "processed" });
+    expect(thresholdAgain).toMatchObject({ status: "processed" });
     expect(duplicate).toEqual({ status: "ignored", answer: "Это действие уже обработано" });
     expect(test.sent).toEqual([
-      "⚽ #v1 «27.07.2026 20:00 — СОК Олимпийский» — Набралось 2 игроков — можно играть!",
-      '⚠️ #v1 «27.07.2026 20:00 — СОК Олимпийский» — @ivan отменил участие. Сейчас: 1/2',
+      "#v1 «27.07.2026 20:00 — СОК Олимпийский» — Набралось 2/2 игроков — можно играть!",
+      "#v1 «27.07.2026 20:00 — СОК Олимпийский» — Игроков снова меньше минимума. Сейчас: 1/2",
+      "#v1 «27.07.2026 20:00 — СОК Олимпийский» — Набралось 2/2 игроков — можно играть!",
     ]);
   });
 
@@ -203,7 +216,7 @@ describe("match callback actions", () => {
     await service.process(update(20, 10, "going"));
 
     expect(test.sent).toEqual([
-      "⚽ #v1 «27.07.2026 20:00 — СОК Олимпийский» — Набралось 2 игроков — можно играть!",
+      "#v1 «27.07.2026 20:00 — СОК Олимпийский» — Набралось 2/2 игроков — можно играть!",
     ]);
   });
 
@@ -265,23 +278,32 @@ describe("match callback actions", () => {
     });
   });
 
-  it("cancels a match and sends an idempotent cancellation notification", async () => {
+  it("asks for a cancellation reason, then cancels the match idempotently", async () => {
     const test = fixture();
     const service = serviceFor(test);
-    const action = {
+    const prompt = {
       ...update(30, 7, "going", 11),
       chatId: 7,
       messageId: 11,
       action: { kind: "cancel" as const, matchId: 1 },
     };
+    const action = {
+      ...prompt,
+      updateId: 31,
+      action: { kind: "cancel_insufficient_players" as const, matchId: 1 },
+    };
 
+    const prompted = await service.process(prompt);
     const first = await service.process(action);
     const second = await service.process(action);
 
+    expect(prompted).toMatchObject({ status: "processed" });
+    expect(test.cancellationPrompts).toEqual([1]);
     expect(first).toMatchObject({ status: "processed", answer: "Матч отменён" });
     expect(second.status).toBe("ignored");
+    expect(test.match.cancellationReason).toBe("Недостаточно игроков");
     expect(test.sent).toEqual([
-      "🚫 #v1 «27.07.2026 20:00 — СОК Олимпийский» — матч отменён.",
+      "#v1 «27.07.2026 20:00 — СОК Олимпийский» — матч отменён. Причина: Недостаточно игроков.",
     ]);
   });
 });

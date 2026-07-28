@@ -1,44 +1,34 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  formatConfirmationNotification,
-  formatParticipantMention,
   formatCancellationNotification,
+  formatConfirmationNotification,
+  formatThresholdLostNotification,
   formatThresholdNotification,
-  formatWithdrawalNotification,
 } from "../../src/domain/notifications.js";
 
 describe("notification formatting", () => {
-  it("prefers a username", () => {
-    expect(
-      formatParticipantMention({ telegramUserId: 1, username: "ivan", displayName: "Ivan" }),
-    ).toBe("@ivan");
+  it("formats threshold transition messages", () => {
+    expect(formatThresholdNotification(9, "Четверг 20:00-21:30", 12, 10)).toBe(
+      "#v9 «Четверг 20:00-21:30» — Набралось 12/10 игроков — можно играть!",
+    );
+    expect(formatThresholdLostNotification(9, "Четверг 20:00-21:30", 9, 10)).toBe(
+      "#v9 «Четверг 20:00-21:30» — Игроков снова меньше минимума. Сейчас: 9/10",
+    );
   });
 
-  it("uses a clickable escaped mention when no username exists", () => {
-    expect(
-      formatParticipantMention({ telegramUserId: 2, displayName: "<Аня> & Ко" }),
-    ).toBe('<a href="tg://user?id=2">&lt;Аня&gt; &amp; Ко</a>');
+  it("formats cancellation reason and escapes supplied text", () => {
+    expect(formatCancellationNotification(9, "Четверг", "Плохая погода")).toBe(
+      "#v9 «Четверг» — матч отменён. Причина: Плохая погода.",
+    );
+    expect(formatCancellationNotification(9, "<Матч>", "<дождь>")).toBe(
+      "#v9 «&lt;Матч&gt;» — матч отменён. Причина: &lt;дождь&gt;.",
+    );
   });
 
-  it("formats the required messages", () => {
-    expect(formatThresholdNotification(9, "Четверг 20:00-21:30", 10)).toBe(
-      "⚽ #v9 «Четверг 20:00-21:30» — Набралось 10 игроков — можно играть!",
-    );
-    expect(
-      formatWithdrawalNotification(
-        9,
-        "Четверг 20:00-21:30",
-        { telegramUserId: 3, username: "ivan", displayName: "Ivan" },
-        9,
-        10,
-      ),
-    ).toBe("⚠️ #v9 «Четверг 20:00-21:30» — @ivan отменил участие. Сейчас: 9/10");
-    expect(formatCancellationNotification(9, "Четверг 20:00-21:30")).toBe(
-      "🚫 #v9 «Четверг 20:00-21:30» — матч отменён.",
-    );
+  it("formats confirmation", () => {
     expect(formatConfirmationNotification(9, "Четверг 20:00-21:30")).toBe(
-      "✅ #v9 «Четверг 20:00-21:30» — матч состоится.",
+      "#v9 «Четверг 20:00-21:30» — матч состоится.",
     );
   });
 });

@@ -17,12 +17,19 @@ import {
   matchDraftSchema,
   normalizedMatchDraftSchema,
   type MatchDraft,
+  type MatchVenueType,
 } from "./match-schema.js";
 
 export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 export const DEFAULT_MATCH_PARSER_MODEL = "openai/gpt-4.1-mini";
 
-export type MatchClarificationField = "date" | "time" | "location" | "requiredPlayers" | "response";
+export type MatchClarificationField =
+  | "date"
+  | "time"
+  | "location"
+  | "venueType"
+  | "requiredPlayers"
+  | "response";
 export type MatchClarificationKind = "missing" | "ambiguous" | "invalid";
 
 export interface MatchClarificationReason {
@@ -154,6 +161,14 @@ function stripMatchCommand(command: string): string {
   return normalizedText(command).replace(/^\/match(?:@[-\w]+)?(?:\s+|$)/iu, "").trim();
 }
 
+function stripMatchCommandPreservingLines(command: string): string {
+  return command
+    .normalize("NFC")
+    .replace(/^\s*\/match(?:@[-\w]+)?[ \t]*(?:\r?\n)?/iu, "")
+    .replace(/\r\n?/gu, "\n")
+    .trim();
+}
+
 function resolveLocalDateTime(now: Date, timezone: string): DateTime {
   if (Number.isNaN(now.getTime())) {
     throw new MatchParserConfigurationError("The parser reference time must be a valid Date");
@@ -194,6 +209,7 @@ function buildSystemPrompt(options: MatchParserRequestOptions): string {
     "Normalize a Russian date to YYYY-MM-DD using the configured timezone and reference date; resolve relative dates such as завтра.",
     "Normalize a local time to HH:mm without converting it to UTC.",
     "Trim surrounding whitespace from the location while preserving meaningful spaces inside it.",
+    "Set venueType to outdoor for 'на улице' and indoor for 'в здании'. If the venue format is absent or ambiguous, return null for venueType.",
     "A monetary amount such as 100 рублей is the total field price, not part of the location name; keep it separate from the location.",
     `If the player count is omitted, return null; the application will use ${defaultRequiredPlayers}.`,
     "For a missing or genuinely ambiguous date, time, or location, return null for that field instead of guessing.",
@@ -308,6 +324,184 @@ function normalizeLocation(value: string): string | undefined {
   return text === "" ? undefined : text;
 }
 
+type CanonicalMatchField =
+  | "date"
+  | "time"
+  | "location"
+  | "venueType"
+  | "requiredPlayers"
+  | "fieldPriceRubles";
+
+const CANONICAL_MATCH_FIELD_NAMES: Readonly<Record<string, CanonicalMatchField>> = {
+  "дата": "date",
+  "время": "time",
+  "место": "location",
+  "формат": "venueType",
+  "нужно игроков": "requiredPlayers",
+  "игроков": "requiredPlayers",
+  "цена поля": "fieldPriceRubles",
+};
+
+function canonicalFieldName(value: string): CanonicalMatchField | undefined {
+  return CANONICAL_MATCH_FIELD_NAMES[normalizedText(value).toLocaleLowerCase("ru-RU")];
+}
+
+function canonicalVenueType(value: string): MatchVenueType | undefined {
+  const normalized = normalizedText(value).toLocaleLowerCase("ru-RU");
+  if (normalized === "на улице") return "outdoor";
+  if (normalized === "в здании") return "indoor";
+  return undefined;
+}
+
+function canonicalPlayerCount(value: string): number | undefined {
+  const match = /^(\d+)(?:\s*(?:игрок(?:а|ов)?|человек(?:а|ов)?))?$/iu.exec(
+    normalizedText(value),
+  );
+  if (match?.[1] === undefined) return undefined;
+
+  const parsed = Number(match[1]);
+  return Number.isSafeInteger(parsed) && parsed >= MIN_REQUIRED_PLAYERS && parsed <= MAX_REQUIRED_PLAYERS
+    ? parsed
+    : undefined;
+}
+
+function canonicalFieldPrice(value: string): number | undefined {
+  const match = /^(\d+)(?:\s*(?:₽|руб(?:\.|лей|ля|ль)?|р\.))?$/iu.exec(
+    normalizedText(value),
+  );
+  if (match?.[1] === undefined) return undefined;
+
+  const parsed = Number(match[1]);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+/**
+ * Parses the labelled /match template before falling back to the language model.
+ * Returning undefined means that the text did not use the template at all.
+ */
+function parseCanonicalMatchCommand(
+  command: string,
+  reference: DateTime,
+  defaultRequiredPlayers: number,
+): MatchParseResult | undefined {
+  const body = stripMatchCommandPreservingLines(command);
+  if (body === "" || !body.includes("\n")) return undefined;
+
+  const values = new Map<CanonicalMatchField, string>();
+  let recognizedField = false;
+  let hasDuplicateField = false;
+
+  for (const rawLine of body.split("\n")) {
+    const line = rawLine.trim();
+    if (line === "") continue;
+
+    const match = /^([^:]+):\s*(.*)$/u.exec(line);
+    if (match?.[1] === undefined) continue;
+
+    const field = canonicalFieldName(match[1]);
+    if (field === undefined) continue;
+
+    recognizedField = true;
+    if (values.has(field)) {
+      hasDuplicateField = true;
+      continue;
+    }
+    values.set(field, match[2] ?? "");
+  }
+
+  if (!recognizedField) return undefined;
+
+  const reasons: MatchClarificationReason[] = [];
+  if (hasDuplicateField) addReason(reasons, "response", "invalid");
+
+  const dateValue = values.get("date");
+  let date: string | undefined;
+  if (dateValue === undefined || normalizedText(dateValue) === "") {
+    addReason(reasons, "date", "missing");
+  } else {
+    date = normalizeDate(dateValue, reference);
+    if (date === undefined) addReason(reasons, "date", "invalid");
+  }
+
+  const timeValue = values.get("time");
+  let time: string | null = null;
+  if (timeValue !== undefined && normalizedText(timeValue) !== "") {
+    time = normalizeTime(timeValue) ?? null;
+    if (time === null) addReason(reasons, "time", "invalid");
+  }
+
+  const locationValue = values.get("location");
+  let location: string | null = null;
+  if (locationValue !== undefined && normalizedText(locationValue) !== "") {
+    location = normalizeLocation(locationValue) ?? null;
+    if (
+      location === null ||
+      location.length < MIN_LOCATION_LENGTH ||
+      location.length > MAX_LOCATION_LENGTH
+    ) {
+      addReason(reasons, "location", "invalid");
+    }
+  }
+
+  const venueValue = values.get("venueType");
+  let venueType: MatchVenueType | undefined;
+  if (venueValue === undefined || normalizedText(venueValue) === "") {
+    addReason(reasons, "venueType", "missing");
+  } else {
+    venueType = canonicalVenueType(venueValue);
+    if (venueType === undefined) addReason(reasons, "venueType", "invalid");
+  }
+
+  const playerCountValue = values.get("requiredPlayers");
+  let requiredPlayers = defaultRequiredPlayers;
+  if (playerCountValue !== undefined && normalizedText(playerCountValue) !== "") {
+    const parsed = canonicalPlayerCount(playerCountValue);
+    if (parsed === undefined) addReason(reasons, "requiredPlayers", "invalid");
+    else requiredPlayers = parsed;
+  }
+
+  const priceValue = values.get("fieldPriceRubles");
+  let fieldPriceRubles: number | undefined;
+  if (priceValue !== undefined) {
+    fieldPriceRubles = canonicalFieldPrice(priceValue);
+    if (fieldPriceRubles === undefined) addReason(reasons, "response", "invalid");
+  }
+
+  if (reasons.length > 0) return clarification(reasons);
+
+  const validated = normalizedMatchDraftSchema.safeParse({
+    date,
+    time,
+    location,
+    venueType,
+    requiredPlayers,
+  });
+  if (!validated.success) {
+    const finalReasons: MatchClarificationReason[] = [];
+    for (const issue of validated.error.issues) {
+      const field = issue.path[0];
+      if (
+        field === "date" ||
+        field === "time" ||
+        field === "location" ||
+        field === "venueType" ||
+        field === "requiredPlayers"
+      ) {
+        addReason(finalReasons, field, "invalid");
+      }
+    }
+    if (finalReasons.length === 0) addReason(finalReasons, "response", "invalid");
+    return clarification(finalReasons);
+  }
+
+  const draft: MatchDraft = {
+    ...validated.data,
+    ...(fieldPriceRubles === undefined ? {} : { fieldPriceRubles }),
+  };
+
+  return { status: "ok", draft };
+}
+
 function parsePlayerCountToken(token: string): number | undefined {
   const numeric = Number(token.replace(",", "."));
   if (token !== "" && Number.isFinite(numeric)) return numeric;
@@ -404,6 +598,10 @@ function addReason(
     date: kind === "missing" ? "Уточните дату матча." : "Уточните дату матча однозначно.",
     time: kind === "missing" ? "Уточните местное время матча." : "Уточните время матча однозначно.",
     location: kind === "missing" ? "Уточните место матча." : "Уточните место матча однозначно.",
+    venueType:
+      kind === "missing"
+        ? "Укажите формат: на улице или в здании."
+        : "Формат матча должен быть: на улице или в здании.",
     requiredPlayers:
       kind === "invalid"
         ? `Укажите целое число игроков от ${MIN_REQUIRED_PLAYERS} до ${MAX_REQUIRED_PLAYERS}.`
@@ -442,7 +640,7 @@ function validateDefaultRequiredPlayers(value: number): void {
 }
 
 export class MatchParser {
-  private readonly client: MatchParserClient;
+  private readonly client: MatchParserClient | undefined;
   private readonly timezone: string;
   private readonly model: string;
   private readonly defaultRequiredPlayers: number;
@@ -462,7 +660,8 @@ export class MatchParser {
     }
 
     if (options.apiKey === undefined || options.apiKey.trim() === "") {
-      throw new MatchParserConfigurationError("An OpenRouter API key or injected parser client is required");
+      this.client = undefined;
+      return;
     }
 
     const openRouterClient = new OpenAI({
@@ -489,6 +688,19 @@ export class MatchParser {
     }
 
     const referenceTime = typeof this.now === "function" ? this.now() : this.now;
+    const canonicalResult = parseCanonicalMatchCommand(
+      command,
+      resolveLocalDateTime(referenceTime, this.timezone),
+      this.defaultRequiredPlayers,
+    );
+    if (canonicalResult !== undefined) return canonicalResult;
+
+    if (this.client === undefined) {
+      throw new MatchParserConfigurationError(
+        "An OpenRouter API key or injected parser client is required for free-form match commands",
+      );
+    }
+
     const request = buildMatchParserRequest({
       command,
       timezone: this.timezone,
@@ -551,6 +763,8 @@ export class MatchParser {
       } else location = normalizedLocation;
     }
 
+    const venueType = modelDraft.venueType ?? undefined;
+
     let requiredPlayers: number | undefined;
     if (!thresholdHint.invalid) {
       requiredPlayers = modelDraft.requiredPlayers ?? thresholdHint.value ?? this.defaultRequiredPlayers;
@@ -565,12 +779,24 @@ export class MatchParser {
 
     if (reasons.length > 0) return clarification(reasons);
 
-    const validated = normalizedMatchDraftSchema.safeParse({ date, time, location, requiredPlayers });
+    const validated = normalizedMatchDraftSchema.safeParse({
+      date,
+      time,
+      location,
+      requiredPlayers,
+      ...(venueType === undefined ? {} : { venueType }),
+    });
     if (!validated.success) {
       const finalReasons: MatchClarificationReason[] = [];
       for (const issue of validated.error.issues) {
         const field = issue.path[0];
-        if (field === "date" || field === "time" || field === "location" || field === "requiredPlayers") {
+        if (
+          field === "date" ||
+          field === "time" ||
+          field === "location" ||
+          field === "venueType" ||
+          field === "requiredPlayers"
+        ) {
           addReason(finalReasons, field, "invalid");
         }
       }

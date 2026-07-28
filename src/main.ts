@@ -6,7 +6,10 @@ import type { Bot, Context } from "grammy";
 import { createBot, type BotDependencies } from "./bot/create-bot.js";
 import { createDatabaseClient } from "./db/client.js";
 import { createRepositories } from "./db/repositories/index.js";
-import { createMatchCreationService } from "./application/match-creation.js";
+import {
+  createMatchCreationService,
+  parseMatchDraftAction,
+} from "./application/match-creation.js";
 import { createExternalParticipantService } from "./application/external-participants.js";
 import {
   createMatchActionService,
@@ -14,6 +17,7 @@ import {
 import { MatchActionService } from "./application/match-actions.js";
 import {
   adminPanelContent,
+  cancellationPromptContent,
   type MatchCallbackUpdate,
 } from "./application/match-card.js";
 import { MatchCardUpdater } from "./application/match-card-updater.js";
@@ -36,10 +40,24 @@ import {
   validateStartupConfig,
   type AppConfig,
 } from "./config.js";
+import {
+  OpenMeteoWeatherForecastClient,
+} from "./application/weather-forecast.js";
+import {
+  createWeatherForecastNotificationStore,
+  createWeatherForecastScheduler,
+} from "./scheduler/weather-forecast-scheduler.js";
 
 export interface MainDependencies {
   createBot?: (config: StartupConfig) => Bot;
 }
+
+interface RuntimeLifecycleHooks {
+  start(): void;
+  stop(): void;
+}
+
+const runtimeLifecycleHooks = new WeakMap<Bot, RuntimeLifecycleHooks>();
 
 function messageText(context: Context): string {
   return context.msg?.text ?? "";
@@ -149,11 +167,6 @@ function createRuntimeBot(config: StartupConfig): Bot {
     return parser;
   };
 
-  const matchCreation = createMatchCreationService({
-    repositories,
-    cardPublisher,
-  });
-
   const notifier = {
     send: async (text: string) => {
       await getBot().api.sendMessage(chatId, text, {
@@ -172,11 +185,33 @@ function createRuntimeBot(config: StartupConfig): Bot {
     }
   };
 
-  const cardUpdater = new MatchCardUpdater(repositories, cardPublisher);
+  const matchCreation = createMatchCreationService({
+    repositories,
+    cardPublisher,
+    authorizeCreator: isCommandAuthorized,
+    timezone: config.groupTimezone,
+  });
+
+  const cardUpdater = new MatchCardUpdater(repositories, cardPublisher, config.groupTimezone);
   const matchAction = createMatchActionService({
     repositories,
     notifier,
     refreshCard: (matchId) => cardUpdater.refresh(matchId),
+    showCancellationPrompt: async (match) => {
+      const adminMessage = repositories.matchMessages.findByMatchIdAndKind(
+        match.id,
+        "admin_panel",
+      );
+      if (adminMessage === undefined || cardPublisher.editMessage === undefined) return;
+
+      const content = cancellationPromptContent(match);
+      await cardPublisher.editMessage({
+        chatId: adminMessage.chatId,
+        messageId: adminMessage.messageId,
+        text: content.text,
+        replyMarkup: content.replyMarkup,
+      });
+    },
     isAdmin: isCommandAuthorized,
   });
   const externalParticipant = createExternalParticipantService({
@@ -185,6 +220,15 @@ function createRuntimeBot(config: StartupConfig): Bot {
     refreshCard: (matchId) => cardUpdater.refresh(matchId),
   });
   const matchInfo = createMatchInfoService(repositories);
+  const weatherScheduler = createWeatherForecastScheduler({
+    chatId,
+    repositories: {
+      matches: repositories.matches,
+      weatherNotifications: createWeatherForecastNotificationStore(repositories.notifications),
+    },
+    notifier,
+    forecastClient: new OpenMeteoWeatherForecastClient(),
+  });
 
   const participantDisplayName = (context: Context): string => {
     const user = context.from;
@@ -228,15 +272,20 @@ function createRuntimeBot(config: StartupConfig): Bot {
           return;
         }
 
-        const result = await matchCreation.create({
+        const input = {
           idempotencyKey: String(context.update.update_id),
           chatId,
           generalTopicId,
           timezone: config.groupTimezone,
           creatorTelegramUserId: creator.id,
           draft: parsed.draft,
-        });
-        await context.reply(`✅ Матч создан: #v${result.match.id}.\nКарточка опубликована в General.`);
+        };
+        if (config.confirmMatchCreation) {
+          await matchCreation.createPreview(input);
+        } else {
+          const result = await matchCreation.create(input);
+          await context.reply(`Матч создан: #v${result.match.id}.\nКарточка опубликована в General.`);
+        }
       } catch (error) {
         console.error(`Match creation failed (${errorKind(error)}): ${errorDetails(error)}`);
         await context.reply("Не удалось создать матч. Проверьте данные и попробуйте ещё раз.");
@@ -277,10 +326,43 @@ function createRuntimeBot(config: StartupConfig): Bot {
     onCallbackQuery: async (context) => {
       const callback = context.callbackQuery;
       const message = callback?.message;
+      const draftAction = callback?.data === undefined
+        ? undefined
+        : parseMatchDraftAction(callback.data);
       const action = callback?.data === undefined
         ? undefined
         : MatchActionService.parseCallbackData(callback.data);
-      if (callback === undefined || message === undefined || action === undefined || context.from === undefined) {
+      if (
+        callback === undefined ||
+        message === undefined ||
+        context.from === undefined ||
+        (draftAction === undefined && action === undefined)
+      ) {
+        await context.answerCallbackQuery("Это действие больше недоступно");
+        return;
+      }
+
+      if (draftAction !== undefined) {
+        try {
+          const result = await matchCreation.processPreviewAction({
+            telegramUserId: context.from.id,
+            chatId: message.chat.id,
+            messageId: message.message_id,
+            generalTopicId,
+            action: draftAction,
+          });
+          await context.api.answerCallbackQuery(callback.id, { text: result.answer });
+        } catch (error) {
+          console.error(`Match draft action failed (${errorKind(error)}): ${errorDetails(error)}`);
+          await context.api.answerCallbackQuery(callback.id, {
+            text: "Не удалось обработать черновик",
+            show_alert: true,
+          });
+        }
+        return;
+      }
+
+      if (action === undefined) {
         await context.answerCallbackQuery("Это действие больше недоступно");
         return;
       }
@@ -298,7 +380,10 @@ function createRuntimeBot(config: StartupConfig): Bot {
 
       try {
         const result = await matchAction.process(update);
-        await context.api.answerCallbackQuery(callback.id, { text: result.answer });
+        await context.api.answerCallbackQuery(
+          callback.id,
+          result.answer === undefined ? {} : { text: result.answer },
+        );
       } catch (error) {
         console.error(`Match action failed (${errorKind(error)}): ${errorDetails(error)}`);
         await context.api.answerCallbackQuery(callback.id, {
@@ -320,6 +405,7 @@ function createRuntimeBot(config: StartupConfig): Bot {
           updateId: context.update.update_id,
           addedByTelegramUserId: user.id,
           quantity: command.quantity,
+          sourceLabel: command.sourceLabel,
         });
         if (result.status === "ignored" && result.reason === "unknown_match") {
           await context.reply(`Матч #v${command.matchId} не найден.`);
@@ -330,13 +416,17 @@ function createRuntimeBot(config: StartupConfig): Bot {
           result.reason === "insufficient_external_players"
         ) {
           const externalCount = repositories.externalParticipants.countByMatchId(command.matchId);
+          const sourceHint = command.sourceLabel === null
+            ? " Для игроков с именем используйте «от <имя> -N игрока»."
+            : "";
           await context.reply(
-            `Нельзя убрать столько внешних игроков. Сейчас дополнительных игроков: ${externalCount}.`,
+            `Нельзя убрать столько внешних игроков. Сейчас дополнительных игроков: ${externalCount}.${sourceHint}`,
           );
         } else if (result.status === "added") {
           const action = command.quantity > 0 ? "Добавлено" : "Убрано";
+          const source = result.sourceLabel === null ? "" : ` от ${result.sourceLabel}`;
           await context.reply(
-            `✅ ${action} ${Math.abs(command.quantity)} внешних игроков.\n` +
+            `${action} ${Math.abs(command.quantity)} внешних игроков${source}.\n` +
               `Дополнительных игроков сейчас: ${result.externalCount}.\n` +
               `Всего участников: ${result.goingCount}.`,
           );
@@ -352,6 +442,7 @@ function createRuntimeBot(config: StartupConfig): Bot {
 
   const bot = createBot(config, dependencies);
   botRef.current = bot;
+  runtimeLifecycleHooks.set(bot, weatherScheduler);
   return bot;
 }
 
@@ -381,9 +472,11 @@ export async function startBot(
 ): Promise<void> {
   const startupConfig = validateStartupConfig(config);
   const bot = dependencies.createBot?.(startupConfig) ?? createRuntimeBot(startupConfig);
+  const lifecycleHooks = runtimeLifecycleHooks.get(bot);
   let stopPromise: Promise<void> | undefined;
   const stop = (): Promise<void> => {
     stopPromise ??= (async () => {
+      lifecycleHooks?.stop();
       await sendLifecycleNotification(bot, startupConfig, BOT_STOPPED_NOTIFICATION);
       await bot.stop();
     })();
@@ -400,6 +493,7 @@ export async function startBot(
       drop_pending_updates: true,
       onStart: async () => {
         console.info("Football Bot started with Telegram long polling.");
+        lifecycleHooks?.start();
         await sendLifecycleNotification(bot, startupConfig, BOT_STARTED_NOTIFICATION);
       },
     });
@@ -424,7 +518,7 @@ function isMainModule(): boolean {
 
 if (isMainModule()) {
   void main().catch((error: unknown) => {
-    console.error(`Football Bot startup failed (${errorKind(error)}).`);
+    console.error(`Football Bot startup failed (${errorKind(error)}): ${errorDetails(error)}`);
     process.exitCode = 1;
   });
 }

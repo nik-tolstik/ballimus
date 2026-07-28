@@ -12,6 +12,9 @@ import {
 export const matchStatuses = ["draft", "active", "confirmed", "completed", "cancelled"] as const;
 export type MatchStatus = (typeof matchStatuses)[number];
 
+export const venueTypes = ["outdoor", "indoor"] as const;
+export type VenueType = (typeof venueTypes)[number];
+
 export const voteOptions = ["going", "not_going", "maybe"] as const;
 export type VoteOption = (typeof voteOptions)[number];
 
@@ -20,14 +23,20 @@ export type MatchMessageKind = (typeof matchMessageKinds)[number];
 
 export const notificationTypes = [
   "threshold_reached",
+  "threshold_lost",
   "withdrawal",
   "match_confirmed",
   "match_cancelled",
+  "weather_forecast",
 ] as const;
 export type NotificationType = (typeof notificationTypes)[number];
 
 const matchStatusSql = sql.join(
   matchStatuses.map((status) => sql.raw(`'${status}'`)),
+  sql`, `,
+);
+const venueTypeSql = sql.join(
+  venueTypes.map((type) => sql.raw(`'${type}'`)),
   sql`, `,
 );
 const voteOptionSql = sql.join(
@@ -73,10 +82,12 @@ export const matches = sqliteTable(
       .references(() => chatSettings.chatId, { onDelete: "restrict", onUpdate: "cascade" }),
     scheduledAt: integer("scheduled_at", { mode: "timestamp_ms" }),
     location: text("location"),
+    venueType: text("venue_type", { enum: venueTypes }),
     fieldPriceRubles: integer("field_price_rubles"),
     title: text("title"),
     requiredPlayers: integer("required_players").notNull(),
     status: text("status", { enum: matchStatuses }).notNull().default("draft"),
+    cancellationReason: text("cancellation_reason"),
     creatorTelegramUserId: integer("creator_telegram_user_id").notNull(),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
@@ -92,8 +103,16 @@ export const matches = sqliteTable(
       sql`${table.location} is null or length(trim(${table.location})) > 0`,
     ),
     check(
+      "matches_venue_type_valid",
+      sql`${table.venueType} is null or ${table.venueType} in (${venueTypeSql})`,
+    ),
+    check(
       "matches_field_price_non_negative",
       sql`${table.fieldPriceRubles} is null or ${table.fieldPriceRubles} >= 0`,
+    ),
+    check(
+      "matches_cancellation_reason_not_empty",
+      sql`${table.cancellationReason} is null or length(trim(${table.cancellationReason})) > 0`,
     ),
     check("matches_status_valid", sql`${table.status} in (${matchStatusSql})`),
     uniqueIndex("matches_id_chat_unique").on(table.id, table.chatId),
@@ -175,6 +194,7 @@ export const externalParticipants = sqliteTable(
       .references(() => matches.id, { onDelete: "cascade", onUpdate: "cascade" }),
     addedByTelegramUserId: integer("added_by_telegram_user_id").notNull(),
     sourceUpdateId: integer("source_update_id").notNull(),
+    sourceLabel: text("source_label"),
     quantity: integer("quantity").notNull().default(1),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
@@ -183,6 +203,10 @@ export const externalParticipants = sqliteTable(
   (table) => [
     check("external_participants_source_update_non_negative", sql`${table.sourceUpdateId} >= 0`),
     check("external_participants_quantity_non_zero", sql`${table.quantity} <> 0`),
+    check(
+      "external_participants_source_label_not_empty",
+      sql`${table.sourceLabel} is null or length(trim(${table.sourceLabel})) > 0`,
+    ),
     uniqueIndex("external_participants_source_update_unique").on(table.sourceUpdateId),
     index("external_participants_match_idx").on(table.matchId),
   ],
@@ -207,6 +231,11 @@ export const notifications = sqliteTable(
       table.notificationType,
       table.transitionKey,
     ),
+    uniqueIndex("notifications_weather_forecast_day_unique")
+      .on(table.notificationType, table.transitionKey)
+      .where(
+        sql`${table.notificationType} = 'weather_forecast' and ${table.transitionKey} glob 'forecast:*:*'`,
+      ),
     check("notifications_type_valid", sql`${table.notificationType} in (${notificationTypeSql})`),
     index("notifications_match_idx").on(table.matchId),
   ],

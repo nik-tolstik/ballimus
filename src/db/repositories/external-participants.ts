@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { AppDatabase } from "../client.js";
 import {
@@ -10,6 +10,7 @@ export interface AddExternalParticipantInput {
   matchId: number;
   addedByTelegramUserId: number;
   sourceUpdateId: number;
+  sourceLabel?: string | null;
   quantity?: number;
   createdAt?: Date;
 }
@@ -24,6 +25,7 @@ export class ExternalParticipantsRepository {
         matchId: input.matchId,
         addedByTelegramUserId: input.addedByTelegramUserId,
         sourceUpdateId: input.sourceUpdateId,
+        sourceLabel: input.sourceLabel ?? null,
         quantity: input.quantity ?? 1,
         createdAt: input.createdAt ?? new Date(),
       })
@@ -37,6 +39,36 @@ export class ExternalParticipantsRepository {
       .select({ count: sql<number>`coalesce(sum(${externalParticipants.quantity}), 0)` })
       .from(externalParticipants)
       .where(eq(externalParticipants.matchId, matchId))
+      .get();
+
+    return result?.count ?? 0;
+  }
+
+  public countByMatchIdAndSourceLabel(matchId: number, sourceLabel: string): number {
+    const result = this.db
+      .select({ count: sql<number>`coalesce(sum(${externalParticipants.quantity}), 0)` })
+      .from(externalParticipants)
+      .where(
+        and(
+          eq(externalParticipants.matchId, matchId),
+          eq(externalParticipants.sourceLabel, sourceLabel),
+        ),
+      )
+      .get();
+
+    return result?.count ?? 0;
+  }
+
+  public countByMatchIdWithoutSourceLabel(matchId: number): number {
+    const result = this.db
+      .select({ count: sql<number>`coalesce(sum(${externalParticipants.quantity}), 0)` })
+      .from(externalParticipants)
+      .where(
+        and(
+          eq(externalParticipants.matchId, matchId),
+          isNull(externalParticipants.sourceLabel),
+        ),
+      )
       .get();
 
     return result?.count ?? 0;

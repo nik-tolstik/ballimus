@@ -1,7 +1,11 @@
 import type { InlineKeyboardMarkup } from "grammy/types";
 
-import type { Match, Vote } from "../db/schema.js";
-import { renderMatchCard } from "../domain/match-card.js";
+import type { ExternalParticipant, Match, Vote } from "../db/schema.js";
+import {
+  escapeHtml,
+  renderMatchCard,
+  type MatchCardDisplayOptions,
+} from "../domain/match-card.js";
 
 export const MATCH_VOTE_OPTIONS = ["going", "maybe", "not_going"] as const;
 export type MatchVoteOption = (typeof MATCH_VOTE_OPTIONS)[number];
@@ -10,7 +14,10 @@ export type MatchAction =
   | { kind: "vote"; matchId: number; option: MatchVoteOption }
   | { kind: "confirm"; matchId: number }
   | { kind: "complete"; matchId: number }
-  | { kind: "cancel"; matchId: number };
+  | { kind: "cancel"; matchId: number }
+  | { kind: "cancel_insufficient_players"; matchId: number }
+  | { kind: "cancel_bad_weather"; matchId: number }
+  | { kind: "cancel_back"; matchId: number };
 
 export interface MatchCallbackUpdate {
   updateId: number;
@@ -45,9 +52,16 @@ export function parseMatchAction(data: string): MatchAction | undefined {
   }
   if (
     parts[0] === "match" &&
-    (parts[2] === "confirm" || parts[2] === "complete" || parts[2] === "cancel")
+    (
+      parts[2] === "confirm" ||
+      parts[2] === "complete" ||
+      parts[2] === "cancel" ||
+      parts[2] === "cancel_insufficient_players" ||
+      parts[2] === "cancel_bad_weather" ||
+      parts[2] === "cancel_back"
+    )
   ) {
-    return { kind: parts[2], matchId };
+    return { kind: parts[2] as Exclude<MatchAction["kind"], "vote">, matchId };
   }
   return undefined;
 }
@@ -55,11 +69,11 @@ export function parseMatchAction(data: string): MatchAction | undefined {
 function voteText(option: MatchVoteOption): string {
   switch (option) {
     case "going":
-      return "✅ Участвую";
+      return "Участвую";
     case "maybe":
-      return "❓ Под вопросом";
+      return "Под вопросом";
     case "not_going":
-      return "❌ Не смогу";
+      return "Не смогу";
   }
 }
 
@@ -78,11 +92,11 @@ export function adminPanelKeyboard(matchId: number): InlineKeyboardMarkup {
   return {
     inline_keyboard: [[
       {
-        text: "✅ Матч будет",
+        text: "Матч будет",
         callback_data: callbackData({ kind: "confirm", matchId }),
       },
       {
-        text: "🚫 Отменить",
+        text: "Отменить",
         callback_data: callbackData({ kind: "cancel", matchId }),
       },
     ]],
@@ -93,14 +107,33 @@ export function confirmedAdminPanelKeyboard(matchId: number): InlineKeyboardMark
   return {
     inline_keyboard: [[
       {
-        text: "✅ Завершить",
+        text: "Завершить",
         callback_data: callbackData({ kind: "complete", matchId }),
       },
       {
-        text: "🚫 Отменить",
+        text: "Отменить",
         callback_data: callbackData({ kind: "cancel", matchId }),
       },
     ]],
+  };
+}
+
+export function cancellationReasonKeyboard(matchId: number): InlineKeyboardMarkup {
+  return {
+    inline_keyboard: [
+      [{
+        text: "Недостаточно игроков",
+        callback_data: callbackData({ kind: "cancel_insufficient_players", matchId }),
+      }],
+      [{
+        text: "Плохая погода",
+        callback_data: callbackData({ kind: "cancel_bad_weather", matchId }),
+      }],
+      [{
+        text: "Назад",
+        callback_data: callbackData({ kind: "cancel_back", matchId }),
+      }],
+    ],
   };
 }
 
@@ -108,8 +141,13 @@ export function matchCardContent(
   match: Match,
   votes: readonly Vote[],
   externalCount: number,
+  externalParticipants: readonly ExternalParticipant[] = [],
+  displayOptions: MatchCardDisplayOptions = {},
 ): MatchCardContent {
-  const card = renderMatchCard({ match, votes, externalCount });
+  const card = renderMatchCard(
+    { match, votes, externalCount, externalParticipants },
+    displayOptions,
+  );
   return {
     text: card.text,
     ...(card.isActive ? { replyMarkup: publicCardKeyboard(match.id) } : {}),
@@ -117,13 +155,20 @@ export function matchCardContent(
 }
 
 export function adminPanelContent(match: Match): MatchCardContent {
+  const cancellationReason = match.cancellationReason?.trim();
+  const cancellationReasonText =
+    cancellationReason === undefined || cancellationReason === ""
+      ? ""
+      : ` Причина: ${escapeHtml(cancellationReason)}.`;
   const status = match.status === "active"
     ? "Голосование открыто."
     : match.status === "confirmed"
       ? "Матч подтверждён."
       : match.status === "completed"
         ? "Матч завершён."
-        : "Матч отменён.";
+        : match.status === "cancelled"
+          ? `Матч отменён.${cancellationReasonText}`
+          : "Черновик ожидает публикации.";
   return {
     text: `Управление матчем #v${match.id}\n${status}`,
     ...(match.status === "active"
@@ -131,5 +176,12 @@ export function adminPanelContent(match: Match): MatchCardContent {
       : match.status === "confirmed"
         ? { replyMarkup: confirmedAdminPanelKeyboard(match.id) }
         : {}),
+  };
+}
+
+export function cancellationPromptContent(match: Match): MatchCardContent {
+  return {
+    text: `Отмена матча #v${match.id}\nУкажите причину:`,
+    replyMarkup: cancellationReasonKeyboard(match.id),
   };
 }

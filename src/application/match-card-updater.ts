@@ -1,4 +1,4 @@
-import type { Match, MatchMessageKind, Vote } from "../db/schema.js";
+import type { ExternalParticipant, Match, MatchMessageKind, Vote } from "../db/schema.js";
 import { adminPanelContent, matchCardContent } from "./match-card.js";
 import type { MatchCardPublisher } from "./match-creation.js";
 
@@ -17,6 +17,7 @@ export interface MatchCardUpdaterRepositories {
   };
   externalParticipants: {
     countByMatchId(matchId: number): number;
+    listByMatchId?(matchId: number): ExternalParticipant[];
   };
 }
 
@@ -24,6 +25,7 @@ export class MatchCardUpdater {
   public constructor(
     private readonly repositories: MatchCardUpdaterRepositories,
     private readonly publisher: Pick<MatchCardPublisher, "editMessage">,
+    private readonly timezone = "Europe/Minsk",
   ) {}
 
   public async refresh(matchId: number): Promise<void> {
@@ -32,19 +34,24 @@ export class MatchCardUpdater {
       matchId,
       "public_card",
     );
-    if (match === undefined || publicMessage === undefined || this.publisher.editMessage === undefined) {
+    if (match === undefined || this.publisher.editMessage === undefined) {
       return;
     }
 
     const votes = this.repositories.votes.listByMatchId(matchId);
     const externalCount = this.repositories.externalParticipants.countByMatchId(matchId);
-    const card = matchCardContent(match, votes, externalCount);
-    await this.safeEdit({
-      chatId: publicMessage.chatId,
-      messageId: publicMessage.messageId,
-      text: card.text,
-      replyMarkup: card.replyMarkup,
-    });
+    const externalParticipants = this.repositories.externalParticipants.listByMatchId?.(matchId) ?? [];
+    if (publicMessage !== undefined) {
+      const card = matchCardContent(match, votes, externalCount, externalParticipants, {
+        timezone: this.timezone,
+      });
+      await this.safeEdit({
+        chatId: publicMessage.chatId,
+        messageId: publicMessage.messageId,
+        text: card.text,
+        replyMarkup: card.replyMarkup,
+      });
+    }
 
     const adminMessage = this.repositories.matchMessages.findByMatchIdAndKind(
       matchId,

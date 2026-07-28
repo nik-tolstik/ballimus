@@ -1,14 +1,27 @@
-import type { Match, Notification } from "../db/schema.js";
-import type { CreateNotificationInput } from "../db/repositories/notifications.js";
-import type { ExternalParticipant } from "../db/schema.js";
-import { formatThresholdNotification } from "../domain/notifications.js";
+import type { ExternalParticipant, Match, NotificationType } from "../db/schema.js";
+import {
+  formatThresholdLostNotification,
+  formatThresholdNotification,
+} from "../domain/notifications.js";
+import { evaluateThresholdTransition } from "../domain/votes.js";
 
 const EXTERNAL_PARTICIPANT_COMMAND_PATTERN =
-  /^@([A-Za-z0-9_]{5,32})\s+([+-])([1-9]\d*)\s+для\s+#v([1-9]\d*)\s*$/iu;
+  /^@([A-Za-z0-9_]{5,32})(?:\s+от\s+(.+?))?\s+([+-])([1-9]\d*)(?:\s+игрок(?:а|ов)?)?\s+для\s+#v([1-9]\d*)\s*$/iu;
+const MAX_SOURCE_LABEL_LENGTH = 80;
 
 export interface ExternalParticipantCommand {
   matchId: number;
   quantity: number;
+  sourceLabel: string | null;
+}
+
+function normalizeSourceLabel(value: string | undefined): string | null | undefined {
+  if (value === undefined) return null;
+
+  const sourceLabel = value.trim().replace(/\s+/gu, " ");
+  if (sourceLabel === "" || sourceLabel.length > MAX_SOURCE_LABEL_LENGTH) return undefined;
+
+  return sourceLabel;
 }
 
 export function parseExternalParticipantCommand(
@@ -20,11 +33,13 @@ export function parseExternalParticipantCommand(
 
   const match = EXTERNAL_PARTICIPANT_COMMAND_PATTERN.exec(text.trim());
   const mentionedUsername = match?.[1];
-  const sign = match?.[2];
-  const quantityText = match?.[3];
-  const matchIdText = match?.[4];
+  const sourceLabel = normalizeSourceLabel(match?.[2]);
+  const sign = match?.[3];
+  const quantityText = match?.[4];
+  const matchIdText = match?.[5];
   if (
     mentionedUsername === undefined ||
+    sourceLabel === undefined ||
     sign === undefined ||
     quantityText === undefined ||
     matchIdText === undefined ||
@@ -43,7 +58,7 @@ export function parseExternalParticipantCommand(
   ) {
     return undefined;
   }
-  return { matchId, quantity };
+  return { matchId, quantity, sourceLabel };
 }
 
 export interface ExternalParticipantRepositories {
@@ -55,16 +70,22 @@ export interface ExternalParticipantRepositories {
   };
   externalParticipants: {
     countByMatchId(matchId: number): number;
+    countByMatchIdAndSourceLabel(matchId: number, sourceLabel: string): number;
+    countByMatchIdWithoutSourceLabel(matchId: number): number;
     add(input: {
       matchId: number;
       addedByTelegramUserId: number;
       sourceUpdateId: number;
       quantity: number;
+      sourceLabel: string | null;
     }): ExternalParticipant | undefined;
   };
   notifications: {
-    listByMatchId(matchId: number): Notification[];
-    claim(input: CreateNotificationInput): Notification | undefined;
+    claim(input: {
+      matchId: number;
+      notificationType: NotificationType;
+      transitionKey: string;
+    }): { id: number } | undefined;
     delete?(id: number): boolean;
   };
 }
@@ -78,6 +99,7 @@ export interface AddExternalParticipantInput {
   updateId: number;
   addedByTelegramUserId: number;
   quantity: number;
+  sourceLabel?: string | null;
 }
 
 export type ExternalParticipantIgnoredReason =
@@ -94,19 +116,22 @@ export interface ExternalParticipantIgnoredResult {
 export interface ExternalParticipantAddedResult {
   status: "added";
   matchId: number;
+  sourceLabel: string | null;
   externalCount: number;
   goingCount: number;
+  thresholdReached: boolean;
+  thresholdLost: boolean;
+  thresholdReachedNotificationSent: boolean;
+  thresholdLostNotificationSent: boolean;
+  /** @deprecated Use thresholdReached. */
   thresholdCrossed: boolean;
+  /** @deprecated Use thresholdReachedNotificationSent. */
   thresholdNotificationSent: boolean;
 }
 
 export type ExternalParticipantResult =
   | ExternalParticipantIgnoredResult
   | ExternalParticipantAddedResult;
-
-function hasReachedThreshold(notifications: readonly Notification[]): boolean {
-  return notifications.some((notification) => notification.notificationType === "threshold_reached");
-}
 
 function isValidUpdateId(updateId: number): boolean {
   return Number.isSafeInteger(updateId) && updateId >= 0;
@@ -130,7 +155,7 @@ export class ExternalParticipantService {
       throw new Error("Telegram update_id must be a non-negative safe integer");
     }
     if (!isValidQuantity(input.quantity)) {
-      throw new Error("External participant quantity must be a positive safe integer");
+      throw new Error("External participant quantity must be a non-zero safe integer");
     }
 
     const match = this.options.repositories.matches.findById(input.matchId);
@@ -141,24 +166,26 @@ export class ExternalParticipantService {
       return { status: "ignored", reason: "inactive_match" };
     }
 
+    const sourceLabel = input.sourceLabel ?? null;
     const externalCountBefore =
       this.options.repositories.externalParticipants.countByMatchId(match.id);
     const goingCountBefore =
       this.options.repositories.votes.countGoing(match.id) + externalCountBefore;
-    if (
-      input.quantity < 0 &&
-      Math.abs(input.quantity) > externalCountBefore
-    ) {
+    const sourceCountBefore = sourceLabel === null
+      ? this.options.repositories.externalParticipants.countByMatchIdWithoutSourceLabel(match.id)
+      : this.options.repositories.externalParticipants.countByMatchIdAndSourceLabel(
+        match.id,
+        sourceLabel,
+      );
+    if (input.quantity < 0 && Math.abs(input.quantity) > sourceCountBefore) {
       return { status: "ignored", reason: "insufficient_external_players" };
     }
-    const thresholdWasReached = hasReachedThreshold(
-      this.options.repositories.notifications.listByMatchId(match.id),
-    );
     const participant = this.options.repositories.externalParticipants.add({
       matchId: match.id,
       addedByTelegramUserId: input.addedByTelegramUserId,
       sourceUpdateId: input.updateId,
       quantity: input.quantity,
+      sourceLabel,
     });
 
     if (participant === undefined) {
@@ -166,47 +193,81 @@ export class ExternalParticipantService {
     }
 
     const goingCountAfter = goingCountBefore + input.quantity;
-    const thresholdCrossed =
-      goingCountBefore < match.requiredPlayers && goingCountAfter >= match.requiredPlayers;
-
-    let thresholdNotificationSent = false;
-    if (!thresholdWasReached && goingCountAfter >= match.requiredPlayers) {
-      const claim = this.options.repositories.notifications.claim({
-        matchId: match.id,
-        notificationType: "threshold_reached",
-        transitionKey: `threshold:${match.id}:${match.requiredPlayers}`,
-      });
-      if (claim !== undefined) {
-        try {
-          await this.options.notifier.send(
-            formatThresholdNotification(match.id, match.title, match.requiredPlayers),
-          );
-        } catch (error) {
-          this.options.repositories.notifications.delete?.(claim.id);
-          console.error(
-            `External-player notification failed: ${error instanceof Error ? error.message : String(error)}`,
-          );
-        }
-        if (this.options.repositories.notifications.listByMatchId(match.id).some(
-          (notification) =>
-            notification.notificationType === "threshold_reached" &&
-            notification.transitionKey === `threshold:${match.id}:${match.requiredPlayers}`,
-        )) {
-          thresholdNotificationSent = true;
-        }
-      }
-    }
+    const transition = evaluateThresholdTransition({
+      countBefore: goingCountBefore,
+      countAfter: goingCountAfter,
+      threshold: match.requiredPlayers,
+      eventKey: String(input.updateId),
+    });
+    const thresholdReachedNotificationSent = await this.sendClaimedNotification(
+      transition.thresholdReachedNotificationKey === undefined
+        ? undefined
+        : {
+            matchId: match.id,
+            notificationType: "threshold_reached",
+            transitionKey: transition.thresholdReachedNotificationKey,
+            text: formatThresholdNotification(
+              match.id,
+              match.title,
+              goingCountAfter,
+              match.requiredPlayers,
+            ),
+          },
+    );
+    const thresholdLostNotificationSent = await this.sendClaimedNotification(
+      transition.thresholdLostNotificationKey === undefined
+        ? undefined
+        : {
+            matchId: match.id,
+            notificationType: "threshold_lost",
+            transitionKey: transition.thresholdLostNotificationKey,
+            text: formatThresholdLostNotification(
+              match.id,
+              match.title,
+              goingCountAfter,
+              match.requiredPlayers,
+            ),
+          },
+    );
 
     await this.options.refreshCard?.(match.id);
 
     return {
       status: "added",
       matchId: match.id,
+      sourceLabel,
       externalCount: externalCountBefore + input.quantity,
       goingCount: goingCountAfter,
-      thresholdCrossed,
-      thresholdNotificationSent,
+      thresholdReached: transition.thresholdReached,
+      thresholdLost: transition.thresholdLost,
+      thresholdReachedNotificationSent,
+      thresholdLostNotificationSent,
+      thresholdCrossed: transition.thresholdReached,
+      thresholdNotificationSent: thresholdReachedNotificationSent,
     };
+  }
+
+  private async sendClaimedNotification(input: {
+    matchId: number;
+    notificationType: NotificationType;
+    transitionKey: string;
+    text: string;
+  } | undefined): Promise<boolean> {
+    if (input === undefined) return false;
+
+    const claim = this.options.repositories.notifications.claim(input);
+    if (claim === undefined) return false;
+
+    try {
+      await this.options.notifier.send(input.text);
+      return true;
+    } catch (error) {
+      this.options.repositories.notifications.delete?.(claim.id);
+      console.error(
+        `External-player notification failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
+    }
   }
 }
 

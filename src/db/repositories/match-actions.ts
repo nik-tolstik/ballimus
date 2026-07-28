@@ -39,6 +39,7 @@ export interface ChangeMatchStatusInput {
   matchId: number;
   telegramUserId: number;
   status: Extract<MatchStatus, "confirmed" | "completed" | "cancelled">;
+  cancellationReason?: string | null;
   allowedCurrentStatuses: readonly MatchStatus[];
 }
 
@@ -159,7 +160,13 @@ export class MatchActionsRepository {
 
       const match = tx
         .update(matches)
-        .set({ status: input.status, updatedAt: new Date() })
+        .set({
+          status: input.status,
+          ...(input.cancellationReason === undefined
+            ? {}
+            : { cancellationReason: input.cancellationReason }),
+          updatedAt: new Date(),
+        })
         .where(eq(matches.id, input.matchId))
         .returning()
         .get();

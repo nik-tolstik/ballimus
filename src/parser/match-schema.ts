@@ -8,6 +8,8 @@ export const MIN_REQUIRED_PLAYERS = 1;
 export const MAX_REQUIRED_PLAYERS = 100;
 export const MIN_LOCATION_LENGTH = 2;
 export const MAX_LOCATION_LENGTH = 200;
+export const MATCH_VENUE_TYPES = ["outdoor", "indoor"] as const;
+export type MatchVenueType = (typeof MATCH_VENUE_TYPES)[number];
 
 export const ISO_DATE_PATTERN = "^\\d{4}-\\d{2}-\\d{2}$";
 export const LOCAL_TIME_PATTERN = "^(?:[01]\\d|2[0-3]):[0-5]\\d$";
@@ -38,8 +40,15 @@ export const matchDraftJsonSchema = {
       anyOf: [{ type: "integer" }, { type: "null" }],
       description: "Required player count, or null when no count was supplied.",
     },
+    venueType: {
+      anyOf: [
+        { type: "string", enum: MATCH_VENUE_TYPES },
+        { type: "null" },
+      ],
+      description: "Whether the match is outdoors or indoors, or null when no format was supplied.",
+    },
   },
-  required: ["date", "time", "location", "requiredPlayers"],
+  required: ["date", "time", "location", "requiredPlayers", "venueType"],
 } as const;
 
 /** The exact shape accepted from the model before deterministic normalization. */
@@ -49,6 +58,7 @@ export const matchDraftSchema = z
     time: z.string().nullable(),
     location: z.string().nullable(),
     requiredPlayers: z.number().int().nullable(),
+    venueType: z.enum(MATCH_VENUE_TYPES).nullable().optional(),
   })
   .strict();
 
@@ -63,6 +73,7 @@ export const normalizedMatchDraftSchema = z
     fieldPriceRubles: z.number().int().nonnegative().optional(),
     dateLabel: z.string().min(1).max(100).optional(),
     timeLabel: z.string().min(1).max(100).optional(),
+    venueType: z.enum(MATCH_VENUE_TYPES).nullable().optional(),
     requiredPlayers: z
       .number()
       .int()
