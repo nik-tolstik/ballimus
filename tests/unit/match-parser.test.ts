@@ -150,6 +150,36 @@ describe("Russian /match parsing", () => {
     });
   });
 
+  it("accepts an approximate time and an empty location in the labelled template", async () => {
+    const parser = new MatchParser({
+      timezone: "Europe/Minsk",
+      now: REFERENCE_NOW,
+    });
+
+    await expect(
+      parser.parse(
+        [
+          "/match",
+          "Дата: 03.08.2026",
+          "Время: примерно 20:00",
+          "Место:",
+          "Формат: на улице",
+          "Нужно игроков: 10",
+        ].join("\n"),
+      ),
+    ).resolves.toEqual({
+      status: "ok",
+      draft: {
+        date: "2026-08-03",
+        time: null,
+        timeLabel: "примерно 20:00",
+        location: null,
+        venueType: "outdoor",
+        requiredPlayers: 10,
+      },
+    });
+  });
+
   it("asks for the venue format when the labelled template omits it", async () => {
     const parser = new MatchParser({
       timezone: "Europe/Minsk",

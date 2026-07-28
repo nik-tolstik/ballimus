@@ -1,0 +1,1 @@
+ALTER TABLE `external_participants` ADD `display_name_snapshot` text;

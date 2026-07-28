@@ -8,6 +8,7 @@ import {
   votes,
   type Match,
   type MatchStatus,
+  type VenueType,
   type Vote,
   type VoteOption,
 } from "../schema.js";
@@ -48,6 +49,25 @@ export type ChangeMatchStatusResult =
   | { status: "missing_match" }
   | { status: "inactive_match"; match: Match }
   | { status: "changed"; match: Match };
+
+export interface UpdateMatchDetailsInput {
+  updateId: number;
+  matchId: number;
+  telegramUserId: number;
+  scheduledAt: Date | null;
+  location: string | null;
+  venueType: VenueType | null;
+  fieldPriceRubles: number | null;
+  title: string;
+  requiredPlayers: number;
+  allowedCurrentStatuses: readonly MatchStatus[];
+}
+
+export type UpdateMatchDetailsResult =
+  | { status: "duplicate"; processedMatchId: number }
+  | { status: "missing_match" }
+  | { status: "inactive_match"; match: Match }
+  | { status: "updated"; match: Match };
 
 function countGoing(tx: Parameters<Parameters<AppDatabase["transaction"]>[0]>[0], matchId: number): number {
   return tx
@@ -183,6 +203,53 @@ export class MatchActionsRepository {
         .run();
 
       return { status: "changed", match };
+    });
+  }
+
+  public updateDetails(input: UpdateMatchDetailsInput): UpdateMatchDetailsResult {
+    return this.db.transaction((tx) => {
+      const processed = tx
+        .select()
+        .from(processedUpdates)
+        .where(eq(processedUpdates.updateId, input.updateId))
+        .get();
+      if (processed !== undefined) {
+        return { status: "duplicate", processedMatchId: processed.matchId };
+      }
+
+      const current = tx.select().from(matches).where(eq(matches.id, input.matchId)).get();
+      if (current === undefined) return { status: "missing_match" };
+      if (!input.allowedCurrentStatuses.includes(current.status)) {
+        return { status: "inactive_match", match: current };
+      }
+
+      const match = tx
+        .update(matches)
+        .set({
+          scheduledAt: input.scheduledAt,
+          location: input.location,
+          venueType: input.venueType,
+          fieldPriceRubles: input.fieldPriceRubles,
+          title: input.title,
+          requiredPlayers: input.requiredPlayers,
+          updatedAt: new Date(),
+        })
+        .where(eq(matches.id, input.matchId))
+        .returning()
+        .get();
+      if (match === undefined) return { status: "missing_match" };
+
+      tx.insert(processedUpdates)
+        .values({
+          updateId: input.updateId,
+          matchId: input.matchId,
+          action: "match:edit",
+          telegramUserId: input.telegramUserId,
+          createdAt: new Date(),
+        })
+        .run();
+
+      return { status: "updated", match };
     });
   }
 }

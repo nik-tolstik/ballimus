@@ -195,6 +195,7 @@ export const externalParticipants = sqliteTable(
     addedByTelegramUserId: integer("added_by_telegram_user_id").notNull(),
     sourceUpdateId: integer("source_update_id").notNull(),
     sourceLabel: text("source_label"),
+    displayNameSnapshot: text("display_name_snapshot"),
     quantity: integer("quantity").notNull().default(1),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
@@ -238,6 +239,26 @@ export const notifications = sqliteTable(
       ),
     check("notifications_type_valid", sql`${table.notificationType} in (${notificationTypeSql})`),
     index("notifications_match_idx").on(table.matchId),
+  ],
+);
+
+export const userAliases = sqliteTable(
+  "user_aliases",
+  {
+    username: text("username").primaryKey(),
+    telegramUserId: integer("telegram_user_id"),
+    displayName: text("display_name").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (table) => [
+    check("user_aliases_username_not_empty", sql`length(trim(${table.username})) > 0`),
+    check("user_aliases_display_name_not_empty", sql`length(trim(${table.displayName})) > 0`),
+    index("user_aliases_telegram_user_idx").on(table.telegramUserId),
   ],
 );
 
@@ -307,6 +328,8 @@ export type ExternalParticipant = typeof externalParticipants.$inferSelect;
 export type NewExternalParticipant = typeof externalParticipants.$inferInsert;
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
+export type UserAlias = typeof userAliases.$inferSelect;
+export type NewUserAlias = typeof userAliases.$inferInsert;
 
 export const schema = {
   chatSettings,
@@ -316,6 +339,7 @@ export const schema = {
   votes,
   externalParticipants,
   notifications,
+  userAliases,
   chatSettingsRelations,
   matchesRelations,
   matchMessagesRelations,

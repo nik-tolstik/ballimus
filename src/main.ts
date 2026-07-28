@@ -10,7 +10,17 @@ import {
   createMatchCreationService,
   parseMatchDraftAction,
 } from "./application/match-creation.js";
+import {
+  createMatchEditingService,
+  matchEditPromptText,
+  parseMatchEditCommand,
+} from "./application/match-editing.js";
 import { createExternalParticipantService } from "./application/external-participants.js";
+import {
+  externalParticipantMenuContent,
+  parseExternalParticipantAction,
+} from "./application/external-participant-actions.js";
+import { createUserRenamingService } from "./application/user-renaming.js";
 import {
   createMatchActionService,
 } from "./application/match-actions.js";
@@ -191,6 +201,10 @@ function createRuntimeBot(config: StartupConfig): Bot {
     authorizeCreator: isCommandAuthorized,
     timezone: config.groupTimezone,
   });
+  const matchEditing = createMatchEditingService({
+    repositories,
+    authorizeCreator: isCommandAuthorized,
+  });
 
   const cardUpdater = new MatchCardUpdater(repositories, cardPublisher, config.groupTimezone);
   const matchAction = createMatchActionService({
@@ -212,12 +226,20 @@ function createRuntimeBot(config: StartupConfig): Bot {
         replyMarkup: content.replyMarkup,
       });
     },
+    showEditPrompt: async (match, userId) => {
+      await getBot().api.sendMessage(userId, matchEditPromptText(match, config.groupTimezone));
+    },
     isAdmin: isCommandAuthorized,
   });
   const externalParticipant = createExternalParticipantService({
     repositories,
     notifier,
     refreshCard: (matchId) => cardUpdater.refresh(matchId),
+  });
+  const userRenaming = createUserRenamingService({
+    userAliases: repositories.userAliases,
+    votes: repositories.votes,
+    externalParticipants: repositories.externalParticipants,
   });
   const matchInfo = createMatchInfoService(repositories);
   const weatherScheduler = createWeatherForecastScheduler({
@@ -256,6 +278,29 @@ function createRuntimeBot(config: StartupConfig): Bot {
     });
   };
 
+  const updateExternalParticipantMenu = async (
+    chatId: number,
+    messageId: number,
+    matchId: number,
+    telegramUserId: number,
+  ): Promise<void> => {
+    const content = externalParticipantMenuContent(
+      matchId,
+      repositories.externalParticipants.countByMatchIdAndAddedByTelegramUserId(
+        matchId,
+        telegramUserId,
+      ),
+    );
+    try {
+      await getBot().api.editMessageText(chatId, messageId, content.text, {
+        reply_markup: content.replyMarkup,
+      });
+    } catch (error) {
+      if (error instanceof Error && /message is not modified/i.test(error.message)) return;
+      console.error(`External-player menu update failed (${errorKind(error)}): ${errorDetails(error)}`);
+    }
+  };
+
   const dependencies: BotDependencies = {
     isCommandAuthorized,
     onMatch: async (context) => {
@@ -289,6 +334,47 @@ function createRuntimeBot(config: StartupConfig): Bot {
       } catch (error) {
         console.error(`Match creation failed (${errorKind(error)}): ${errorDetails(error)}`);
         await context.reply("Не удалось создать матч. Проверьте данные и попробуйте ещё раз.");
+      }
+    },
+    onMatchEdit: async (context) => {
+      const creator = context.from;
+      if (creator === undefined) {
+        await context.reply("Не удалось определить автора команды.");
+        return;
+      }
+
+      const command = parseMatchEditCommand(messageText(context));
+      if (command === undefined) {
+        await context.reply(
+          "Использование: /editmatch #v32, затем заполните все строки шаблона в том же сообщении.",
+        );
+        return;
+      }
+
+      try {
+        const parsed = await getParser().parse(command.matchCommand);
+        if (parsed.status === "clarification") {
+          await context.reply(clarificationText(parsed));
+          return;
+        }
+
+        const result = await matchEditing.edit({
+          updateId: context.update.update_id,
+          chatId,
+          matchId: command.matchId,
+          editorTelegramUserId: creator.id,
+          timezone: config.groupTimezone,
+          draft: parsed.draft,
+        });
+        if (result.status === "updated") {
+          await cardUpdater.refresh(result.match.id);
+          await context.reply(`Карточка #v${result.match.id} обновлена.`);
+          return;
+        }
+        await context.reply(result.answer);
+      } catch (error) {
+        console.error(`Match editing failed (${errorKind(error)}): ${errorDetails(error)}`);
+        await context.reply("Не удалось обновить матч. Проверьте данные и попробуйте ещё раз.");
       }
     },
     onMatchInfo: async (context) => {
@@ -326,6 +412,9 @@ function createRuntimeBot(config: StartupConfig): Bot {
     onCallbackQuery: async (context) => {
       const callback = context.callbackQuery;
       const message = callback?.message;
+      const externalAction = callback?.data === undefined
+        ? undefined
+        : parseExternalParticipantAction(callback.data);
       const draftAction = callback?.data === undefined
         ? undefined
         : parseMatchDraftAction(callback.data);
@@ -336,9 +425,128 @@ function createRuntimeBot(config: StartupConfig): Bot {
         callback === undefined ||
         message === undefined ||
         context.from === undefined ||
-        (draftAction === undefined && action === undefined)
+        (draftAction === undefined && action === undefined && externalAction === undefined)
       ) {
         await context.answerCallbackQuery("Это действие больше недоступно");
+        return;
+      }
+
+      if (externalAction !== undefined) {
+        const match = repositories.matches.findById(externalAction.matchId);
+        if (match === undefined) {
+          await context.api.answerCallbackQuery(callback.id, {
+            text: "Матч не найден",
+            show_alert: true,
+          });
+          return;
+        }
+        if (match.status !== "active" && match.status !== "confirmed") {
+          await context.api.answerCallbackQuery(callback.id, {
+            text: "Матч больше недоступен",
+            show_alert: true,
+          });
+          return;
+        }
+
+        if (externalAction.kind === "menu") {
+          const publicMessage = repositories.matchMessages.findByChatAndMessageId(
+            message.chat.id,
+            message.message_id,
+            "public_card",
+          );
+          if (publicMessage === undefined || publicMessage.matchId !== externalAction.matchId) {
+            await context.api.answerCallbackQuery(callback.id, {
+              text: "Это сообщение матча больше не актуально",
+              show_alert: true,
+            });
+            return;
+          }
+
+          const content = externalParticipantMenuContent(
+            match.id,
+            repositories.externalParticipants.countByMatchIdAndAddedByTelegramUserId(
+              match.id,
+              context.from.id,
+            ),
+          );
+          try {
+            await getBot().api.sendMessage(context.from.id, content.text, {
+              reply_markup: content.replyMarkup,
+            });
+          } catch (error) {
+            console.error(`External-player private menu failed (${errorKind(error)}): ${errorDetails(error)}`);
+            await context.api.answerCallbackQuery(callback.id, {
+              text: "Сначала откройте личный чат с ботом и нажмите /start",
+              show_alert: true,
+            });
+            return;
+          }
+          await context.api.answerCallbackQuery(callback.id, {
+            text: "Меню отправлено в личные сообщения",
+          });
+          return;
+        }
+
+        if (message.chat.type !== "private") {
+          await context.api.answerCallbackQuery(callback.id, {
+            text: "Откройте меню дополнительных игроков в личном чате",
+            show_alert: true,
+          });
+          return;
+        }
+
+        const displayName = userRenaming.resolveDisplayName({
+          telegramUserId: context.from.id,
+          username: context.from.username ?? null,
+          fallback: participantDisplayName(context),
+        });
+        try {
+          const result = await externalParticipant.add({
+            matchId: match.id,
+            updateId: context.update.update_id,
+            addedByTelegramUserId: context.from.id,
+            quantity: externalAction.kind === "add" ? 1 : -1,
+            sourceLabel: null,
+            displayNameSnapshot: displayName,
+            removeOnlyOwn: true,
+          });
+          if (result.status === "ignored") {
+            const answer = result.reason === "duplicate_update"
+              ? "Это действие уже обработано"
+              : result.reason === "insufficient_external_players"
+                ? "У вас нет добавленных вами игроков для удаления"
+                : result.reason === "inactive_match"
+                  ? "Матч больше недоступен"
+                  : result.reason === "unknown_match"
+                    ? "Матч не найден"
+                    : "Не удалось изменить дополнительных игроков";
+            await context.api.answerCallbackQuery(callback.id, {
+              text: answer,
+              show_alert: result.reason !== "duplicate_update",
+            });
+            return;
+          }
+
+          await updateExternalParticipantMenu(
+            message.chat.id,
+            message.message_id,
+            match.id,
+            context.from.id,
+          );
+          const actionText = externalAction.kind === "add" ? "Добавлен 1 игрок" : "Убран 1 игрок";
+          await context.api.answerCallbackQuery(callback.id, {
+            text: `${actionText}. У вас: ${repositories.externalParticipants.countByMatchIdAndAddedByTelegramUserId(
+              match.id,
+              context.from.id,
+            )}`,
+          });
+        } catch (error) {
+          console.error(`External-player callback failed (${errorKind(error)}): ${errorDetails(error)}`);
+          await context.api.answerCallbackQuery(callback.id, {
+            text: "Не удалось изменить количество дополнительных игроков",
+            show_alert: true,
+          });
+        }
         return;
       }
 
@@ -372,7 +580,11 @@ function createRuntimeBot(config: StartupConfig): Bot {
         callbackQueryId: callback.id,
         telegramUserId: context.from.id,
         username: context.from.username ?? null,
-        displayName: participantDisplayName(context),
+        displayName: userRenaming.resolveDisplayName({
+          telegramUserId: context.from.id,
+          username: context.from.username ?? null,
+          fallback: participantDisplayName(context),
+        }),
         chatId: message.chat.id,
         messageId: message.message_id,
         action,
@@ -392,50 +604,19 @@ function createRuntimeBot(config: StartupConfig): Bot {
         });
       }
     },
-    onExternalParticipant: async (context, command) => {
-      const user = context.from;
-      if (user === undefined) {
-        await context.reply("Не удалось определить автора сообщения.");
-        return;
-      }
-
+    onRenameUser: async (context, command) => {
       try {
-        const result = await externalParticipant.add({
-          matchId: command.matchId,
-          updateId: context.update.update_id,
-          addedByTelegramUserId: user.id,
-          quantity: command.quantity,
-          sourceLabel: command.sourceLabel,
-        });
-        if (result.status === "ignored" && result.reason === "unknown_match") {
-          await context.reply(`Матч #v${command.matchId} не найден.`);
-        } else if (result.status === "ignored" && result.reason === "inactive_match") {
-          await context.reply(`Матч #v${command.matchId} больше недоступен.`);
-        } else if (
-          result.status === "ignored" &&
-          result.reason === "insufficient_external_players"
-        ) {
-          const externalCount = repositories.externalParticipants.countByMatchId(command.matchId);
-          const sourceHint = command.sourceLabel === null
-            ? " Для игроков с именем используйте «от <имя> -N игрока»."
-            : "";
-          await context.reply(
-            `Нельзя убрать столько внешних игроков. Сейчас дополнительных игроков: ${externalCount}.${sourceHint}`,
-          );
-        } else if (result.status === "added") {
-          const action = command.quantity > 0 ? "Добавлено" : "Убрано";
-          const source = result.sourceLabel === null ? "" : ` от ${result.sourceLabel}`;
-          await context.reply(
-            `${action} ${Math.abs(command.quantity)} внешних игроков${source}.\n` +
-              `Дополнительных игроков сейчас: ${result.externalCount}.\n` +
-              `Всего участников: ${result.goingCount}.`,
-          );
-        }
-      } catch (error) {
-        console.error(
-          `External participant addition failed (${errorKind(error)}): ${errorDetails(error)}`,
+        const result = userRenaming.rename(command);
+        await Promise.all(result.affectedMatchIds.map((matchId) => cardUpdater.refresh(matchId)));
+        await context.reply(
+          `Для @${command.username} закреплено имя «${command.displayName}».` +
+            (result.affectedMatchIds.length === 0
+              ? " Новые голосования будут использовать это имя."
+              : " Списки голосований обновлены."),
         );
-        await context.reply("Не удалось изменить количество дополнительных игроков. Попробуйте ещё раз.");
+      } catch (error) {
+        console.error(`User renaming failed (${errorKind(error)}): ${errorDetails(error)}`);
+        await context.reply("Не удалось закрепить имя пользователя. Попробуйте ещё раз.");
       }
     },
   };

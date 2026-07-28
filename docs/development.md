@@ -51,20 +51,23 @@ The current MVP uses a clean inline-card baseline. If the local database contain
        Цена поля: 100 рублей
 
 8. Verify that the creator receives a private draft with `Опубликовать`, `Исправить`, and `Отменить`, and that no public card exists yet.
-9. Press `Исправить`, correct the request, then press `Опубликовать`; verify that a public editable card with three inline buttons appears in `General` and the creator receives a private admin panel.
+9. Press `Исправить`, correct the request, then press `Опубликовать`; verify that a public editable card with vote buttons and `Доп. игроки` appears in `General` and the creator receives a private admin panel with `Редактировать`, `Матч будет`, and `Отменить`.
 10. Verify that the card displays `на улице` or `в здании` as the chosen venue type.
 11. Vote from several Telegram accounts, including one more than the stated minimum, and verify that names and counts update in the same card without a roster lock.
 12. Verify a threshold-reached notification at `3/3`.
 13. Change one confirmed vote to `Под вопросом` or `Не смогу`, verify a threshold-lost warning at `2/3`, then restore the vote and verify a new threshold-reached notification at `3/3`.
-14. Use `@ballimus_bot от Никиты +2 игрока для #v<ID>` and `@ballimus_bot от Никиты -1 игрока для #v<ID>` and verify that the card displays the attribution and updates.
-15. Use `/matchinfo #v<ID>` and verify that the creator receives a fresh admin panel with venue, external sources, and current status.
-16. Verify that a non-creator cannot use the admin actions.
-17. Press `Матч будет`, verify that the card says the match will happen, voting remains available, and the panel changes to `Завершить`.
-18. Press `Завершить`, verify that the match is frozen and buttons disappear.
-19. Create another match, press `Отменить`, select `Недостаточно игроков` or `Плохая погода`, and verify that the frozen card and cancellation notification show the selected reason.
-20. Create an outdoor exact-time active or confirmed match about 16 hours ahead (or use a controlled clock), and verify that the scheduler sends one Minsk weather forecast to `Chat`; verify that an indoor match and a second outdoor match on the same Minsk day do not send duplicates.
-21. Stop and restart the bot, verify the shutdown/startup notifications in the status recipient's private dialog, and confirm that messages sent while it was offline are not processed after restart.
-22. Repeat callback deliveries in tests and verify that no duplicate vote, cancellation, or notification is created.
+14. Press `Доп. игроки` on the public card, confirm that the private menu opens, and press `➕ Добавить игрока` twice. Verify that the private counter, public card, and `/matchinfo #v<ID>` show the user's contribution as `От <name>: 2`.
+15. Press `Редактировать`, update the full `/editmatch #v<ID>` template with a different time or location, and send it privately. Verify that the existing public card is edited in place while its ID, votes, external participants, and active status remain unchanged.
+16. Press `➖ Убрать игрока` once and verify that only the same user's contribution decreases. Try removing from another user's menu and verify that another user's players cannot be removed. Use `/matchinfo #v<ID>` and verify the grouped contributions and current status.
+17. Send `/rename_user @<voter_username> Иван Петров` privately as an administrator and verify that the current card and `/matchinfo` show the alias in the participant list; vote again from that account and verify that the alias remains applied.
+18. Verify that a non-creator cannot use the admin actions or edit the match.
+19. Press `Матч будет`, verify that the card says the match will happen, voting remains available, and the panel changes to `Редактировать`, `Завершить`, and `Отменить`.
+20. Use `Редактировать` again while the match is confirmed. Verify that its card changes without reverting the status or removing votes and external participants.
+21. Press `Завершить`, verify that the public card is deleted from `General` immediately after the action and `/matchinfo #v<ID>` still shows the frozen match history. The deletion must follow the button press, not a scheduled expiry.
+22. Create another match, press `Отменить`, select `Недостаточно игроков` or `Плохая погода`, and verify that the public card is deleted, the cancellation notification shows the selected reason, and `/matchinfo #v<ID>` retains the reason.
+23. Create an outdoor exact-time active or confirmed match about 16 hours ahead (or use a controlled clock), and verify that the scheduler sends one Minsk weather forecast to `Chat`; verify that an indoor match and a second outdoor match on the same Minsk day do not send duplicates.
+24. Stop and restart the bot, verify the shutdown/startup notifications in the status recipient's private dialog, and confirm that messages sent while it was offline are not processed after restart.
+25. Repeat callback deliveries in tests and verify that no duplicate vote, cancellation, match edit, or notification is created.
 
 ## Troubleshooting
 

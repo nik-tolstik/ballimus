@@ -5,62 +5,6 @@ import {
 } from "../domain/notifications.js";
 import { evaluateThresholdTransition } from "../domain/votes.js";
 
-const EXTERNAL_PARTICIPANT_COMMAND_PATTERN =
-  /^@([A-Za-z0-9_]{5,32})(?:\s+от\s+(.+?))?\s+([+-])([1-9]\d*)(?:\s+игрок(?:а|ов)?)?\s+для\s+#v([1-9]\d*)\s*$/iu;
-const MAX_SOURCE_LABEL_LENGTH = 80;
-
-export interface ExternalParticipantCommand {
-  matchId: number;
-  quantity: number;
-  sourceLabel: string | null;
-}
-
-function normalizeSourceLabel(value: string | undefined): string | null | undefined {
-  if (value === undefined) return null;
-
-  const sourceLabel = value.trim().replace(/\s+/gu, " ");
-  if (sourceLabel === "" || sourceLabel.length > MAX_SOURCE_LABEL_LENGTH) return undefined;
-
-  return sourceLabel;
-}
-
-export function parseExternalParticipantCommand(
-  text: string,
-  botUsername: string | undefined,
-): ExternalParticipantCommand | undefined {
-  const normalizedBotUsername = botUsername?.trim().replace(/^@+/, "").toLowerCase();
-  if (normalizedBotUsername === undefined || normalizedBotUsername === "") return undefined;
-
-  const match = EXTERNAL_PARTICIPANT_COMMAND_PATTERN.exec(text.trim());
-  const mentionedUsername = match?.[1];
-  const sourceLabel = normalizeSourceLabel(match?.[2]);
-  const sign = match?.[3];
-  const quantityText = match?.[4];
-  const matchIdText = match?.[5];
-  if (
-    mentionedUsername === undefined ||
-    sourceLabel === undefined ||
-    sign === undefined ||
-    quantityText === undefined ||
-    matchIdText === undefined ||
-    mentionedUsername.toLowerCase() !== normalizedBotUsername
-  ) {
-    return undefined;
-  }
-
-  const quantity = Number(quantityText) * (sign === "-" ? -1 : 1);
-  const matchId = Number(matchIdText);
-  if (
-    !Number.isSafeInteger(quantity) ||
-    quantity === 0 ||
-    !Number.isSafeInteger(matchId) ||
-    matchId < 1
-  ) {
-    return undefined;
-  }
-  return { matchId, quantity, sourceLabel };
-}
-
 export interface ExternalParticipantRepositories {
   matches: {
     findById(matchId: number): Match | undefined;
@@ -72,12 +16,15 @@ export interface ExternalParticipantRepositories {
     countByMatchId(matchId: number): number;
     countByMatchIdAndSourceLabel(matchId: number, sourceLabel: string): number;
     countByMatchIdWithoutSourceLabel(matchId: number): number;
+    countByMatchIdAndAddedByTelegramUserId(matchId: number, telegramUserId: number): number;
+    findBySourceUpdateId(sourceUpdateId: number): ExternalParticipant | undefined;
     add(input: {
       matchId: number;
       addedByTelegramUserId: number;
       sourceUpdateId: number;
       quantity: number;
       sourceLabel: string | null;
+      displayNameSnapshot?: string | null;
     }): ExternalParticipant | undefined;
   };
   notifications: {
@@ -100,6 +47,8 @@ export interface AddExternalParticipantInput {
   addedByTelegramUserId: number;
   quantity: number;
   sourceLabel?: string | null;
+  displayNameSnapshot?: string | null;
+  removeOnlyOwn?: boolean;
 }
 
 export type ExternalParticipantIgnoredReason =
@@ -166,13 +115,22 @@ export class ExternalParticipantService {
       return { status: "ignored", reason: "inactive_match" };
     }
 
+    if (this.options.repositories.externalParticipants.findBySourceUpdateId(input.updateId) !== undefined) {
+      return { status: "ignored", reason: "duplicate_update" };
+    }
+
     const sourceLabel = input.sourceLabel ?? null;
     const externalCountBefore =
       this.options.repositories.externalParticipants.countByMatchId(match.id);
     const goingCountBefore =
       this.options.repositories.votes.countGoing(match.id) + externalCountBefore;
-    const sourceCountBefore = sourceLabel === null
-      ? this.options.repositories.externalParticipants.countByMatchIdWithoutSourceLabel(match.id)
+    const sourceCountBefore = sourceLabel === null && input.removeOnlyOwn === true
+      ? this.options.repositories.externalParticipants.countByMatchIdAndAddedByTelegramUserId(
+        match.id,
+        input.addedByTelegramUserId,
+      )
+      : sourceLabel === null
+        ? this.options.repositories.externalParticipants.countByMatchIdWithoutSourceLabel(match.id)
       : this.options.repositories.externalParticipants.countByMatchIdAndSourceLabel(
         match.id,
         sourceLabel,
@@ -186,6 +144,7 @@ export class ExternalParticipantService {
       sourceUpdateId: input.updateId,
       quantity: input.quantity,
       sourceLabel,
+      displayNameSnapshot: input.displayNameSnapshot ?? null,
     });
 
     if (participant === undefined) {

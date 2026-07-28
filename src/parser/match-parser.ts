@@ -375,6 +375,13 @@ function canonicalFieldPrice(value: string): number | undefined {
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
+function canonicalApproximateTimeLabel(value: string): string | undefined {
+  const text = normalizedText(value);
+  const match = APPROXIMATE_TIME_PATTERN.exec(text) ?? TIME_RANGE_PATTERN.exec(text);
+  if (match === null || match[0] !== text) return undefined;
+  return text;
+}
+
 /**
  * Parses the labelled /match template before falling back to the language model.
  * Returning undefined means that the text did not use the template at all.
@@ -425,9 +432,13 @@ function parseCanonicalMatchCommand(
 
   const timeValue = values.get("time");
   let time: string | null = null;
+  let timeLabel: string | undefined;
   if (timeValue !== undefined && normalizedText(timeValue) !== "") {
     time = normalizeTime(timeValue) ?? null;
-    if (time === null) addReason(reasons, "time", "invalid");
+    if (time === null) {
+      timeLabel = canonicalApproximateTimeLabel(timeValue);
+      if (timeLabel === undefined) addReason(reasons, "time", "invalid");
+    }
   }
 
   const locationValue = values.get("location");
@@ -475,6 +486,7 @@ function parseCanonicalMatchCommand(
     location,
     venueType,
     requiredPlayers,
+    ...(timeLabel === undefined ? {} : { timeLabel }),
   });
   if (!validated.success) {
     const finalReasons: MatchClarificationReason[] = [];

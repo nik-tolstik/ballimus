@@ -59,13 +59,13 @@ describe("SQLite migration upgrade", () => {
       "SELECT venue_type AS venueType, cancellation_reason AS cancellationReason FROM matches WHERE id = 1",
     ).get()).toEqual({ venueType: null, cancellationReason: null });
     expect(sqlite.prepare(
-      "SELECT source_label AS sourceLabel, quantity FROM external_participants WHERE match_id = 1",
-    ).get()).toEqual({ sourceLabel: null, quantity: 2 });
+      "SELECT source_label AS sourceLabel, display_name_snapshot AS displayNameSnapshot, quantity FROM external_participants WHERE match_id = 1",
+    ).get()).toEqual({ sourceLabel: null, displayNameSnapshot: null, quantity: 2 });
     expect(sqlite.prepare(
       "SELECT notification_type AS notificationType, transition_key AS transitionKey FROM notifications",
     ).get()).toEqual({ notificationType: "threshold_reached", transitionKey: "legacy-threshold" });
     expect(sqlite.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
-    expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({ count: 3 });
+    expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({ count: 5 });
     expect(sqlite.prepare(
       "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'notifications_weather_forecast_day_unique'",
     ).get()).toMatchObject({ sql: expect.stringContaining("WHERE") });

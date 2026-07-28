@@ -1,7 +1,6 @@
 import type { ExternalParticipant, Match, Notification } from "../../src/db/schema.js";
 import {
   ExternalParticipantService,
-  parseExternalParticipantCommand,
   type ExternalParticipantRepositories,
 } from "../../src/application/external-participants.js";
 import { describe, expect, it } from "vitest";
@@ -19,13 +18,13 @@ const match = {
   updatedAt: new Date("2026-07-26T00:00:00.000Z"),
 } as Match;
 
-function fixture() {
-  const participants: Array<ExternalParticipant & { sourceLabel: string | null }> = [];
+function fixture(currentMatch: Match = match) {
+  const participants: ExternalParticipant[] = [];
   const notifications: Notification[] = [];
   const sent: string[] = [];
   const repositories: ExternalParticipantRepositories = {
     matches: {
-      findById: (matchId) => (matchId === match.id ? match : undefined),
+      findById: (matchId) => (matchId === currentMatch.id ? currentMatch : undefined),
     },
     votes: {
       countGoing: () => 1,
@@ -48,6 +47,17 @@ function fixture() {
             (participant) => participant.matchId === matchId && participant.sourceLabel === null,
           )
           .reduce((total, participant) => total + participant.quantity, 0),
+      countByMatchIdAndAddedByTelegramUserId: (matchId, telegramUserId) =>
+        participants
+          .filter(
+            (participant) =>
+              participant.matchId === matchId &&
+              participant.addedByTelegramUserId === telegramUserId &&
+              participant.sourceLabel === null,
+          )
+          .reduce((total, participant) => total + participant.quantity, 0),
+      findBySourceUpdateId: (sourceUpdateId) =>
+        participants.find((participant) => participant.sourceUpdateId === sourceUpdateId),
       add: (input) => {
         if (participants.some((participant) => participant.sourceUpdateId === input.sourceUpdateId)) {
           return undefined;
@@ -56,7 +66,7 @@ function fixture() {
           id: participants.length + 1,
           ...input,
           createdAt: new Date(),
-        } as ExternalParticipant & { sourceLabel: string | null };
+        } as ExternalParticipant;
         participants.push(participant);
         return participant;
       },
@@ -87,58 +97,7 @@ function fixture() {
   return { repositories, participants, notifications, sent };
 }
 
-describe("external participant commands", () => {
-  it("parses a command addressed to this bot", () => {
-    expect(parseExternalParticipantCommand("@ballimus_bot +1 для #v32", "ballimus_bot")).toEqual({
-      matchId: 32,
-      quantity: 1,
-      sourceLabel: null,
-    });
-    expect(parseExternalParticipantCommand("@BALLIMUS_BOT +1 для #V32", "ballimus_bot")).toEqual({
-      matchId: 32,
-      quantity: 1,
-      sourceLabel: null,
-    });
-    expect(parseExternalParticipantCommand("@ballimus_bot +10 для #v32", "ballimus_bot")).toEqual({
-      matchId: 32,
-      quantity: 10,
-      sourceLabel: null,
-    });
-    expect(parseExternalParticipantCommand("@ballimus_bot -3 для #v32", "ballimus_bot")).toEqual({
-      matchId: 32,
-      quantity: -3,
-      sourceLabel: null,
-    });
-  });
-
-  it("parses attributed additions and removals while keeping the legacy syntax", () => {
-    expect(
-      parseExternalParticipantCommand(
-        "@ballimus_bot от Никиты +3 игрока для #v32",
-        "ballimus_bot",
-      ),
-    ).toEqual({
-      matchId: 32,
-      quantity: 3,
-      sourceLabel: "Никиты",
-    });
-    expect(
-      parseExternalParticipantCommand(
-        "@ballimus_bot от   Никиты   -1 игроков для #v32",
-        "ballimus_bot",
-      ),
-    ).toEqual({
-      matchId: 32,
-      quantity: -1,
-      sourceLabel: "Никиты",
-    });
-  });
-
-  it("ignores commands addressed to another bot or with an invalid match ID", () => {
-    expect(parseExternalParticipantCommand("@other_bot +1 для #v32", "ballimus_bot")).toBeUndefined();
-    expect(parseExternalParticipantCommand("@ballimus_bot +1 для #v0", "ballimus_bot")).toBeUndefined();
-    expect(parseExternalParticipantCommand("@ballimus_bot +1 #v32", "ballimus_bot")).toBeUndefined();
-  });
+describe("external participants", () => {
 
   it("counts an external player once and announces an upward threshold crossing", async () => {
     const test = fixture();
@@ -195,7 +154,7 @@ describe("external participant commands", () => {
     ]);
   });
 
-  it("adds a requested number of external players in one command", async () => {
+  it("supports historical quantity batches in the application service", async () => {
     const test = fixture();
     const service = new ExternalParticipantService({
       repositories: test.repositories,
@@ -246,6 +205,72 @@ describe("external participant commands", () => {
       thresholdCrossed: false,
     });
     expect(test.participants.map((participant) => participant.quantity)).toEqual([10, -3]);
+  });
+
+  it("stores the display snapshot and lets each user remove only their own players", async () => {
+    const test = fixture();
+    const service = new ExternalParticipantService({
+      repositories: test.repositories,
+      notifier: { send: async (text) => { test.sent.push(text); } },
+    });
+
+    await service.add({
+      matchId: match.id,
+      updateId: 32,
+      addedByTelegramUserId: 7,
+      quantity: 2,
+      sourceLabel: null,
+      displayNameSnapshot: "Ваня",
+      removeOnlyOwn: true,
+    });
+    await service.add({
+      matchId: match.id,
+      updateId: 33,
+      addedByTelegramUserId: 8,
+      quantity: 1,
+      sourceLabel: null,
+      displayNameSnapshot: "Петя",
+      removeOnlyOwn: true,
+    });
+
+    const otherPlayers = await service.add({
+      matchId: match.id,
+      updateId: 34,
+      addedByTelegramUserId: 8,
+      quantity: -2,
+      sourceLabel: null,
+      removeOnlyOwn: true,
+    });
+    const ownPlayers = await service.add({
+      matchId: match.id,
+      updateId: 35,
+      addedByTelegramUserId: 7,
+      quantity: -1,
+      sourceLabel: null,
+      removeOnlyOwn: true,
+    });
+
+    expect(otherPlayers).toEqual({
+      status: "ignored",
+      reason: "insufficient_external_players",
+    });
+    expect(ownPlayers).toMatchObject({ status: "added", externalCount: 2 });
+    expect(test.participants).toEqual([
+      expect.objectContaining({
+        addedByTelegramUserId: 7,
+        displayNameSnapshot: "Ваня",
+        quantity: 2,
+      }),
+      expect.objectContaining({
+        addedByTelegramUserId: 8,
+        displayNameSnapshot: "Петя",
+        quantity: 1,
+      }),
+      expect.objectContaining({
+        addedByTelegramUserId: 7,
+        quantity: -1,
+      }),
+    ]);
   });
 
   it("announces threshold loss and a later repeated threshold reach", async () => {
@@ -323,6 +348,27 @@ describe("external participant commands", () => {
       reason: "insufficient_external_players",
     });
     expect(test.participants).toHaveLength(0);
+  });
+
+  it("blocks additions for completed and cancelled matches", async () => {
+    for (const status of ["completed", "cancelled"] as const) {
+      const test = fixture({ ...match, status });
+      const service = new ExternalParticipantService({
+        repositories: test.repositories,
+        notifier: { send: async (text) => { test.sent.push(text); } },
+      });
+
+      const result = await service.add({
+        matchId: match.id,
+        updateId: status === "completed" ? 41 : 42,
+        addedByTelegramUserId: 7,
+        quantity: 1,
+        removeOnlyOwn: true,
+      });
+
+      expect(result).toEqual({ status: "ignored", reason: "inactive_match" });
+      expect(test.participants).toHaveLength(0);
+    }
   });
 
   it("persists an attribution label and only removes players from that label", async () => {

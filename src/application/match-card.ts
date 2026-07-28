@@ -1,6 +1,7 @@
 import type { InlineKeyboardMarkup } from "grammy/types";
 
 import type { ExternalParticipant, Match, Vote } from "../db/schema.js";
+import { externalParticipantCallbackData } from "./external-participant-actions.js";
 import {
   escapeHtml,
   renderMatchCard,
@@ -12,6 +13,7 @@ export type MatchVoteOption = (typeof MATCH_VOTE_OPTIONS)[number];
 
 export type MatchAction =
   | { kind: "vote"; matchId: number; option: MatchVoteOption }
+  | { kind: "edit"; matchId: number }
   | { kind: "confirm"; matchId: number }
   | { kind: "complete"; matchId: number }
   | { kind: "cancel"; matchId: number }
@@ -54,6 +56,7 @@ export function parseMatchAction(data: string): MatchAction | undefined {
     parts[0] === "match" &&
     (
       parts[2] === "confirm" ||
+      parts[2] === "edit" ||
       parts[2] === "complete" ||
       parts[2] === "cancel" ||
       parts[2] === "cancel_insufficient_players" ||
@@ -84,37 +87,53 @@ export function publicCardKeyboard(matchId: number): InlineKeyboardMarkup {
         text: voteText(option),
         callback_data: callbackData({ kind: "vote", matchId, option }),
       })),
+      [{
+        text: "Доп. игроки",
+        callback_data: externalParticipantCallbackData({ kind: "menu", matchId }),
+      }],
     ],
   };
 }
 
 export function adminPanelKeyboard(matchId: number): InlineKeyboardMarkup {
   return {
-    inline_keyboard: [[
-      {
-        text: "Матч будет",
-        callback_data: callbackData({ kind: "confirm", matchId }),
-      },
-      {
-        text: "Отменить",
-        callback_data: callbackData({ kind: "cancel", matchId }),
-      },
-    ]],
+    inline_keyboard: [
+      [{
+        text: "Редактировать",
+        callback_data: callbackData({ kind: "edit", matchId }),
+      }],
+      [
+        {
+          text: "Матч будет",
+          callback_data: callbackData({ kind: "confirm", matchId }),
+        },
+        {
+          text: "Отменить",
+          callback_data: callbackData({ kind: "cancel", matchId }),
+        },
+      ],
+    ],
   };
 }
 
 export function confirmedAdminPanelKeyboard(matchId: number): InlineKeyboardMarkup {
   return {
-    inline_keyboard: [[
-      {
-        text: "Завершить",
-        callback_data: callbackData({ kind: "complete", matchId }),
-      },
-      {
-        text: "Отменить",
-        callback_data: callbackData({ kind: "cancel", matchId }),
-      },
-    ]],
+    inline_keyboard: [
+      [{
+        text: "Редактировать",
+        callback_data: callbackData({ kind: "edit", matchId }),
+      }],
+      [
+        {
+          text: "Завершить",
+          callback_data: callbackData({ kind: "complete", matchId }),
+        },
+        {
+          text: "Отменить",
+          callback_data: callbackData({ kind: "cancel", matchId }),
+        },
+      ],
+    ],
   };
 }
 

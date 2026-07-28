@@ -24,7 +24,7 @@ export interface MatchCardUpdaterRepositories {
 export class MatchCardUpdater {
   public constructor(
     private readonly repositories: MatchCardUpdaterRepositories,
-    private readonly publisher: Pick<MatchCardPublisher, "editMessage">,
+    private readonly publisher: Pick<MatchCardPublisher, "deleteMessage" | "editMessage">,
     private readonly timezone = "Europe/Minsk",
   ) {}
 
@@ -34,9 +34,7 @@ export class MatchCardUpdater {
       matchId,
       "public_card",
     );
-    if (match === undefined || this.publisher.editMessage === undefined) {
-      return;
-    }
+    if (match === undefined) return;
 
     const votes = this.repositories.votes.listByMatchId(matchId);
     const externalCount = this.repositories.externalParticipants.countByMatchId(matchId);
@@ -45,12 +43,27 @@ export class MatchCardUpdater {
       const card = matchCardContent(match, votes, externalCount, externalParticipants, {
         timezone: this.timezone,
       });
-      await this.safeEdit({
-        chatId: publicMessage.chatId,
-        messageId: publicMessage.messageId,
-        text: card.text,
-        replyMarkup: card.replyMarkup,
-      });
+      if (match.status === "completed" || match.status === "cancelled") {
+        const deleted = await this.safeDelete({
+          chatId: publicMessage.chatId,
+          messageId: publicMessage.messageId,
+        });
+        if (!deleted) {
+          await this.safeEdit({
+            chatId: publicMessage.chatId,
+            messageId: publicMessage.messageId,
+            text: card.text,
+            replyMarkup: card.replyMarkup,
+          });
+        }
+      } else {
+        await this.safeEdit({
+          chatId: publicMessage.chatId,
+          messageId: publicMessage.messageId,
+          text: card.text,
+          replyMarkup: card.replyMarkup,
+        });
+      }
     }
 
     const adminMessage = this.repositories.matchMessages.findByMatchIdAndKind(
@@ -79,6 +92,19 @@ export class MatchCardUpdater {
     } catch (error) {
       if (error instanceof Error && /message is not modified/i.test(error.message)) return;
       console.error(`Match card update failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async safeDelete(request: { chatId: number; messageId: number }): Promise<boolean> {
+    if (this.publisher.deleteMessage === undefined) return false;
+
+    try {
+      await this.publisher.deleteMessage(request);
+      return true;
+    } catch (error) {
+      if (error instanceof Error && /message to delete not found/i.test(error.message)) return true;
+      console.error(`Match card deletion failed: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
     }
   }
 }

@@ -1,7 +1,12 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, or, sql } from "drizzle-orm";
 
 import type { AppDatabase } from "../client.js";
 import { votes, type Vote, type VoteOption } from "../schema.js";
+import { normalizeTelegramUsername } from "./user-aliases.js";
+
+function usernameCondition(username: string) {
+  return sql`lower(ltrim(trim(${votes.usernameSnapshot}), '@')) = ${normalizeTelegramUsername(username)}`;
+}
 
 export interface UpsertVoteInput {
   matchId: number;
@@ -34,6 +39,41 @@ export class VotesRepository {
       .where(eq(votes.matchId, matchId))
       .orderBy(asc(votes.telegramUserId))
       .all();
+  }
+
+  public findTelegramUserIdsByUsername(username: string): number[] {
+    const rows = this.db
+      .select({ telegramUserId: votes.telegramUserId })
+      .from(votes)
+      .where(usernameCondition(username))
+      .all();
+
+    return [...new Set(rows.map((row) => row.telegramUserId))];
+  }
+
+  public renameUser(input: {
+    username: string;
+    displayName: string;
+    telegramUserId?: number | null;
+  }): number[] {
+    const conditions = [usernameCondition(input.username)];
+    if (input.telegramUserId !== undefined && input.telegramUserId !== null) {
+      conditions.push(eq(votes.telegramUserId, input.telegramUserId));
+    }
+
+    const affectedRows = this.db
+      .select({ matchId: votes.matchId })
+      .from(votes)
+      .where(or(...conditions))
+      .all();
+
+    this.db
+      .update(votes)
+      .set({ displayNameSnapshot: input.displayName })
+      .where(or(...conditions))
+      .run();
+
+    return [...new Set(affectedRows.map((row) => row.matchId))];
   }
 
   public upsert(input: UpsertVoteInput): Vote {

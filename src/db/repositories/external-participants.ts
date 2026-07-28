@@ -11,6 +11,7 @@ export interface AddExternalParticipantInput {
   addedByTelegramUserId: number;
   sourceUpdateId: number;
   sourceLabel?: string | null;
+  displayNameSnapshot?: string | null;
   quantity?: number;
   createdAt?: Date;
 }
@@ -26,6 +27,7 @@ export class ExternalParticipantsRepository {
         addedByTelegramUserId: input.addedByTelegramUserId,
         sourceUpdateId: input.sourceUpdateId,
         sourceLabel: input.sourceLabel ?? null,
+        displayNameSnapshot: input.displayNameSnapshot ?? null,
         quantity: input.quantity ?? 1,
         createdAt: input.createdAt ?? new Date(),
       })
@@ -72,6 +74,46 @@ export class ExternalParticipantsRepository {
       .get();
 
     return result?.count ?? 0;
+  }
+
+  public countByMatchIdAndAddedByTelegramUserId(matchId: number, telegramUserId: number): number {
+    const result = this.db
+      .select({ count: sql<number>`coalesce(sum(${externalParticipants.quantity}), 0)` })
+      .from(externalParticipants)
+      .where(
+        and(
+          eq(externalParticipants.matchId, matchId),
+          eq(externalParticipants.addedByTelegramUserId, telegramUserId),
+          isNull(externalParticipants.sourceLabel),
+        ),
+      )
+      .get();
+
+    return result?.count ?? 0;
+  }
+
+  public findBySourceUpdateId(sourceUpdateId: number): ExternalParticipant | undefined {
+    return this.db
+      .select()
+      .from(externalParticipants)
+      .where(eq(externalParticipants.sourceUpdateId, sourceUpdateId))
+      .get();
+  }
+
+  public updateDisplayNameByTelegramUserId(telegramUserId: number, displayName: string): number[] {
+    const affectedRows = this.db
+      .select({ matchId: externalParticipants.matchId })
+      .from(externalParticipants)
+      .where(eq(externalParticipants.addedByTelegramUserId, telegramUserId))
+      .all();
+
+    this.db
+      .update(externalParticipants)
+      .set({ displayNameSnapshot: displayName })
+      .where(eq(externalParticipants.addedByTelegramUserId, telegramUserId))
+      .run();
+
+    return [...new Set(affectedRows.map((row) => row.matchId))];
   }
 
   public listByMatchId(matchId: number): ExternalParticipant[] {

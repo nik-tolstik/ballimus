@@ -1,6 +1,7 @@
 import { DateTime } from "luxon";
 
 import type { ExternalParticipant, Match, Vote, VoteOption } from "../db/schema.js";
+import { groupExternalParticipants } from "./external-participants.js";
 
 export interface MatchCardData {
   match: Match;
@@ -140,17 +141,8 @@ function venueLabel(venueType: Match["venueType"]): string {
 function namedExternalParticipantLines(
   participants: readonly ExternalParticipant[],
 ): string[] {
-  const totals = new Map<string, number>();
-  for (const participant of participants) {
-    const label = participant.sourceLabel?.trim();
-    if (label === undefined || label === "") continue;
-    totals.set(label, (totals.get(label) ?? 0) + participant.quantity);
-  }
-
-  return [...totals.entries()]
-    .filter(([, quantity]) => quantity !== 0)
-    .sort(([left], [right]) => left.localeCompare(right, "ru"))
-    .map(([label, quantity]) => `От ${escapeHtml(label)}: ${quantity}`);
+  return groupExternalParticipants(participants)
+    .map(({ label, quantity }) => `От ${escapeHtml(label)}: ${quantity}`);
 }
 
 function addParticipantSection(

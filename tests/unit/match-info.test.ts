@@ -1,4 +1,4 @@
-import type { Match, Vote } from "../../src/db/schema.js";
+import type { ExternalParticipant, Match, Vote } from "../../src/db/schema.js";
 import { MatchInfoService, formatMatchInfo, parseMatchInfoMatchId } from "../../src/application/match-info.js";
 import { describe, expect, it } from "vitest";
 
@@ -58,7 +58,19 @@ describe("match info", () => {
           chatId === match.chatId && status === match.status ? [match] : [],
       },
       votes: { listByMatchId: () => votes },
-      externalParticipants: { countByMatchId: () => 2 },
+      externalParticipants: {
+        countByMatchId: () => 2,
+        listByMatchId: () => [{
+          id: 1,
+          matchId: match.id,
+          addedByTelegramUserId: 555,
+          sourceUpdateId: 1,
+          sourceLabel: null,
+          displayNameSnapshot: "Ваня",
+          quantity: 2,
+          createdAt: new Date(),
+        } as ExternalParticipant],
+      },
     });
 
     const result = service.get({ chatId: match.chatId, matchId: match.id });
@@ -73,7 +85,8 @@ describe("match info", () => {
         "Цена поля: не указана\n" +
         "Статус: Голосование открыто\n" +
         "Участники: 3/5\n" +
-        "Дополнительные игроки: 2\n\n" +
+        "Дополнительные игроки: 2\n" +
+        "- От Ваня: 2\n\n" +
         "Буду (1):\n" +
         "- Иван (@ivan)\n" +
         "Не смогу (1):\n" +

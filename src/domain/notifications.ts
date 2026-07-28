@@ -33,14 +33,15 @@ export function formatThresholdLostNotification(
 
 export function formatCancellationNotification(
   matchId: number,
-  title: string | null | undefined,
   reason: string | null | undefined,
 ): string {
   const normalizedReason = reason?.trim();
-  const reasonText = normalizedReason === undefined || normalizedReason === ""
-    ? ""
-    : ` Причина: ${escapeHtml(normalizedReason)}.`;
-  return `${formatMatchContext(matchId, title)} — матч отменён.${reasonText}`;
+  return [
+    `Матч #v${matchId} отменён.`,
+    ...(normalizedReason === undefined || normalizedReason === ""
+      ? []
+      : [`Причина: ${escapeHtml(normalizedReason)}.`]),
+  ].join("\n");
 }
 
 export function formatConfirmationNotification(

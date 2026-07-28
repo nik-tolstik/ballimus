@@ -17,6 +17,7 @@ import {
   createExternalParticipantsRepository,
   ExternalParticipantsRepository,
 } from "./external-participants.js";
+import { createUserAliasesRepository, UserAliasesRepository } from "./user-aliases.js";
 
 export {
   ChatSettingsRepository,
@@ -27,6 +28,7 @@ export {
   ProcessedUpdatesRepository,
   VotesRepository,
   ExternalParticipantsRepository,
+  UserAliasesRepository,
 };
 export * from "./chat-settings.js";
 export * from "./matches.js";
@@ -36,6 +38,7 @@ export * from "./notifications.js";
 export * from "./processed-updates.js";
 export * from "./votes.js";
 export * from "./external-participants.js";
+export * from "./user-aliases.js";
 
 export interface Repositories {
   chatSettings: ChatSettingsRepository;
@@ -46,6 +49,7 @@ export interface Repositories {
   votes: VotesRepository;
   externalParticipants: ExternalParticipantsRepository;
   notifications: NotificationsRepository;
+  userAliases: UserAliasesRepository;
 }
 
 export function createRepositories(db: AppDatabase): Repositories {
@@ -58,5 +62,6 @@ export function createRepositories(db: AppDatabase): Repositories {
     votes: createVotesRepository(db),
     externalParticipants: createExternalParticipantsRepository(db),
     notifications: createNotificationsRepository(db),
+    userAliases: createUserAliasesRepository(db),
   };
 }
