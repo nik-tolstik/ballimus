@@ -1,6 +1,7 @@
 import { DateTime } from "luxon";
 
 import type { ExternalParticipant, Match, MatchStatus, Vote } from "../db/schema.js";
+import { groupExternalParticipants } from "../domain/external-participants.js";
 
 export interface MatchInfoRepositories {
   matches: {
@@ -143,16 +144,8 @@ function venueLabel(venueType: Match["venueType"]): string {
 function namedExternalParticipantLines(
   participants: readonly ExternalParticipant[],
 ): string[] {
-  const totals = new Map<string, number>();
-  for (const participant of participants) {
-    const label = participant.sourceLabel?.trim();
-    if (label === undefined || label === "") continue;
-    totals.set(label, (totals.get(label) ?? 0) + participant.quantity);
-  }
-  return [...totals.entries()]
-    .filter(([, quantity]) => quantity !== 0)
-    .sort(([left], [right]) => left.localeCompare(right, "ru"))
-    .map(([label, quantity]) => `- От ${label}: ${quantity}`);
+  return groupExternalParticipants(participants)
+    .map(({ label, quantity }) => `- От ${label}: ${quantity}`);
 }
 
 function formatParticipants(votes: readonly Vote[], option: Vote["option"]): string[] {

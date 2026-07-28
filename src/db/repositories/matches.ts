@@ -23,8 +23,10 @@ export interface CreateMatchInput {
 }
 
 export interface UpdateMatchInput {
-  scheduledAt?: Date;
-  location?: string;
+  scheduledAt?: Date | null;
+  location?: string | null;
+  fieldPriceRubles?: number | null;
+  title?: string | null;
   requiredPlayers?: number;
   status?: MatchStatus;
   venueType?: VenueType | null;
@@ -105,8 +107,10 @@ export class MatchesRepository {
 
   public update(id: number, input: UpdateMatchInput): Match | undefined {
     const values: {
-      scheduledAt?: Date;
-      location?: string;
+      scheduledAt?: Date | null;
+      location?: string | null;
+      fieldPriceRubles?: number | null;
+      title?: string | null;
       requiredPlayers?: number;
       status?: MatchStatus;
       venueType?: VenueType | null;
@@ -116,6 +120,8 @@ export class MatchesRepository {
 
     if (input.scheduledAt !== undefined) values.scheduledAt = input.scheduledAt;
     if (input.location !== undefined) values.location = input.location;
+    if (input.fieldPriceRubles !== undefined) values.fieldPriceRubles = input.fieldPriceRubles;
+    if (input.title !== undefined) values.title = input.title;
     if (input.requiredPlayers !== undefined) values.requiredPlayers = input.requiredPlayers;
     if (input.status !== undefined) values.status = input.status;
     if (input.venueType !== undefined) values.venueType = input.venueType;

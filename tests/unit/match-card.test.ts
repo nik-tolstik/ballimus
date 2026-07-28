@@ -114,6 +114,10 @@ describe("match card", () => {
       "Под вопросом",
       "Не смогу",
     ]);
+    expect(content.replyMarkup?.inline_keyboard[1]).toEqual([{
+      text: "Доп. игроки",
+      callback_data: "external:32:menu",
+    }]);
   });
 
   it("uses Today based on the Minsk calendar date at a UTC day boundary", () => {
@@ -155,7 +159,7 @@ describe("match card", () => {
     const externalParticipants = [
       { id: 1, matchId: 32, addedByTelegramUserId: 7, sourceUpdateId: 1, sourceLabel: "Никиты", quantity: 3, createdAt: new Date() },
       { id: 2, matchId: 32, addedByTelegramUserId: 7, sourceUpdateId: 2, sourceLabel: "Никиты", quantity: -1, createdAt: new Date() },
-      { id: 3, matchId: 32, addedByTelegramUserId: 7, sourceUpdateId: 3, sourceLabel: null, quantity: 1, createdAt: new Date() },
+      { id: 3, matchId: 32, addedByTelegramUserId: 7, sourceUpdateId: 3, sourceLabel: null, displayNameSnapshot: "Ваня", quantity: 1, createdAt: new Date() },
     ] as ExternalParticipant[];
 
     const content = matchCardContent(match, [], 3, externalParticipants);
@@ -163,6 +167,52 @@ describe("match card", () => {
     expect(content.text).toContain("🏠 Формат: на улице, 3-5 человек");
     expect(content.text).toContain("Внешние игроки: 3");
     expect(content.text).toContain("От Никиты: 2");
+    expect(content.text).toContain("От Ваня: 1");
+  });
+
+  it("groups unnamed historical players by Telegram ID when no snapshot exists", () => {
+    const content = matchCardContent(match, [], 2, [
+      {
+        id: 1,
+        matchId: match.id,
+        addedByTelegramUserId: 555,
+        sourceUpdateId: 1,
+        sourceLabel: null,
+        displayNameSnapshot: null,
+        quantity: 2,
+        createdAt: new Date(),
+      },
+    ]);
+
+    expect(content.text).toContain("От ID 555: 2");
+  });
+
+  it("prefers a later display snapshot for the same unnamed contributor", () => {
+    const content = matchCardContent(match, [], 2, [
+      {
+        id: 1,
+        matchId: match.id,
+        addedByTelegramUserId: 555,
+        sourceUpdateId: 1,
+        sourceLabel: null,
+        displayNameSnapshot: null,
+        quantity: 1,
+        createdAt: new Date(),
+      },
+      {
+        id: 2,
+        matchId: match.id,
+        addedByTelegramUserId: 555,
+        sourceUpdateId: 2,
+        sourceLabel: null,
+        displayNameSnapshot: "Ваня",
+        quantity: 1,
+        createdAt: new Date(),
+      },
+    ]);
+
+    expect(content.text).toContain("От Ваня: 2");
+    expect(content.text).not.toContain("От ID 555");
   });
 
   it("hides the external-player section when there are no external players", () => {
@@ -181,10 +231,16 @@ describe("match card", () => {
     expect(content.replyMarkup?.inline_keyboard[0]).toHaveLength(3);
     expect(admin.text).toContain("Матч подтверждён");
     expect(activeAdmin.replyMarkup?.inline_keyboard[0]?.map((button) => button.text)).toEqual([
+      "Редактировать",
+    ]);
+    expect(activeAdmin.replyMarkup?.inline_keyboard[1]?.map((button) => button.text)).toEqual([
       "Матч будет",
       "Отменить",
     ]);
     expect(admin.replyMarkup?.inline_keyboard[0]?.map((button) => button.text)).toEqual([
+      "Редактировать",
+    ]);
+    expect(admin.replyMarkup?.inline_keyboard[1]?.map((button) => button.text)).toEqual([
       "Завершить",
       "Отменить",
     ]);
@@ -195,6 +251,7 @@ describe("match card", () => {
     expect(callbackData(action)).toBe("vote:32:going");
     expect(parseMatchAction("vote:32:going")).toEqual(action);
     expect(parseMatchAction("match:32:cancel")).toEqual({ kind: "cancel", matchId: 32 });
+    expect(parseMatchAction("match:32:edit")).toEqual({ kind: "edit", matchId: 32 });
     expect(parseMatchAction("match:32:cancel_bad_weather")).toEqual({
       kind: "cancel_bad_weather",
       matchId: 32,

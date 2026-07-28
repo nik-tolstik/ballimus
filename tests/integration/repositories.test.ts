@@ -192,7 +192,78 @@ describe("persistence repositories", () => {
     expect(repositories.votes.find(match.id, 555)).toBeUndefined();
   });
 
-  it("stores each external player command once", () => {
+  it("persists user aliases and renames all known vote snapshots", () => {
+    const firstMatch = repositories.matches.create({
+      chatId: -1001234567890,
+      scheduledAt: new Date("2026-08-01T17:00:00.000Z"),
+      location: "Synthetic Stadium",
+      requiredPlayers: 3,
+      creatorTelegramUserId: 101,
+      status: "active",
+    });
+    const secondMatch = repositories.matches.create({
+      chatId: -1001234567890,
+      scheduledAt: new Date("2026-08-08T17:00:00.000Z"),
+      location: "Synthetic Stadium",
+      requiredPlayers: 3,
+      creatorTelegramUserId: 101,
+      status: "active",
+    });
+
+    repositories.votes.upsert({
+      matchId: firstMatch.id,
+      telegramUserId: 555,
+      usernameSnapshot: "chocolate",
+      displayNameSnapshot: "Telegram Name",
+      option: "going",
+    });
+    repositories.votes.upsert({
+      matchId: secondMatch.id,
+      telegramUserId: 555,
+      usernameSnapshot: null,
+      displayNameSnapshot: "Telegram Name",
+      option: "maybe",
+    });
+    repositories.externalParticipants.add({
+      matchId: firstMatch.id,
+      addedByTelegramUserId: 555,
+      sourceUpdateId: 690,
+      displayNameSnapshot: "Telegram Name",
+      quantity: 2,
+    });
+
+    const knownIds = repositories.votes.findTelegramUserIdsByUsername("@CHOCOLATE");
+    const alias = repositories.userAliases.upsert({
+      username: "@Chocolate",
+      telegramUserId: knownIds[0] ?? null,
+      displayName: "Ваня",
+    });
+    const affectedMatchIds = repositories.votes.renameUser({
+      username: "chocolate",
+      telegramUserId: alias.telegramUserId,
+      displayName: alias.displayName,
+    });
+
+    expect(alias).toMatchObject({
+      username: "chocolate",
+      telegramUserId: 555,
+      displayName: "Ваня",
+    });
+    expect(affectedMatchIds).toEqual([firstMatch.id, secondMatch.id]);
+    expect(repositories.votes.find(firstMatch.id, 555)?.displayNameSnapshot).toBe("Ваня");
+    expect(repositories.votes.find(secondMatch.id, 555)?.displayNameSnapshot).toBe("Ваня");
+    expect(
+      repositories.externalParticipants.updateDisplayNameByTelegramUserId(555, "Ваня"),
+    ).toEqual([firstMatch.id]);
+    expect(repositories.externalParticipants.listByMatchId(firstMatch.id)[0]?.displayNameSnapshot)
+      .toBe("Ваня");
+    expect(repositories.userAliases.findByTelegramUserId(555)).toMatchObject({
+      username: "chocolate",
+      displayName: "Ваня",
+    });
+  });
+
+  it("stores each external player update once", () => {
     const match = repositories.matches.create({
       chatId: -1001234567890,
       scheduledAt: new Date("2026-08-01T17:00:00.000Z"),
@@ -205,6 +276,7 @@ describe("persistence repositories", () => {
       matchId: match.id,
       addedByTelegramUserId: 555,
       sourceUpdateId: 700,
+      displayNameSnapshot: "Ваня",
       quantity: 1,
     });
     const duplicate = repositories.externalParticipants.add({
@@ -217,6 +289,7 @@ describe("persistence repositories", () => {
       matchId: match.id,
       addedByTelegramUserId: 555,
       sourceUpdateId: 700,
+      displayNameSnapshot: "Ваня",
     });
     expect(duplicate).toBeUndefined();
     expect(repositories.externalParticipants.countByMatchId(match.id)).toBe(1);
@@ -267,6 +340,10 @@ describe("persistence repositories", () => {
     expect(repositories.externalParticipants.countByMatchIdAndSourceLabel(match.id, "Алексея"))
       .toBe(2);
     expect(repositories.externalParticipants.countByMatchIdWithoutSourceLabel(match.id)).toBe(1);
+    expect(repositories.externalParticipants.countByMatchIdAndAddedByTelegramUserId(match.id, 555))
+      .toBe(1);
+    expect(repositories.externalParticipants.countByMatchIdAndAddedByTelegramUserId(match.id, 556))
+      .toBe(0);
     expect(repositories.externalParticipants.countByMatchId(match.id)).toBe(6);
 
     const removed = repositories.externalParticipants.add({

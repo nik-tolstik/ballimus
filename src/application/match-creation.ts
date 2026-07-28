@@ -242,7 +242,7 @@ export function draftPreviewContent(
   };
 }
 
-function scheduledAt(draft: MatchDraft, timezone: string): Date | null {
+export function matchScheduledAt(draft: MatchDraft, timezone: string): Date | null {
   if (draft.time === null) return null;
   const local = DateTime.fromISO(`${draft.date}T${draft.time}`, { zone: timezone });
   if (!local.isValid) {
@@ -307,7 +307,7 @@ export class MatchCreationService {
     try {
       match = this.options.repositories.matches.create({
         chatId: input.chatId,
-        scheduledAt: scheduledAt(input.draft, input.timezone),
+        scheduledAt: matchScheduledAt(input.draft, input.timezone),
         location: input.draft.location,
         fieldPriceRubles: input.draft.fieldPriceRubles ?? null,
         title: formatMatchTitle(input.draft),
@@ -431,7 +431,7 @@ export class MatchCreationService {
     try {
       match = this.options.repositories.matches.create({
         chatId: input.chatId,
-        scheduledAt: scheduledAt(input.draft, input.timezone),
+        scheduledAt: matchScheduledAt(input.draft, input.timezone),
         location: input.draft.location,
         fieldPriceRubles: input.draft.fieldPriceRubles ?? null,
         title: formatMatchTitle(input.draft),

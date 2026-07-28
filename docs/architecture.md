@@ -7,7 +7,7 @@ The application is assembled in `src/main.ts`:
 1. configuration is loaded and validated;
 2. SQLite is opened and the baseline Drizzle schema is applied;
 3. repositories are created;
-4. card creation, card updates, match actions, external participants, match information, and scheduled forecast services are constructed;
+4. card creation, card updates, published-match editing, match actions, external participants, match information, and scheduled forecast services are constructed;
 5. grammY handlers are wired to those services;
 6. the in-process scheduler is started;
 7. Telegram long polling starts after pending updates are discarded; lifecycle notifications are sent to the configured administrator's private dialog on startup and shutdown.
@@ -27,22 +27,27 @@ grammY handlers, private authorization, and topic routing
       |                 +--> publish --> public card in General
       |                 +--> creator admin panel in private chat
       |
-      +--> callback_query --> MatchActionService
+      +--> /editmatch --> shared parser --> atomic same-match update --> card refresh
+      |
+      +--> /rename_user --> user alias and vote snapshot update --> card refresh
+      |
+      +--> callback_query --> MatchActionService or external-player flow
       |                         |
       |                         +--> atomic vote/status persistence
       |                         +--> callback idempotency
       |                         +--> card refresh
       |                         +--> important notifications
       |
-      +--> external-player command --> persistence --> card refresh
+      +--> external-player callbacks --> private menu --> persistence --> card refresh
       |
       +--> in-process scheduler --> Minsk forecast --> Chat
 ```
 
 ## Topic routing
 
-- `/match`, `/help`, `/matchinfo`, and external-player commands are accepted only in private conversations from authorized group administrators;
+- `/match`, `/editmatch`, `/help`, `/matchinfo`, and `/rename_user` are accepted only in private conversations from authorized group administrators;
 - public match cards are sent to the configured `General` topic;
+- the `Доп. игроки` card callback opens a private menu; add/remove callbacks are accepted only from that private menu;
 - status notifications are sent to the configured `Chat` topic;
 - creator admin panels are sent to the creator's private Telegram chat.
 
@@ -63,13 +68,23 @@ The match-creation service normally uses a private review step (`CONFIRM_MATCH_C
 
 When confirmation is disabled, successful parsing continues directly with publication. If publication or persistence fails, the draft match and already-sent messages are cleaned up on a best-effort basis.
 
+## Published-match editing
+
+The creator can request a copyable `/editmatch #v<ID>` full-replacement template from the private admin panel. The command is accepted only from that creator in a private conversation, after the creator's current group-administrator permission has been checked. It is available only while the match is `active` or `confirmed`.
+
+The command body is adapted to the same parser used by `/match`. A successful atomic update replaces the schedule, location, venue type, field price, required-player threshold, and derived title on the same match row, then refreshes the existing public card. The match ID, current lifecycle status, votes, and external-participant entries are not replaced. The Telegram update ID is stored with the edit so repeated delivery is idempotent.
+
 ## Callback actions
 
-Callback data represents one of four intents: a vote on a public card, a creator lifecycle action, a private draft action, or a cancellation-reason choice. The service validates the source message, match reference, status, user identity, and administrator permissions. User votes and status changes are written atomically with a durable `processed_updates` record keyed by Telegram `update_id`.
+Callback data represents votes, creator lifecycle actions, private draft actions, cancellation-reason choices, and external-player menu actions. The services validate the source message, match reference, status, user identity, and administrator permissions. User votes and status changes are written atomically with a durable `processed_updates` record keyed by Telegram `update_id`; external-player entries use a unique source update ID.
 
-The lifecycle is `draft → active → confirmed → completed`; cancellation is allowed from `active` or `confirmed` after the creator chooses `Недостаточно игроков` or `Плохая погода`. The reason is persisted and rendered on the final card and notification. `confirmed` does not lock the roster: voting and external-player changes remain available, and the required-player value is a threshold rather than a capacity.
+The lifecycle is `draft → active → confirmed → completed`; cancellation is allowed from `active` or `confirmed` after the creator chooses `Недостаточно игроков` or `Плохая погода`. The reason is persisted and included in the cancellation notification. `confirmed` does not lock the roster: voting and external-player changes remain available, and the required-player value is a threshold rather than a capacity.
 
-The public card is rendered from persisted votes and external-player quantities after every successful action. Telegram message-edit failures do not roll back already-persisted state; they are logged and the next action retries the refresh.
+The public card is rendered from persisted votes and external-player quantities after every successful active or confirmed action. When the creator completes or cancels a match, the updater deletes its public card from `General`; it does not delete the persisted match history. There is no automatic time-based card deletion. Telegram message-edit failures do not roll back already-persisted state; they are logged and the next action retries the refresh.
+
+## User aliases
+
+An administrator can send `/rename_user @username Readable Name` in the private conversation. The command stores a normalized username alias in `user_aliases`. If the username is already present in vote snapshots, the service also updates all known snapshots for that Telegram user and refreshes the affected match cards. New callback votes resolve the alias before persistence, so `/matchinfo` and historical match views use the same readable name.
 
 ## Notifications and scheduled forecasts
 
@@ -79,7 +94,7 @@ The in-process scheduler checks only `outdoor` `active` and `confirmed` matches 
 
 ## External participants
 
-External-player commands are stored as signed quantity changes. They can include an optional source label, for example `от Никиты`; the card and match information render that attribution. A named removal is limited to entries with the same source label, while legacy unnamed commands operate on unnamed entries.
+The public card's external-player button opens a private menu. Each add/remove callback stores a signed change of exactly one player with a nullable display-name snapshot and no source label. Removal checks the contribution owned by the clicking Telegram user. The card and match information group these entries by user; historical entries without a snapshot fall back to the Telegram ID, and historical source labels remain displayable.
 
 The current operating model assumes one organizer changes external participants at a time. The application does not coordinate simultaneous edits by multiple administrators.
 
@@ -88,9 +103,10 @@ The current operating model assumes one organizer changes external participants 
 - `chat_settings` — chat IDs, topic IDs, timezone, and threshold;
 - `matches` — schedule, title, location, venue type, price, status, threshold, cancellation reason, and creator;
 - `match_messages` — public-card and private-panel message references;
-- `processed_updates` — callback action deduplication;
+- `processed_updates` — callback-action and match-edit command deduplication;
 - `votes` — one current choice per Telegram user and match;
-- `external_participants` — signed quantity changes and optional source labels;
+- `user_aliases` — administrator-defined readable names keyed by normalized Telegram username;
+- `external_participants` — signed quantity changes, optional historical source labels, and nullable display-name snapshots;
 - `notifications` — important transition and forecast idempotency.
 
 The project currently uses a clean baseline migration for the inline-card MVP. Native poll records are intentionally not migrated.

@@ -65,6 +65,7 @@ export interface MatchActionOptions {
   notifier: MatchActionNotifier;
   refreshCard: (matchId: number) => Promise<void>;
   showCancellationPrompt?: (match: Match) => Promise<void>;
+  showEditPrompt?: (match: Match, userId: number) => Promise<void>;
   isAdmin: (telegramUserId: number) => boolean | Promise<boolean>;
 }
 
@@ -215,6 +216,17 @@ export class MatchActionService {
       return { status: "ignored", answer: "Недостаточно прав" };
     }
 
+    if (update.action.kind === "edit") {
+      if (match.status !== "active" && match.status !== "confirmed") {
+        return { status: "ignored", answer: alreadyInactive(match) };
+      }
+      if (this.options.showEditPrompt === undefined) {
+        return { status: "ignored", answer: "Редактирование сейчас недоступно" };
+      }
+      await this.options.showEditPrompt(match, update.telegramUserId);
+      return { status: "processed", answer: "Шаблон для редактирования отправлен", action: update.action };
+    }
+
     if (update.action.kind === "cancel") {
       if (match.status !== "active" && match.status !== "confirmed") {
         return { status: "ignored", answer: alreadyInactive(match) };
@@ -232,7 +244,7 @@ export class MatchActionService {
         matchId: match.id,
         notificationType: "match_cancelled",
         transitionKey: "status:cancelled",
-        text: formatCancellationNotification(match.id, match.title, match.cancellationReason),
+        text: formatCancellationNotification(match.id, match.cancellationReason),
       });
       await this.options.refreshCard(match.id);
       return { status: "ignored", answer: "Матч уже отменён" };
@@ -288,7 +300,6 @@ export class MatchActionService {
         transitionKey: "status:cancelled",
         text: formatCancellationNotification(
           match.id,
-          match.title,
           result.match.cancellationReason,
         ),
       });

@@ -18,11 +18,11 @@ describe("notification formatting", () => {
   });
 
   it("formats cancellation reason and escapes supplied text", () => {
-    expect(formatCancellationNotification(9, "Четверг", "Плохая погода")).toBe(
-      "#v9 «Четверг» — матч отменён. Причина: Плохая погода.",
+    expect(formatCancellationNotification(9, "Плохая погода")).toBe(
+      "Матч #v9 отменён.\nПричина: Плохая погода.",
     );
-    expect(formatCancellationNotification(9, "<Матч>", "<дождь>")).toBe(
-      "#v9 «&lt;Матч&gt;» — матч отменён. Причина: &lt;дождь&gt;.",
+    expect(formatCancellationNotification(9, "<дождь>")).toBe(
+      "Матч #v9 отменён.\nПричина: &lt;дождь&gt;.",
     );
   });
 

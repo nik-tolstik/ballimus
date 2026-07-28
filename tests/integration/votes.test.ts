@@ -30,6 +30,7 @@ interface Fixture {
   sent: string[];
   refreshed: number[];
   cancellationPrompts: number[];
+  editPrompts: number[];
 }
 
 function fixture(externalCount = 0): Fixture {
@@ -40,6 +41,7 @@ function fixture(externalCount = 0): Fixture {
   const sent: string[] = [];
   const refreshed: number[] = [];
   const cancellationPrompts: number[] = [];
+  const editPrompts: number[] = [];
 
   const repositories: MatchActionRepositories = {
     matchActions: {
@@ -136,7 +138,7 @@ function fixture(externalCount = 0): Fixture {
     },
   };
 
-  return { repositories, match, votes, notifications, sent, refreshed, cancellationPrompts };
+  return { repositories, match, votes, notifications, sent, refreshed, cancellationPrompts, editPrompts };
 }
 
 function update(
@@ -170,6 +172,9 @@ function serviceFor(test: Fixture, admin = true) {
     },
     showCancellationPrompt: async (match) => {
       test.cancellationPrompts.push(match.id);
+    },
+    showEditPrompt: async (match) => {
+      test.editPrompts.push(match.id);
     },
     isAdmin: () => admin,
   });
@@ -278,6 +283,27 @@ describe("match callback actions", () => {
     });
   });
 
+  it("sends the editing prompt to the creator without changing the match", async () => {
+    const test = fixture();
+    const service = serviceFor(test);
+
+    const result = await service.process({
+      ...update(25, 7, "going", 11),
+      chatId: 7,
+      messageId: 11,
+      action: { kind: "edit", matchId: 1 },
+    });
+
+    expect(result).toMatchObject({
+      status: "processed",
+      answer: "Шаблон для редактирования отправлен",
+      action: { kind: "edit", matchId: 1 },
+    });
+    expect(test.editPrompts).toEqual([1]);
+    expect(test.match.status).toBe("active");
+    expect(test.refreshed).toEqual([]);
+  });
+
   it("asks for a cancellation reason, then cancels the match idempotently", async () => {
     const test = fixture();
     const service = serviceFor(test);
@@ -303,7 +329,7 @@ describe("match callback actions", () => {
     expect(second.status).toBe("ignored");
     expect(test.match.cancellationReason).toBe("Недостаточно игроков");
     expect(test.sent).toEqual([
-      "#v1 «27.07.2026 20:00 — СОК Олимпийский» — матч отменён. Причина: Недостаточно игроков.",
+      "Матч #v1 отменён.\nПричина: Недостаточно игроков.",
     ]);
   });
 });

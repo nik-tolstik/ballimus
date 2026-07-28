@@ -2,9 +2,10 @@ import { Bot, type Context, type MiddlewareFn } from "grammy";
 import type { Message } from "grammy/types";
 
 import {
-  parseExternalParticipantCommand,
-  type ExternalParticipantCommand,
-} from "../application/external-participants.js";
+  parseRenameUserCommand,
+  RENAME_USER_USAGE,
+  type RenameUserCommand,
+} from "../application/user-renaming.js";
 import {
   type AppConfig,
   type StartupConfig,
@@ -18,21 +19,20 @@ export interface GeneralTopicSender {
 
 export interface BotDependencies {
   onMatch?: (ctx: Context) => void | Promise<void>;
+  onMatchEdit?: (ctx: Context) => void | Promise<void>;
   onMatchInfo?: (ctx: Context) => void | Promise<void>;
+  onRenameUser?: (ctx: Context, command: RenameUserCommand) => void | Promise<void>;
   onCallbackQuery?: (ctx: Context) => void | Promise<void>;
-  onExternalParticipant?: (
-    ctx: Context,
-    command: ExternalParticipantCommand,
-  ) => void | Promise<void>;
   isCommandAuthorized?: (telegramUserId: number) => boolean | Promise<boolean>;
 }
 
 export const HELP_TEXT = [
   "/help — показать эту справку.",
   "/match — создать матч и опубликовать карточку в теме general.",
+  "/editmatch #v32 — изменить опубликованный матч.",
   "/matchinfo [#v32] — показать участников и дополнительных игроков.",
-  "@бот +/-N для #v32 — добавить или убрать N внешних игроков.",
-  "@бот от Никиты +N игрока для #v32 — учесть игроков от указанного человека.",
+  "/rename_user @username Имя — закрепить понятное имя пользователя.",
+  "Кнопка «Доп. игроки» в карточке — открыть меню дополнительных игроков.",
 ].join("\n");
 
 function errorKind(error: unknown): string {
@@ -122,6 +122,15 @@ export function createBot(
     await context.reply("Команда /match принята. Укажите дату, время и место матча.");
   });
 
+  bot.command("editmatch", privateCommandMiddleware, async (context) => {
+    if (dependencies.onMatchEdit !== undefined) {
+      await dependencies.onMatchEdit(context);
+      return;
+    }
+
+    await context.reply("Использование: /editmatch #v32, затем заполните данные матча.");
+  });
+
   bot.command("matchinfo", privateCommandMiddleware, async (context) => {
     if (dependencies.onMatchInfo !== undefined) {
       await dependencies.onMatchInfo(context);
@@ -131,10 +140,19 @@ export function createBot(
     await context.reply("Команда /matchinfo принята.");
   });
 
-  bot.on("message:text", privateCommandMiddleware, async (context) => {
-    const command = parseExternalParticipantCommand(context.msg.text, context.me.username);
-    if (command === undefined || dependencies.onExternalParticipant === undefined) return;
-    await dependencies.onExternalParticipant(context, command);
+  bot.command("rename_user", privateCommandMiddleware, async (context) => {
+    const command = parseRenameUserCommand(context.msg?.text ?? "");
+    if (command === undefined) {
+      await context.reply(RENAME_USER_USAGE);
+      return;
+    }
+
+    if (dependencies.onRenameUser !== undefined) {
+      await dependencies.onRenameUser(context, command);
+      return;
+    }
+
+    await context.reply("Команда /rename_user принята.");
   });
 
   bot.on("callback_query:data", async (context) => {

@@ -7,7 +7,7 @@ Football Bot organizes matches inside a Telegram forum group with two topics:
 - `general` — the live match card and inline voting buttons;
 - `chat` — important status notifications.
 
-Administrators create matches from a private conversation with the bot. By default, the bot first shows a private draft for review; after publication, it maintains one editable match card in `general`. Users vote with inline buttons and the card is refreshed after every change.
+Administrators create matches from a private conversation with the bot. By default, the bot first shows a private draft for review; after publication, it maintains one editable match card in `general` while the match is active or confirmed. Users vote with inline buttons and the card is refreshed after every change.
 
 ## Product behavior
 
@@ -38,52 +38,70 @@ After publication, the bot turns that private preview into the creator's admin p
 Карточка опубликована в General.
 ```
 
-The public card contains the match reference, schedule, location, venue type, field price, current status, participant names, and three inline buttons:
+The public card contains the match reference, schedule, location, venue type, field price, current status, participant names, and inline buttons:
 
 - `Участвую`;
 - `Под вопросом`;
-- `Не смогу`.
+- `Не смогу`;
+- `Доп. игроки`.
 
-The creator's private panel initially contains `Матч будет` and `Отменить`. After confirmation it changes to `Завершить` and `Отменить`. The creator must still be a group administrator to use them.
+The creator's private panel contains `Редактировать`, `Матч будет`, and `Отменить`. After confirmation it contains `Редактировать`, `Завершить`, and `Отменить`. The creator must still be a group administrator to use them.
+
+### `/editmatch`
+
+For an `active` or `confirmed` match, the creator can press `Редактировать` in the private panel. The bot sends a copyable full-replacement template, for example:
+
+```text
+/editmatch #v32
+Дата: 03.08.2026
+Время: 20:00
+Место: Ракета
+Формат: на улице
+Нужно игроков: 10
+Цена поля: 100 рублей
+```
+
+The creator edits the fields and sends the complete form back to the bot privately. It is parsed using the same labelled format as `/match` and updates the existing match and its public card: the `#v` ID, votes, external participants, and current lifecycle status are retained. The optional `Цена поля` line may be omitted to clear the field price. Only the match creator, while still a group administrator, can edit a match; completed and cancelled matches cannot be edited.
 
 ### Match card
 
 The card is a regular Telegram message, not a native poll. It is edited in place after every vote or external-player change. Participants are grouped by their current choice. Telegram usernames are displayed when available; otherwise the name is rendered as a clickable Telegram mention.
 
-When the external-player total is greater than zero, the card shows that quantity and the source label for attributed additions, such as `от Никиты`. The total confirmed count is `Участвую` votes plus external participants.
+When the external-player total is greater than zero, the card shows that quantity and each user's contribution, such as `От Вани: 2`. Historical source labels, such as `от Никиты`, remain visible. The total confirmed count is `Участвую` votes plus external participants.
 
 The required-player value is a threshold, not a capacity. The card shows an informational target range ending two players above that minimum, but there is no roster lock or waitlist: an eleventh player can vote for a 10-player match, and participants can continue changing their votes while the match is `active` or `confirmed`.
 
-Once a match is completed or cancelled, the card remains available as history and all buttons are removed.
+When the creator completes or cancels a match, its public card is deleted from `General`. This is an explicit lifecycle action, not an automatic time-based cleanup. The match record, votes, external participants, and cancellation reason remain available as history through `/matchinfo #v32`.
 
 ### Match lifecycle
 
 - `draft` — a private, unpublished review state;
-- `active` — users may vote and administrators may update external players;
+- `active` — users may vote and manage their own additional-player contribution;
 - `confirmed` — the match is confirmed, but the roster may still change;
-- `completed` — the match is frozen and kept for history;
-- `cancelled` — the match is frozen, marked as cancelled with a reason, and the group is notified.
+- `completed` — the match is frozen, its public card is removed, and its record is kept for history;
+- `cancelled` — the match is frozen, its public card is removed, the cancellation reason is retained, and the group is notified.
 
 The creator can restore the private admin panel by sending `/matchinfo #v32` in the private chat.
 
 ### `/matchinfo`
 
-Send `/matchinfo` in a private conversation to see the only active match. Use `/matchinfo #v32` to inspect a specific match. The response includes the status, schedule, current participants grouped by choice, external players, and the creator's admin panel when applicable.
+Send `/matchinfo` in a private conversation to see the only active match. Use `/matchinfo #v32` to inspect a specific match, including a completed or cancelled match whose public card was removed. The response includes the status, schedule, current participants grouped by choice, external players, and the creator's admin panel when applicable.
+
+### `/rename_user`
+
+An authorized administrator can assign a readable name to a Telegram username from the private conversation:
+
+```text
+/rename_user @chocolate Ваня Петров
+```
+
+The alias is stored in SQLite, applied to new votes, and propagated to existing vote lists and match history. The username remains visible next to the alias when available.
 
 ### External participants
 
-Additional participants can be managed from the private conversation:
+The public match card has a `Доп. игроки` button. Pressing it sends a private menu with `➕ Добавить игрока` and `➖ Убрать игрока`. Each press changes the current user's contribution by exactly one player; a user can remove only players previously added by that user. The bot requires the user to open its private chat first.
 
-```text
-@ballimus_bot +2 для #v32
-@ballimus_bot -1 для #v32
-@ballimus_bot от Никиты +3 игрока для #v32
-@ballimus_bot от Никиты -1 игрока для #v32
-```
-
-A plus sign adds participants and a minus sign removes previously added participants. The legacy command without a name remains supported, and it can remove only players previously added without an attribution. A named command keeps and displays the attribution on the external-player entry, and a named removal can only remove players previously added under the same name. The total count cannot become negative, and the same Telegram update is processed only once. Successful changes refresh the public card.
-
-The current operating model assumes one organizer manages external-player changes at a time. The bot does not coordinate simultaneous changes from several administrators.
+The card and `/matchinfo` show the total and the current contribution of each user, for example `От Вани: 2`. New button entries keep a display-name snapshot, including a name configured with `/rename_user`. Historical entries without a snapshot fall back to their Telegram ID, and historical source labels remain unchanged. The same Telegram update is processed only once, and successful changes refresh the public card.
 
 ## Notifications
 
@@ -93,7 +111,7 @@ Every time confirmed participants cross the configured threshold upward, the bot
 #v32 «27.07.2026 20:00 — Ракета» — Набралось 10/10 игроков — можно играть!
 ```
 
-If the count then falls below the threshold, the bot sends a neutral warning. A later upward crossing sends a new availability notification. The creator can explicitly confirm that the match will happen. Cancellation requires the creator to choose `Недостаточно игроков` or `Плохая погода`; the reason is shown on the frozen card and in the cancellation notification.
+If the count then falls below the threshold, the bot sends a neutral warning. A later upward crossing sends a new availability notification. The creator can explicitly confirm that the match will happen. Cancellation requires the creator to choose `Недостаточно игроков` or `Плохая погода`; the reason is retained in match history and included in the cancellation notification.
 
 For the first eligible outdoor `active` or `confirmed` match on each Minsk calendar day, the in-process scheduler sends one Minsk weather forecast to `Chat` about 16 hours before kick-off. Indoor matches do not trigger it, and additional outdoor matches on the same day do not duplicate it. Card edits remain the source of truth; notifications are reserved for important events.
 
@@ -132,13 +150,17 @@ grammY handlers, authorization, and topic routing
       |                         +--> public card in General
       |                         +--> private creator panel
       |
+      +--> /editmatch --> shared parser --> same-match update --> card refresh
+      |
+      +--> /rename_user --> user alias and vote snapshot update --> card refresh
+      |
       +--> callback_query --> atomic match action
                                   |
                                   +--> vote/status persistence
                                   +--> card refresh
                                   +--> threshold reached/lost/cancellation notification
       |
-      +--> external-player command --> persistence --> card refresh
+      +--> external-player callbacks --> private menu --> persistence --> card refresh
       |
       +--> scheduler --> one Minsk forecast per day for outdoor exact-time matches
 ```
@@ -150,9 +172,10 @@ Business rules live in application and domain modules, not inside Telegram handl
 - `chat_settings`: Telegram chat and topic settings, timezone, and default threshold;
 - `matches`: schedule, location, venue type, field price, threshold, lifecycle status, cancellation reason, and creator;
 - `match_messages`: public card and private admin-panel message references;
-- `processed_updates`: durable callback-action idempotency records;
+- `processed_updates`: durable callback and match-edit idempotency records;
 - `votes`: one current choice per Telegram user and match;
-- `external_participants`: signed external-player changes and optional source labels;
+- `user_aliases`: administrator-defined readable names keyed by Telegram username;
+- `external_participants`: signed external-player changes, historical source labels, and display-name snapshots;
 - `notifications`: idempotency claims for important status and forecast notifications.
 
 The MVP uses a clean database baseline for the inline-card model. Native poll data is not migrated.
@@ -196,14 +219,16 @@ Included:
 
 - natural-language `/match` parsing;
 - editable inline match cards;
-- three response buttons with revoting;
+- creator-only editing of published active and confirmed matches;
+- three response buttons with revoting and a per-user additional-player menu;
 - creator-only completion and cancellation controls;
 - durable callback idempotency;
 - threshold-reached, threshold-lost, and cancellation notifications;
 - external-player additions and removals;
 - private match-preview drafts and cancellation reasons;
 - one daily Minsk weather forecast before outdoor exact-time matches;
-- match information and topic routing.
+- match information and topic routing;
+- administrator-defined user aliases in voting lists and match history.
 
 Not included yet:
 
