@@ -1,0 +1,34 @@
+{
+  "name": "@football/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Generated OpenAPI client output for the Football bot.",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "generate": "pnpm exec orval --config orval.config.ts && node scripts/normalize-generated-imports.mjs",
+    "lint": "pnpm exec oxlint src",
+    "test": "pnpm exec vitest run --passWithNoTests --config vitest.config.ts",
+    "typecheck": "pnpm exec tsc --project tsconfig.json --noEmit",
+    "build": "pnpm exec tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.90.5",
+    "axios": "^1.12.2"
+  },
+  "devDependencies": {
+    "orval": "^7.15.0"
+  }
+}

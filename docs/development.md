@@ -2,94 +2,202 @@
 
 ## Prerequisites
 
-- Node.js 22 or newer;
-- pnpm;
-- a Telegram bot token for a private test supergroup;
-- a private Telegram supergroup with Topics enabled;
-- an OpenRouter API key for natural-language `/match` parsing.
+- Node.js `>=22.18.0`;
+- pnpm `11.10.0` or a compatible pnpm version;
+- Docker Engine with the Compose plugin for local PostgreSQL;
+- a non-production Telegram bot and test group only if live Telegram checks are needed.
 
-Use a separate token, chat, and SQLite database for development.
+Use the local test group and local PostgreSQL for development. Never use a production bot token, production database URL, production group/topic IDs, production webhook, or production Mini App origin locally.
 
-## Setup
+## Local setup
+
+Install dependencies and prepare the local database configuration:
 
 ```bash
-pnpm install
-cp .env.example .env
+pnpm install --frozen-lockfile
+cp .env.local.example .env.local
+node scripts/postgres-local.mjs
 ```
 
-Fill in the test token, chat and topic IDs, status recipient user ID, OpenRouter key, database path, and timezone. `CONFIRM_MATCH_CREATION=true` is the default and enables the private match-preview flow. Open the bot's private chat once from the status recipient account. Keep `.env` out of Git.
+The local helper starts PostgreSQL on `127.0.0.1:54329` and waits for its health check. Extend `.env.local` with the required local API values:
 
-## Commands
+```text
+DATABASE_URL=postgresql://football_local:football_local_dev_password@127.0.0.1:54329/football_local
+TELEGRAM_BOT_TOKEN=<local-test-bot-token>
+TELEGRAM_WEBHOOK_SECRET=<local-test-webhook-secret>
+TELEGRAM_OWNER_USER_ID=<local-owner-telegram-id>
+TELEGRAM_CHAT_ID=<local-test-chat-id>
+TELEGRAM_GENERAL_TOPIC_ID=<local-general-topic-id>
+TELEGRAM_CHAT_TOPIC_ID=<local-chat-topic-id>
+TELEGRAM_MINI_APP_URL=http://localhost:5173
+TELEGRAM_MINI_APP_INIT_DATA_MAX_AGE_SECONDS=86400
+WEB_ORIGIN=http://localhost:5173
+GROUP_TIMEZONE=Europe/Minsk
+LOG_LEVEL=debug
+```
+
+The API validates all of these values at startup. `TELEGRAM_MINI_APP_URL` may be an HTTP URL for local development; `WEB_ORIGIN` must be the exact origin, without a path. The init-data maximum age defaults to 24 hours when omitted.
+
+Generate correctly signed local fixture `initData` without adding an authentication bypass:
 
 ```bash
-pnpm dev
+pnpm auth:fixture -- --user-id <local-owner-telegram-id>
+```
+
+The command reads the local bot token from the environment or `.env.local`, prints only the signed query string, and never prints the token. Use the result as `X-Telegram-Init-Data` for local API clients. Pass `--auth-date <unix-seconds>` to create deterministic expiry fixtures.
+
+Run the migration explicitly after PostgreSQL is healthy. API startup does not run migrations:
+
+```bash
+set -a
+source .env.local
+set +a
+pnpm --filter @football/db db:migrate
+```
+
+## Run the local services
+
+Keep the exported environment in the shell that starts the API and jobs:
+
+```bash
+set -a
+source .env.local
+set +a
+pnpm --filter @football/api exec tsx src/main.ts
+```
+
+In another shell, create `apps/web/.env.local` with the public API URL and start Vite:
+
+```text
+VITE_API_BASE_URL=http://localhost:3000
+```
+
+```bash
+pnpm --filter @football/web dev
+```
+
+Run one bounded local jobs pass when the API/database environment is exported:
+
+```bash
+set -a
+source .env.local
+set +a
+pnpm --filter @football/api jobs:run
+```
+
+The jobs command exits after one leased outbox/weather pass. Do not replace it with a permanent timer in the API process.
+
+## Telegram development with ngrok
+
+When the Mini App or webhook must be tested from Telegram, use the project ngrok workflow instead of copying public URLs into `.env.local` manually. It starts local PostgreSQL, applies migrations, opens separate API and Web HTTPS tunnels, and injects the resulting URLs into the child processes. Mini App API calls stay on the stable Web origin and are proxied by Vite to the local API; the dynamic API tunnel is used for the webhook:
+
+Authenticate ngrok once on the development machine; keep the credential out of Git and chat:
+
+```bash
+ngrok config add-authtoken <your-ngrok-authtoken>
+```
+
+```bash
+pnpm dev:ngrok
+```
+
+The command prints the public Mini App URL, API URL, webhook URL, and the local ngrok inspector at `http://127.0.0.1:4040`. The Web tunnel uses the reserved domain configured in `ngrok.local.yml`, while the API tunnel remains dynamic unless a second reserved domain is added. It does not change Telegram configuration by default.
+
+To register the local bot webhook explicitly:
+
+```bash
+pnpm dev:ngrok -- --register-webhook
+```
+
+To also set the configured owner's local menu button to the temporary Mini App URL:
+
+```bash
+pnpm dev:ngrok -- --register-webhook --set-menu-button
+```
+
+These flags call Telegram's Bot API for the values in `.env.local`. Use only a non-production bot and test group. The Web URL remains stable with the configured reserved domain; the API URL changes between sessions until a second reserved domain is configured, but the Mini App itself continues using the stable Web URL through the local proxy.
+
+## Exact package commands
+
+Useful focused commands are:
+
+```bash
+pnpm --filter @football/api lint
+pnpm --filter @football/api test
+pnpm --filter @football/api typecheck
+pnpm --filter @football/api build
+pnpm --filter @football/db db:check
+pnpm --filter @football/db db:migrate
+pnpm --filter @football/domain test
+pnpm --filter @football/api-client generate
+pnpm --filter @football/web test
+pnpm --filter @football/web build
+```
+
+Regenerate the API contract and client together:
+
+```bash
+pnpm openapi:generate
+pnpm api-client:generate
+```
+
+The drift check used by CI and handoff is:
+
+```bash
+pnpm api:contracts:check
+```
+
+## Repository quality gates
+
+Run all gates from the repository root before handing off changes:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm lint
 pnpm test
 pnpm typecheck
-pnpm lint
-pnpm db:generate
-pnpm db:migrate
+pnpm build
+pnpm api:contracts:check
 ```
 
-The current MVP uses a clean inline-card baseline. If the local database contains data from the old native-poll implementation, remove the local SQLite file before starting the new version.
+`pnpm test`, `pnpm lint`, `pnpm typecheck`, and `pnpm build` run every maintained workspace package. A generated-client change is incomplete until `pnpm api:contracts:check` passes with no diff.
 
-## Manual Telegram acceptance
+## Local acceptance checklist
 
-1. Add the test bot as an administrator in the private test group.
-2. Confirm Topics are enabled and identify the `Chat` and `General` topic IDs.
-3. Start the bot with `pnpm dev`.
-4. Verify that the status recipient's private dialog receives the startup notification.
-5. In a private conversation, send `/help` and verify the help text.
-6. In `General` and `Chat`, send `/help` and verify that the bot does not respond.
-7. Create a low-threshold match using the canonical format:
+Use only the local bot, local group, local database, and local Mini App URL.
 
-       /match
-       Дата: 03.08.2026
-       Время: 20:00
-       Место: Ракета
-       Формат: на улице
-       Нужно игроков: 3
-       Цена поля: 100 рублей
-
-8. Verify that the creator receives a private draft with `Опубликовать`, `Исправить`, and `Отменить`, and that no public card exists yet.
-9. Press `Исправить`, correct the request, then press `Опубликовать`; verify that a public editable card with vote buttons and `Доп. игроки` appears in `General` and the creator receives a private admin panel with `Редактировать`, `Матч будет`, and `Отменить`.
-10. Verify that the card displays `на улице` or `в здании` as the chosen venue type.
-11. Vote from several Telegram accounts, including one more than the stated minimum, and verify that names and counts update in the same card without a roster lock.
-12. Verify a threshold-reached notification at `3/3`.
-13. Change one confirmed vote to `Под вопросом` or `Не смогу`, verify a threshold-lost warning at `2/3`, then restore the vote and verify a new threshold-reached notification at `3/3`.
-14. Press `Доп. игроки` on the public card, confirm that the private menu opens, and press `➕ Добавить игрока` twice. Verify that the private counter, public card, and `/matchinfo #v<ID>` show the user's contribution as `От <name>: 2`.
-15. Press `Редактировать`, update the full `/editmatch #v<ID>` template with a different time or location, and send it privately. Verify that the existing public card is edited in place while its ID, votes, external participants, and active status remain unchanged.
-16. Press `➖ Убрать игрока` once and verify that only the same user's contribution decreases. Try removing from another user's menu and verify that another user's players cannot be removed. Use `/matchinfo #v<ID>` and verify the grouped contributions and current status.
-17. Send `/rename_user @<voter_username> Иван Петров` privately as an administrator and verify that the current card and `/matchinfo` show the alias in the participant list; vote again from that account and verify that the alias remains applied.
-18. Send `/remove_vote #v<ID> @<voter_username>` privately and verify that the selected vote disappears from the public card and `/matchinfo`; repeat with the exact Telegram ID when the username is unavailable or ambiguous.
-19. Remove a `Участвую` vote that takes the match below the minimum and verify the threshold-lost notification; remove a non-going vote and verify that no threshold notification is sent.
-20. Verify that a non-creator cannot use the admin actions, edit the match, or remove a vote, and that a creator who is no longer a group administrator is rejected.
-21. Press `Матч будет`, verify that the card says the match will happen, voting remains available, and the panel changes to `Редактировать`, `Завершить`, and `Отменить`.
-22. Use `Редактировать` again while the match is confirmed. Verify that its card changes without reverting the status or removing votes and external participants.
-23. Press `Завершить`, verify that the public card is deleted from `General` immediately after the action and `/matchinfo #v<ID>` still shows the frozen match history. The deletion must follow the button press, not a scheduled expiry.
-24. Create another match, press `Отменить`, select `Недостаточно игроков` or `Плохая погода`, and verify that the public card is deleted, the cancellation notification shows the selected reason, and `/matchinfo #v<ID>` retains the reason.
-25. Create an outdoor exact-time active or confirmed match about 16 hours ahead (or use a controlled clock), and verify that the scheduler sends one Minsk weather forecast to `Chat`; verify that an indoor match and a second outdoor match on the same Minsk day do not send duplicates.
-26. Stop and restart the bot, verify the shutdown/startup notifications in the status recipient's private dialog, and confirm that messages sent while it was offline are not processed after restart.
-27. Repeat callback and `/remove_vote` deliveries in tests and verify that no duplicate vote removal, cancellation, match edit, or notification is created.
+1. Start PostgreSQL, apply `pnpm --filter @football/db db:migrate`, start the API, and verify `GET http://localhost:3000/health` returns API status `ok`.
+2. Open the Mini App from the local Telegram bot as the configured owner. Verify that an ordinary Telegram account is rejected and that opening the URL outside Telegram shows the Telegram-only state.
+3. Create a structured draft, preview its server-rendered card, publish it, and verify exactly one card is queued for `General`.
+4. Vote from Telegram accounts on the public card. Verify callback source checks, one vote per player/match, card refresh, and duplicate-update safety.
+5. Edit with the current version, then retry with a stale `If-Match` value and verify a conflict without data loss.
+6. Verify confirmation, completion, cancellation, vote correction/removal, external participants, aliases, and retained history through the owner flow.
+7. Run `pnpm --filter @football/api jobs:run` repeatedly. Verify outbox retries, reconciliation state, and no duplicate weather notification for a Minsk day.
+8. Confirm that no local action changed a production database, webhook, BotFather setting, or production Mini App URL.
 
 ## Troubleshooting
 
-### The card does not appear
+### API fails at startup
 
-- Confirm the command was sent privately by a group administrator.
-- Confirm the bot can send messages to `General`.
-- Check the terminal for match creation errors.
-- Verify that the database baseline applied successfully.
+Check that the shell has all required variables, that `DATABASE_URL` uses `postgres://` or `postgresql://`, that IDs are decimal integers, and that `WEB_ORIGIN` is an exact HTTP(S) origin. The API does not accept SQLite URLs and does not run migrations automatically.
 
-### Buttons do not respond
+### Mini App shows an access error
 
-- Confirm the bot is receiving `callback_query` updates.
-- Check that the match is still active.
-- Check that the callback originated from the stored card message.
-- The bot must call `answerCallbackQuery`; otherwise Telegram clients keep showing a progress indicator.
+Open it from Telegram, not a normal browser tab. Restart `pnpm dev:ngrok` after configuration changes, close the current Mini App, and open it again so Telegram reloads the client. Check that the Telegram account is the configured local owner. Expired `initData` requires reopening the Mini App.
 
-### Notifications are missing
+### Public card is missing or stale
 
-- Match notifications are sent to `Chat`, while lifecycle notifications are sent to the configured status recipient's private dialog.
-- Confirm that confirmed votes plus external players crossed the threshold.
-- For a weather forecast, confirm that the match is `outdoor`, has an exact start time, is `active` or `confirmed`, and is near the 16-hour forecast window. Only one forecast is sent per Minsk calendar day.
-- Check the terminal for Telegram send errors.
+Inspect the match's `publicCard` publication state through the owner API, then run the jobs command. For `uncertain` or `failed` initial publication, inspect the configured General topic first:
+
+1. If the card exists, copy its Telegram message ID into the Mini App repair panel and choose **Attach card**. The API stores that reference and queues a refresh (or deletion for an already ended match).
+2. If the card definitely does not exist, choose **Card is absent — retry publication**. This is the only action that resets the uncertain state and allows one new initial send.
+
+Never choose retry merely because the message ID is unknown: Telegram may already contain the card, and an initial `sendMessage` has no idempotency key.
+
+### Jobs report busy
+
+Another invocation holds the PostgreSQL lease. Let that invocation finish; do not delete the lease row or run overlapping manual resets. A later Cron pass can recover retryable work.
+
+## Production boundary
+
+The production sequence is documented in [the Railway runbook](railway.md). No production deployment, database migration, Telegram webhook registration, Mini App URL update, or BotFather change may be performed without explicit owner authorization.

@@ -1,15 +1,16 @@
 # Football Bot Documentation
 
-This directory contains the maintained project documentation.
+This index describes the maintained Telegram Mini App platform. The current implementation lives under `apps/api`, `apps/web`, `packages/domain`, `packages/db`, and `packages/api-client`.
 
 ## Documents
 
-- [Bot guide](bot-guide.md) — purpose, user-facing behavior, inline cards, notifications, and external players.
-- [Architecture](architecture.md) — runtime components, data flows, topic routing, persistence, and idempotency.
-- [Project structure](project-structure.md) — source tree and the responsibility of each directory.
-- [Development guide](development.md) — local setup, configuration, commands, testing, migrations, and Telegram acceptance.
-- [Telegram Mini App implementation plan](mini-app-implementation-plan.md) — approved target architecture and an execution plan for the migration.
-- [Migration work log](../work-log.md) — the live phase status, decisions, verification, and blockers.
-- [Orchestrator prompt](../prompt.md) — mandatory operating instructions for the implementation agent.
+- [Bot and Mini App guide](bot-guide.md) — member voting, the owner-only Mini App flow, match lifecycle, cards, and notifications.
+- [Architecture](architecture.md) — runtime boundaries, authentication, REST contract, webhook processing, persistence, outbox, and jobs.
+- [Development guide](development.md) — local PostgreSQL setup, environment variables, exact pnpm commands, quality gates, and acceptance checks.
+- [Local PostgreSQL](local-postgres.md) — the local-only database lifecycle and separation rules.
+- [Project structure](project-structure.md) — the maintained workspace tree and module responsibilities.
+- [Railway runbook](railway.md) — intended production topology, release order, verification checklist, and authorization gates.
 
-The repository root [README.md](../README.md) remains the short project overview. Keep product behavior and operational instructions synchronized when either document changes.
+The [Mini App implementation plan](mini-app-implementation-plan.md) is the preserved migration plan and is not the operational runbook. The [migration work log](../work-log.md) records phase status and authorization state. The [orchestrator prompt](../prompt.md) contains implementation-agent instructions.
+
+Production deployment is not asserted by these documents. Production deployment, Telegram webhook registration, Mini App URL changes, and BotFather changes require explicit owner authorization.

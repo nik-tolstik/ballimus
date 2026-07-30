@@ -1,0 +1,26 @@
+{
+  "name": "@football/domain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure football match domain rules and Telegram HTML card formatting.",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "lint": "pnpm exec oxlint src",
+    "test": "pnpm exec vitest run --passWithNoTests --config vitest.config.ts",
+    "typecheck": "pnpm exec tsc --project tsconfig.json --noEmit",
+    "build": "pnpm exec tsc --project tsconfig.json"
+  }
+}

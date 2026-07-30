@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: football
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d football"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/football
+      TELEGRAM_BOT_TOKEN: 123456:ci-test-token
+      TELEGRAM_WEBHOOK_SECRET: ci-test-secret
+      TELEGRAM_OWNER_USER_ID: 987654321
+      TELEGRAM_CHAT_ID: -1001234567890
+      TELEGRAM_GENERAL_TOPIC_ID: 1
+      TELEGRAM_CHAT_TOPIC_ID: 2
+      TELEGRAM_MINI_APP_URL: https://mini-app.invalid
+      TELEGRAM_MINI_APP_INIT_DATA_MAX_AGE_SECONDS: 86400
+      WEB_ORIGIN: https://mini-app.invalid
+      GROUP_TIMEZONE: Europe/Minsk
+      LOG_LEVEL: info
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.10.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm typecheck
+      - run: pnpm db:check
+      - run: pnpm api:contracts:check
+      - run: pnpm build

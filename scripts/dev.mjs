@@ -3,39 +3,62 @@ import { watch } from "node:fs";
 import { resolve } from "node:path";
 
 const projectRoot = resolve(import.meta.dirname, "..");
+const apiRoot = resolve(projectRoot, "apps/api");
+const webRoot = resolve(projectRoot, "apps/web");
 const packageManager = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 
-let child;
+try {
+  process.loadEnvFile(resolve(projectRoot, ".env"));
+} catch (error) {
+  if (error?.code !== "ENOENT") throw error;
+}
+
+const children = new Set();
 let restartTimer;
 let restartInProgress = false;
 let stopping = false;
 
-function startChild() {
+function startApi() {
   const nextChild = spawn(
     packageManager,
-    ["exec", "tsx", "watch", "--clear-screen=false", "--env-file=.env", "src/main.ts"],
+    ["exec", "tsx", "watch", "--clear-screen=false", "--env-file=../../.env", "src/main.ts"],
     {
-      cwd: projectRoot,
+      cwd: apiRoot,
       env: process.env,
       stdio: "inherit",
     },
   );
 
-  child = nextChild;
+  children.add(nextChild);
   nextChild.once("exit", (code, signal) => {
-    if (child === nextChild) child = undefined;
+    children.delete(nextChild);
     if (stopping || restartInProgress) return;
 
     const reason = signal === null ? `exit code ${code ?? 1}` : `signal ${signal}`;
-    console.error(`Development bot process stopped (${reason}).`);
+    console.error(`Development API process stopped (${reason}).`);
     process.exitCode = code ?? 1;
   });
 }
 
-function stopChild() {
-  const currentChild = child;
-  if (currentChild === undefined) return Promise.resolve();
+function startWeb() {
+  const nextChild = spawn(packageManager, ["exec", "vite"], {
+    cwd: webRoot,
+    env: process.env,
+    stdio: "inherit",
+  });
 
+  children.add(nextChild);
+  nextChild.once("exit", (code, signal) => {
+    children.delete(nextChild);
+    if (stopping) return;
+
+    const reason = signal === null ? `exit code ${code ?? 1}` : `signal ${signal}`;
+    console.error(`Development web process stopped (${reason}).`);
+    process.exitCode = code ?? 1;
+  });
+}
+
+function stopChild(child) {
   return new Promise((resolveStop) => {
     let settled = false;
     const finish = () => {
@@ -44,23 +67,24 @@ function stopChild() {
       resolveStop();
     };
 
-    currentChild.once("exit", finish);
-    currentChild.kill("SIGTERM");
+    child.once("exit", finish);
+    child.kill("SIGTERM");
 
     const forceKillTimer = setTimeout(() => {
-      if (!settled) currentChild.kill("SIGKILL");
+      if (!settled) child.kill("SIGKILL");
     }, 5000);
     forceKillTimer.unref();
   });
 }
 
-async function restartChild() {
+async function restartApi() {
   if (stopping || restartInProgress) return;
   restartInProgress = true;
 
   try {
-    await stopChild();
-    if (!stopping) startChild();
+    const apiChild = [...children].find((child) => child.spawnargs.includes("src/main.ts"));
+    if (apiChild !== undefined) await stopChild(apiChild);
+    if (!stopping) startApi();
   } finally {
     restartInProgress = false;
   }
@@ -70,7 +94,7 @@ function scheduleRestart() {
   if (restartTimer !== undefined) clearTimeout(restartTimer);
   restartTimer = setTimeout(() => {
     restartTimer = undefined;
-    void restartChild();
+    void restartApi();
   }, 100);
   restartTimer.unref();
 }
@@ -80,7 +104,7 @@ async function shutdown() {
   stopping = true;
   if (restartTimer !== undefined) clearTimeout(restartTimer);
   environmentWatcher.close();
-  await stopChild();
+  await Promise.all([...children].map((child) => stopChild(child)));
 }
 
 const environmentWatcher = watch(projectRoot, (_eventType, filename) => {
@@ -94,5 +118,6 @@ process.once("SIGTERM", () => {
   void shutdown().finally(() => process.exit(143));
 });
 
-console.info("Development watcher started. Source and .env changes restart the bot automatically.");
-startChild();
+console.info("Development API and web workflows started. API and .env changes restart the API automatically.");
+startApi();
+startWeb();

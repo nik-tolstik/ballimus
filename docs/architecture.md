@@ -1,118 +1,110 @@
 # Architecture
 
-## Runtime composition
+## System boundary
 
-The application is assembled in `src/main.ts`:
-
-1. configuration is loaded and validated;
-2. SQLite is opened and the baseline Drizzle schema is applied;
-3. repositories are created;
-4. card creation, card updates, published-match editing, match actions, external participants, match information, and scheduled forecast services are constructed;
-5. grammY handlers are wired to those services;
-6. the in-process scheduler is started;
-7. Telegram long polling starts after pending updates are discarded; lifecycle notifications are sent to the configured administrator's private dialog on startup and shutdown.
-
-Telegram handlers are an integration boundary. Business rules live in application and domain modules so they can be tested without a Telegram connection.
-
-## Component flow
+The maintained runtime is split into an HTTP API, a static Mini App, a PostgreSQL database, and a separately invoked jobs process:
 
 ```text
-Telegram update
-      |
-      v
-grammY handlers, private authorization, and topic routing
-      |
-      +--> /match --> parser --> validated draft in private chat
-      |                 |
-      |                 +--> publish --> public card in General
-      |                 +--> creator admin panel in private chat
-      |
-      +--> /editmatch --> shared parser --> atomic same-match update --> card refresh
-      |
-      +--> /remove_vote --> target resolution --> atomic vote removal --> card refresh/notification
-      |
-      +--> /rename_user --> user alias and vote snapshot update --> card refresh
-      |
-      +--> callback_query --> MatchActionService or external-player flow
-      |                         |
-      |                         +--> atomic vote/status persistence
-      |                         +--> callback idempotency
-      |                         +--> card refresh
-      |                         +--> important notifications
-      |
-      +--> external-player callbacks --> private menu --> persistence --> card refresh
-      |
-      +--> in-process scheduler --> Minsk forecast --> Chat
+Telegram Mini App (owner) -- HTTPS + X-Telegram-Init-Data --> apps/api
+Telegram Bot API --------- HTTPS webhook ------------------> apps/api
+apps/web ----------------- generated client ----------------> apps/api /v1/*
+apps/api <-------------- PostgreSQL ------------------------> packages/db
+Railway Cron or local job command -------------------------> apps/api jobs:run
 ```
 
-## Topic routing
+`apps/api` is a NestJS application. It listens on `0.0.0.0:$PORT`, exposes a public health endpoint, serves the owner REST API under `/v1`, receives Telegram updates at `POST /telegram/webhook`, and composes the Telegram card and callback services. It does not start a Telegram long-polling loop and it does not own a permanent scheduler.
 
-- `/match`, `/editmatch`, `/help`, `/matchinfo`, `/remove_vote`, and `/rename_user` are accepted only in private conversations from authorized group administrators;
-- public match cards are sent to the configured `General` topic;
-- the `Доп. игроки` card callback opens a private menu; add/remove callbacks are accepted only from that private menu;
-- status notifications are sent to the configured `Chat` topic;
-- creator admin panels are sent to the creator's private Telegram chat.
+`apps/web` is a React/Vite application. It initializes the Telegram Web App API, applies Telegram theme and safe-area values, sends the raw Mini App `initData` through the generated client's `X-Telegram-Init-Data` header, and uses TanStack Query for API state.
 
-When `General` has topic ID `1`, the runtime omits `message_thread_id`, because Telegram represents the general topic specially.
+`packages/domain` has no adapter imports. It owns lifecycle transitions, roster counts, vote transitions, HTML-safe card rendering, notification text, weather eligibility, and validation. `packages/db` owns PostgreSQL access and durable state. `packages/api-client` is generated from Nest Swagger/OpenAPI; handwritten REST contracts do not belong in the frontend.
 
-## Match creation
+## Authentication and authorization
 
-The match-creation service normally uses a private review step (`CONFIRM_MATCH_CREATION=true` by default):
+The global `MiniAppAuthGuard` protects the REST API. For `/v1` requests it:
 
-1. stores a draft match;
-2. sends the creator the parsed draft with `Опубликовать`, `Исправить`, and `Отменить` actions;
-3. leaves the match unpublished until the creator chooses `Опубликовать`;
-4. renders and sends the public card;
-5. stores the public message reference;
-6. activates the match and converts the stored preview message into the creator's admin panel;
-7. stores the public-card reference while retaining the admin-panel reference;
-8. edits the preview message to reflect the active status.
+1. reads `X-Telegram-Init-Data`;
+2. validates Telegram's HMAC signature with `TELEGRAM_BOT_TOKEN`;
+3. validates `auth_date` freshness (24 hours by default);
+4. requires the Telegram `user.id` to equal `TELEGRAM_OWNER_USER_ID`.
 
-When confirmation is disabled, successful parsing continues directly with publication. If publication or persistence fails, the draft match and already-sent messages are cleaned up on a best-effort basis.
+Invalid or expired init data is rejected with `401`; a valid Telegram user who is not the configured owner is rejected with `403`. CORS accepts only the exact `WEB_ORIGIN` for the environment. The non-Mini-App HTTP boundaries are `/health` and `/telegram/webhook`; the API has no public `/cron` route. Railway Cron invokes the CLI command `pnpm --filter @football/api jobs:run` instead of calling the API over HTTP.
 
-## Published-match editing
+## Owner REST flow
 
-The creator can request a copyable `/editmatch #v<ID>` full-replacement template from the private admin panel. The command is accepted only from that creator in a private conversation, after the creator's current group-administrator permission has been checked. It is available only while the match is `active` or `confirmed`.
+The public contract is generated from `apps/api/openapi.json` and includes:
 
-The command body is adapted to the same parser used by `/match`. A successful atomic update replaces the schedule, location, venue type, field price, required-player threshold, and derived title on the same match row, then refreshes the existing public card. The match ID, current lifecycle status, votes, and external-participant entries are not replaced. The Telegram update ID is stored with the edit so repeated delivery is idempotent.
+- bootstrap, match listing, match details, and player listing;
+- structured draft creation, optimistic-concurrency edits, server-rendered card preview, publication, confirmation, completion, cancellation, refresh, and reconciliation;
+- owner vote correction/removal and external-participant management;
+- player aliases and readable-name updates.
 
-## Vote removal
+Mutations require an `Idempotency-Key`. Match edits additionally require `If-Match` with the current match version. The API stores idempotency responses in PostgreSQL and returns a conflict instead of silently overwriting a newer version. The generated client adds the Mini App header and mutation key through `packages/api-client/src/mutator.ts`; `apps/web` consumes generated hooks rather than making raw HTTP calls.
 
-`/remove_vote` is restricted to the match creator, who must still be a group administrator. The command resolves a username within the selected match or uses an exact Telegram user ID. The repository removes the current vote and claims the Telegram update in one SQLite transaction. Active and confirmed matches are supported; completed and cancelled matches are unchanged. A successful removal refreshes both stored card messages and reuses the threshold-lost notification flow when the confirmed count crosses below the minimum.
+The normal owner flow is:
 
-## Callback actions
+```text
+Open Mini App in Telegram
+        |
+        v
+Validate signed owner session
+        |
+        v
+Load bootstrap, matches, and players
+        |
+        +--> create structured draft
+        |        |
+        |        +--> preview server-rendered public card
+        |        +--> publish -> durable outbox event
+        |
+        +--> edit with If-Match -> transaction -> card refresh event
+        +--> manage roster/lifecycle -> transaction -> notification/card events
+        +--> history and player aliases
+```
 
-Callback data represents votes, creator lifecycle actions, private draft actions, cancellation-reason choices, and external-player menu actions. The services validate the source message, match reference, status, user identity, and administrator permissions. User votes and status changes are written atomically with a durable `processed_updates` record keyed by Telegram `update_id`; external-player entries use a unique source update ID.
+The API is the source of truth for match details, roster state, lifecycle state, and card publication state. The Telegram card is a projection of that state.
 
-The lifecycle is `draft → active → confirmed → completed`; cancellation is allowed from `active` or `confirmed` after the creator chooses `Недостаточно игроков` or `Плохая погода`. The reason is persisted and included in the cancellation notification. `confirmed` does not lock the roster: voting and external-player changes remain available, and the required-player value is a threshold rather than a capacity.
+## Telegram webhook and voting
 
-The public card is rendered from persisted votes and external-player quantities after every successful active or confirmed action. When the creator completes or cancels a match, the updater deletes its public card from `General`; it does not delete the persisted match history. There is no automatic time-based card deletion. Telegram message-edit failures do not roll back already-persisted state; they are logged and the next action retries the refresh.
+Telegram is configured to call `POST /telegram/webhook`. The controller requires the `X-Telegram-Bot-Api-Secret-Token` header to equal `TELEGRAM_WEBHOOK_SECRET`, validates the update envelope, passes it to grammY, and returns `204 No Content` on success. The current callback path handles public-card vote buttons; callback source validation requires the configured group, `General` topic, and stored card message.
 
-## User aliases
+Each callback claims its Telegram `update_id` in `telegram_updates`. The vote transaction updates the player's current choice and queues a card-refresh outbox event atomically. Replayed updates are treated as duplicates. Telegram API calls are bounded and best effort after commit; a durable outbox event remains available for recovery when a card edit or notification fails.
 
-An administrator can send `/rename_user @username Readable Name` in the private conversation. The command stores a normalized username alias in `user_aliases`. If the username is already present in vote snapshots, the service also updates all known snapshots for that Telegram user and refreshes the affected match cards. New callback votes resolve the alias before persistence, so `/matchinfo` and historical match views use the same readable name.
+After an applied vote, the API also refreshes the player's Telegram profile photo when the cache is older than seven days. It downloads the smallest available image with a 256 KiB limit, stores the validated JPEG/PNG/WebP copy in PostgreSQL, and exposes it only inside authenticated REST responses as a `data:` URL. Telegram bot tokens and temporary Bot API file URLs never reach the browser. Missing or unavailable photos remain a normal initials fallback.
 
-## Notifications and scheduled forecasts
+An exact-time public card uses `going`, `maybe`, and `not_going` buttons. An availability poll instead offers choices such as `after 19:00` and `after 20:00` until the player threshold is reached. The bot then asks the owner to book a field and enter the exact time, location, venue type, and price in the Mini App. Finalization confirms the match atomically, refreshes the card, switches it to exact-attendance buttons, and queues the confirmation notification. A confirmed count is eligible going votes plus external participants. The required-player value is a threshold, not a hard roster capacity.
 
-Threshold-reached, threshold-lost, and cancellation notifications are sent to `Chat`; cancellation notifications include the selected reason. Startup and shutdown notifications are sent to the configured `TELEGRAM_STATUS_USER_ID` private dialog. Threshold notifications use update-specific idempotent transition keys, so a later threshold crossing can be announced again.
+## Persistence and consistency
 
-The in-process scheduler checks only `outdoor` `active` and `confirmed` matches with an exact start time. Around 16 hours before the first eligible kick-off on a Minsk calendar day, it sends one weather forecast to `Chat`. A persistent day-level idempotency key prevents a second outdoor match on that day from duplicating the notification. Long polling starts with `drop_pending_updates`, so updates received while the process was offline are not dispatched to handlers.
+`packages/db` uses Drizzle ORM with PostgreSQL. Migrations live in `packages/db/migrations` and are run explicitly; API startup does not migrate the database.
 
-## External participants
+The baseline model includes:
 
-The public card's external-player button opens a private menu. Each add/remove callback stores a signed change of exactly one player with a nullable display-name snapshot and no source label. Removal checks the contribution owned by the clicking Telegram user. The card and match information group these entries by user; historical entries without a snapshot fall back to the Telegram ID, and historical source labels remain displayable.
+- `telegram_updates` — webhook update claims and processing status;
+- `players` and `player_usernames` — late-bound Telegram identities, readable names, aliases, and the bounded profile-photo cache;
+- `matches` — schedule, location, venue, threshold, lifecycle, owner, and optimistic version;
+- `match_messages` — Telegram public-card reference and publication/reconciliation state;
+- `votes` — one current choice per player and match;
+- `external_participants` — individually editable owner-managed players; each row represents one person;
+- `http_idempotency_keys` — replay-safe REST mutation responses;
+- `notifications` — threshold, lifecycle, and weather delivery state;
+- `outbox` — post-commit Telegram effects and retry state;
+- `job_claims` — the lease preventing overlapping job runs.
 
-The current operating model assumes one organizer changes external participants at a time. The application does not coordinate simultaneous edits by multiple administrators.
+Business state and its outbox event are committed together. Ordinary delivery failures retry with backoff. An uncertain initial publication is not blindly retried because it may have created a Telegram message; it is marked for operator reconciliation, which the Mini App can request through the reconciliation endpoint.
 
-## Persistence model
+## Jobs and webhook timing
 
-- `chat_settings` — chat IDs, topic IDs, timezone, and threshold;
-- `matches` — schedule, title, location, venue type, price, status, threshold, cancellation reason, and creator;
-- `match_messages` — public-card and private-panel message references;
-- `processed_updates` — callback-action, match-edit, and vote-removal command deduplication;
-- `votes` — one current choice per Telegram user and match;
-- `user_aliases` — administrator-defined readable names keyed by normalized Telegram username;
-- `external_participants` — signed quantity changes, optional historical source labels, and nullable display-name snapshots;
-- `notifications` — important transition and forecast idempotency.
+`apps/api/src/jobs/cli.ts` runs one bounded `jobs:run` invocation and exits. `JobsRunner` acquires the PostgreSQL job lease, claims a bounded outbox batch, dispatches Telegram effects, runs due weather work, releases the lease, and reports a summary. It does not use `setInterval`, `node-cron`, or an in-process scheduler.
 
-The project currently uses a clean baseline migration for the inline-card MVP. Native poll records are intentionally not migrated.
+The weather runner sends at most one forecast per configured chat and Minsk calendar day for an eligible outdoor match. Repeated or overlapping Cron invocations are safe because the day claim is durable. A Railway Cron service should invoke `pnpm --filter @football/api jobs:run` on a schedule such as every five minutes; local developers can invoke the same command manually.
+
+## Environment topology
+
+There are exactly two supported environments:
+
+- local — developer machine, Docker Compose PostgreSQL, test Telegram group/non-production bot, local API, local Vite server, and manually invoked jobs;
+- production — independently configured Railway API, PostgreSQL, Cron, and web services using the production Telegram group and bot.
+
+There is no Railway staging environment. Local secrets, database URLs, group/topic IDs, webhook URLs, and Mini App origins must never be shared with production. See [Local PostgreSQL](local-postgres.md), [Development](development.md), and [the Railway runbook](railway.md) for the operational boundaries.
+
+Production deployment and Telegram configuration are pending owner authorization; this repository does not claim that production is deployed or that a production webhook is registered.

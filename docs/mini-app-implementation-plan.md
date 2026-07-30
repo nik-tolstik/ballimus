@@ -1,6 +1,6 @@
 # Telegram Mini App Migration Plan
 
-> Implementation handoff for the agent rebuilding the project. This document describes the target system; the current SQLite/long-polling bot remains the legacy implementation until the migration is complete.
+> Preserved implementation handoff for the migration. The local Mini App stack now implements this target; production cutover and live Telegram acceptance remain explicit operator steps tracked in `work-log.md`.
 
 ## 1. Goal
 
@@ -106,7 +106,7 @@ The baseline schema must include these concepts:
 | --- | --- |
 | `matches` | Structured schedule/location/venue/price/threshold/status/cancellation data, `version` or equivalent optimistic-concurrency field, and timestamps. |
 | `match_messages` | One public-card reference per match: Telegram chat, topic, and message IDs. Private admin panels are not migrated. |
-| `players` | A canonical player profile with nullable unique `telegram_user_id`, optional owner-defined `display_name`, and Telegram profile snapshots. |
+| `players` | A canonical player profile with nullable unique `telegram_user_id`, optional owner-defined `display_name`, Telegram profile snapshots, and a bounded cached profile-photo copy. |
 | `player_usernames` | Normalized username to player mapping. It lets the owner create `@username -> readable name` before a vote and supports later username changes. |
 | `votes` | One current choice per `(match_id, player_id)`, raw Telegram identity snapshots, option, source, and timestamp. An owner may correct/remove a known player's vote; an unresolved username cannot be used to fabricate a Telegram vote. |
 | `external_participants` | Owner-managed named or unnamed quantity entries for a match. Their total counts toward the threshold. |
@@ -195,7 +195,7 @@ DATABASE_URL
 TELEGRAM_BOT_TOKEN
 TELEGRAM_WEBHOOK_SECRET
 TELEGRAM_OWNER_USER_ID
-TELEGRAM_GROUP_CHAT_ID
+TELEGRAM_CHAT_ID
 TELEGRAM_GENERAL_TOPIC_ID
 TELEGRAM_CHAT_TOPIC_ID
 TELEGRAM_MINI_APP_URL

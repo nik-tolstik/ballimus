@@ -1,78 +1,66 @@
 # Project Structure
 
-    football-bot/
-    ├── src/
-    │   ├── main.ts
-    │   ├── config.ts
-    │   ├── application/
-    │   │   ├── match-creation.ts
-    │   │   ├── match-editing.ts
-    │   │   ├── match-card.ts
-    │   │   ├── match-card-updater.ts
-    │   │   ├── match-actions.ts
-    │   │   ├── external-participants.ts
-    │   │   ├── match-info.ts
-    │   │   ├── user-renaming.ts
-    │   │   └── weather-forecast.ts
-    │   ├── bot/
-    │   │   └── create-bot.ts
-    │   ├── domain/
-    │   │   ├── match-card.ts
-    │   │   ├── matches.ts
-    │   │   ├── notifications.ts
-    │   │   └── votes.ts
-    │   ├── parser/
-    │   ├── db/
-    │   │   ├── client.ts
-    │   │   ├── migrate.ts
-    │   │   ├── schema.ts
-    │   │   └── repositories/
-    │   └── scheduler/
-    │       ├── weather-forecast-scheduler.ts
-    │       └── worker.ts
-    ├── tests/
-    │   ├── unit/
-    │   └── integration/
-    ├── drizzle/
-    └── docs/
+```text
+football-bot/
+├── apps/
+│   ├── api/
+│   │   ├── src/
+│   │   │   ├── auth/       Mini App init-data guard and owner identity
+│   │   │   ├── config/     validated API environment
+│   │   │   ├── database/   Nest database wiring
+│   │   │   ├── health/     unauthenticated process health endpoint
+│   │   │   ├── jobs/       one-shot outbox and weather runner
+│   │   │   ├── rest/       owner REST controllers, DTOs, and service
+│   │   │   ├── telegram/   webhook, callback validation, cards, and effects
+│   │   │   ├── bootstrap.ts Nest application composition
+│   │   │   ├── main.ts     HTTP process entry point
+│   │   │   └── openapi.ts  Swagger/OpenAPI document generation
+│   │   └── openapi.json    generated API contract source for Orval
+│   └── web/
+│       ├── src/
+│       │   ├── App.tsx     owner dashboard and match workflows
+│       │   ├── main.tsx    React/TanStack Query entry point
+│       │   ├── normalize.ts API response normalization for the UI
+│       │   ├── telegram.ts Telegram Web App session, theme, and safe area
+│       │   └── styles.css  Mini App presentation
+│       └── index.html
+├── packages/
+│   ├── api-client/
+│   │   ├── src/mutator.ts  API base URL, init data, idempotency, errors
+│   │   ├── src/generated/  Orval models and TanStack Query hooks
+│   │   └── orval.config.ts generated-client configuration
+│   ├── db/
+│   │   ├── src/schema.ts   PostgreSQL Drizzle schema
+│   │   ├── src/migrate.ts  explicit migration entry point
+│   │   ├── src/repositories/ matches, players, votes, outbox, and claims
+│   │   ├── src/transactions.ts atomic domain transactions
+│   │   └── migrations/     versioned PostgreSQL baseline and future migrations
+│   └── domain/
+│       └── src/            pure lifecycle, roster, card, notification, and weather rules
+├── docs/                   maintained documentation and preserved migration plan
+├── scripts/
+│   ├── generate-init-data.mjs signed local Mini App authentication fixture
+│   └── postgres-local.mjs     safe local PostgreSQL lifecycle helper
+├── docker-compose.yml      loopback-only local PostgreSQL service
+├── package.json            root quality gates and generation commands
+└── pnpm-workspace.yaml     apps/* and packages/* workspace definition
+```
 
-## Source modules
+## Dependency direction
 
-### `src/main.ts`
+`apps/web` depends on the generated `@football/api-client`. `apps/api` depends on `@football/domain` and `@football/db`. The API client is generated from the API's Swagger document; it is not a second hand-maintained contract. The domain package stays independent of Telegram, Nest, PostgreSQL, and browser APIs.
 
-Composition root. Loads configuration, initializes SQLite and repositories, wires Telegram API calls, constructs application services, and starts long polling.
+The API composition root creates the Nest modules for configuration, authentication, health, REST, Telegram effects, database access, and jobs. API startup opens PostgreSQL but deliberately does not apply migrations. The jobs entry point creates the same module graph as a short-lived application context and exits after one run.
 
-### `src/bot/create-bot.ts`
+## Important boundaries
 
-Creates the grammY bot, enforces private command authorization, routes commands, and forwards `callback_query:data` updates. It does not contain match business rules.
+- `apps/api/src/auth` is the only place that validates Telegram Mini App identity and owner access.
+- `apps/api/src/rest` exposes owner operations under `/v1`; controllers translate HTTP inputs, while `OwnerRestService` coordinates repositories and domain rules.
+- `apps/api/src/telegram` owns the webhook envelope, callback source validation, Telegram API effects, public-card publication, and card refresh.
+- `apps/api/src/jobs` owns bounded outbox delivery, retry classification, weather work, and the PostgreSQL job lease.
+- `packages/db/src/repositories` owns persistence operations; API and domain code do not open SQLite or issue ad hoc SQL.
+- `packages/api-client/src/generated` is generated output. Change API decorators/schema first, then regenerate with `pnpm api:contracts:check`.
 
-### `src/application/`
+## Preserved migration artifacts
 
-- `match-creation.ts` creates private match drafts, publishes approved drafts, and creates the public card and creator panel;
-- `match-editing.ts` parses full `/editmatch` replacements and updates the details of an active or confirmed match without replacing its ID, votes, external participants, or status;
-- `match-card.ts` defines voting, lifecycle, draft-review, cancellation-reason callback actions, and inline keyboards;
-- `external-participant-actions.ts` defines public-card and private-menu callback data and menu content;
-- `match-card-updater.ts` re-renders active and confirmed public cards, deletes terminal public cards, and updates admin messages;
-- `match-actions.ts` processes votes, creator status actions, edit-template requests, and reasoned cancellations;
-- `external-participants.ts` validates active/confirmed external-player changes, owner-only removals, idempotency, and threshold notifications;
-- `match-info.ts` formats private match details;
-- `user-renaming.ts` parses the administrator alias command, stores readable names, and updates affected vote snapshots;
-- `weather-forecast.ts` retrieves the Minsk forecast and formats the notification.
-
-### `src/domain/`
-
-Contains pure rules and formatting for cards, external-player contribution grouping, vote transitions, mentions, and notifications.
-
-### `src/db/`
-
-Owns the SQLite client, baseline migration, Drizzle schema, and repositories. The persistence layer contains match drafts and publication references, venue and cancellation metadata, votes, user aliases, attributed external participants, notifications, and processed callback updates.
-
-### `src/scheduler/`
-
-`weather-forecast-scheduler.ts` runs the in-process check that sends one Minsk weather forecast around 16 hours before the first eligible outdoor exact-time active or confirmed match each day; `worker.ts` re-exports the scheduler boundary.
-
-## Tests
-
-- unit tests cover configuration, parser behavior, draft, edit, and lifecycle transitions, notifications, weather formatting, and card rendering;
-- integration tests cover draft publication, published-match editing, callback actions, repositories, user aliases, external participants, scheduled forecasts, and routing;
-- the smoke test verifies that the application entry point exists.
+The ignored local `data/database.db`, if present on a developer machine, is not part of the maintained runtime and is never read by the workspace applications. The migration plan, orchestration prompt, and work log remain as historical and operational handoff documents.

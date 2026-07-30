@@ -1,28 +1,12 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "rootDir": ".",
-    "strict": true,
     "noEmit": true,
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
-    "noImplicitOverride": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true,
     "types": [
       "node"
     ]
   },
-  "include": [
-    "src/**/*.ts",
-    "tests/**/*.ts",
-    "drizzle.config.ts",
-    "vitest.config.ts"
-  ],
+  "files": [],
   "exclude": [
     "node_modules",
     "dist",

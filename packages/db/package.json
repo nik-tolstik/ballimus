@@ -1,0 +1,38 @@
+{
+  "name": "@football/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PostgreSQL Drizzle persistence foundation for the Football bot backend.",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "migrations"
+  ],
+  "scripts": {
+    "db:check": "pnpm exec drizzle-kit check --config=drizzle.config.ts",
+    "db:generate": "pnpm exec drizzle-kit generate --config=drizzle.config.ts",
+    "db:migrate": "pnpm exec tsx src/migrate.ts",
+    "lint": "pnpm exec oxlint src drizzle.config.ts",
+    "test": "pnpm exec vitest run --passWithNoTests --config vitest.config.ts",
+    "typecheck": "pnpm exec tsc --project tsconfig.json --noEmit",
+    "build": "pnpm exec tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.7"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.19.4"
+  }
+}
