@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { Bot, type Context } from "grammy";
+import { Bot, GrammyError, type Context } from "grammy";
 import type { InlineKeyboardMarkup, Update } from "grammy/types";
 import type { PlayerAvatarContentType } from "@football/db";
 
@@ -91,6 +91,15 @@ function optionalTelegramNumber(
   return value === undefined ? undefined : positiveTelegramNumber(value, fieldName);
 }
 
+function isMessageNotModifiedError(error: unknown): boolean {
+  return (
+    error instanceof GrammyError &&
+    error.method === "editMessageText" &&
+    error.error_code === 400 &&
+    error.description.toLowerCase().startsWith("bad request: message is not modified")
+  );
+}
+
 /** Owns grammY construction and exposes only update dispatch plus bounded API calls. */
 @Injectable()
 export class TelegramBotService {
@@ -131,15 +140,20 @@ export class TelegramBotService {
       parse_mode: "HTML" as const,
       ...(input.replyMarkup === undefined ? {} : { reply_markup: input.replyMarkup }),
     };
-    await this.withDeadline((signal) =>
-      this.bot.api.editMessageText(
-        chatId(input.chatId),
-        positiveTelegramNumber(input.messageId, "messageId"),
-        input.text,
-        other,
-        signal,
-      ),
-    );
+    try {
+      await this.withDeadline((signal) =>
+        this.bot.api.editMessageText(
+          chatId(input.chatId),
+          positiveTelegramNumber(input.messageId, "messageId"),
+          input.text,
+          other,
+          signal,
+        ),
+      );
+    } catch (error) {
+      if (isMessageNotModifiedError(error)) return;
+      throw error;
+    }
   }
 
   public async deleteMessage(input: TelegramDeleteMessageInput): Promise<void> {

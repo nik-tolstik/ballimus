@@ -9,7 +9,7 @@ import type {
   TransactionRepositories,
 } from "@football/db";
 import { describe, expect, it, vi } from "vitest";
-import { Bot, type Context } from "grammy";
+import { Bot, GrammyError, type Context } from "grammy";
 
 import type { ApiConfig } from "../config/api-config.js";
 import {
@@ -204,6 +204,47 @@ describe("Telegram webhook security", () => {
   it("rejects malformed envelopes without exposing the body", () => {
     expect(() => parseTelegramUpdateBody({ callback_query: {} })).toThrow("Telegram update is malformed");
     expect(() => parseTelegramUpdateBody({ update_id: 1, callback_query: "bad" })).toThrow("Telegram callback query is malformed");
+  });
+});
+
+describe("Telegram API effects", () => {
+  it("treats an unchanged message edit as an idempotent success", async () => {
+    const service = new TelegramBotService(apiConfig);
+    const editMessageText = vi.fn().mockRejectedValue(
+      new GrammyError(
+        "Call to 'editMessageText' failed!",
+        {
+          ok: false,
+          error_code: 400,
+          description:
+            "Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message",
+        },
+        "editMessageText",
+        {},
+      ),
+    );
+    Object.assign(service, { bot: { api: { editMessageText } } });
+
+    await expect(
+      service.editMessageText({ chatId: -100123n, messageId: 701n, text: "Same card" }),
+    ).resolves.toBeUndefined();
+    expect(editMessageText).toHaveBeenCalledOnce();
+  });
+
+  it("rethrows other Telegram edit failures", async () => {
+    const service = new TelegramBotService(apiConfig);
+    const error = new GrammyError(
+      "Call to 'editMessageText' failed!",
+      { ok: false, error_code: 400, description: "Bad Request: message to edit not found" },
+      "editMessageText",
+      {},
+    );
+    const editMessageText = vi.fn().mockRejectedValue(error);
+    Object.assign(service, { bot: { api: { editMessageText } } });
+
+    await expect(
+      service.editMessageText({ chatId: -100123n, messageId: 701n, text: "New card" }),
+    ).rejects.toBe(error);
   });
 });
 
