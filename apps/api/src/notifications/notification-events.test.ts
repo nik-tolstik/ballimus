@@ -105,13 +105,25 @@ describe("application notification events", () => {
       ...match,
       status: "cancelled",
       cancellationReason: "Rain & wind",
-    }, 42n, "Europe/Minsk");
+    }, 42n, "Europe/Minsk", "confirmed");
 
     expect(fixture.claimInTransaction).toHaveBeenCalledWith(expect.objectContaining({
       notificationType: "match_cancelled",
       transitionKey: "status:cancelled",
     }));
     expect(event?.payload?.["text"]).toContain("Rain &amp; wind");
+  });
+
+  it("does not claim a cancellation notification for an unconfirmed match", async () => {
+    const fixture = repositories();
+    const event = await claimLifecycleNotificationEvent(fixture.value, {
+      ...match,
+      status: "cancelled",
+      cancellationReason: "Not enough players",
+    }, 42n, "Europe/Minsk", "active");
+
+    expect(event).toBeUndefined();
+    expect(fixture.claimInTransaction).not.toHaveBeenCalled();
   });
 
   it("mentions only Going voters in the confirmed-match notification", async () => {
@@ -126,7 +138,7 @@ describe("application notification events", () => {
     const event = await claimLifecycleNotificationEvent(fixture.value, {
       ...match,
       status: "confirmed",
-    }, 42n, "Europe/Minsk");
+    }, 42n, "Europe/Minsk", "active");
 
     const text = String(event?.payload?.["text"]);
     expect(text).toContain("⚽ <b>Состав набран — матч состоится!</b>");

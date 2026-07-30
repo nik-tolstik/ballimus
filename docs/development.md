@@ -2,6 +2,8 @@
 
 For a single product-and-operations walkthrough, including member voting, owner workflows, time modes, and both launch paths, start with the [Application guide](application-guide.md). This document is the detailed development command reference.
 
+> **Default Telegram launch:** This repository runs an owner-only Telegram Mini App. For normal local development and any test that must work inside Telegram, start the project with `pnpm dev:ngrok -- --register-webhook`. Do not use the root `pnpm dev` shortcut for Telegram testing: it serves only localhost, does not start PostgreSQL or apply migrations, and does not configure the Telegram-facing URLs and webhook. The local-only commands below are for API, database, and Vite work that does not require Telegram.
+
 ## Prerequisites
 
 - Node.js `>=22.18.0`;
@@ -100,10 +102,10 @@ ngrok config add-authtoken <your-ngrok-authtoken>
 ```
 
 ```bash
-pnpm dev:ngrok
+pnpm dev:ngrok -- --register-webhook
 ```
 
-The command prints the public Mini App URL, API URL, webhook URL, and the local ngrok inspector at `http://127.0.0.1:4040`. The Web tunnel uses the reserved domain configured in `ngrok.local.yml`, while the API tunnel remains dynamic unless a second reserved domain is added. It does not change Telegram configuration by default.
+The command prints the public Mini App URL, API URL, webhook URL, and the local ngrok inspector at `http://127.0.0.1:4040`. The Web tunnel uses the reserved domain configured in `ngrok.local.yml`, while the API tunnel remains dynamic unless a second reserved domain is added. The `--register-webhook` flag registers the local bot webhook for the current API tunnel.
 
 To register the local bot webhook explicitly:
 
@@ -166,9 +168,9 @@ pnpm api:contracts:check
 
 ## Local acceptance checklist
 
-Use only the local bot, local group, local database, and local Mini App URL.
+For Telegram acceptance, start with `pnpm dev:ngrok -- --register-webhook` and use only the local bot, local group, local database, and the public URL printed by the workflow.
 
-1. Start PostgreSQL, apply `pnpm --filter @football/db db:migrate`, start the API, and verify `GET http://localhost:3000/health` returns API status `ok`.
+1. Verify that the ngrok workflow started PostgreSQL, applied migrations, started the API, and that `GET http://localhost:3000/health` returns API status `ok`.
 2. Open the Mini App from the local Telegram bot as the configured owner. Verify that an ordinary Telegram account is rejected and that opening the URL outside Telegram shows the Telegram-only state.
 3. Create and publish a match from the Mini App, then verify that one transaction created the active match and queued exactly one card for `General`.
 4. Vote from Telegram accounts on the public card. Verify callback source checks, one vote per player/match, card refresh, and duplicate-update safety.

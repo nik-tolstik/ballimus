@@ -65,6 +65,7 @@ export function evaluateMatchTransition(input: {
   }
 
   const isCancelled = input.to === "cancelled";
+  const shouldNotifyCancellation = isCancelled && input.from === "confirmed";
   const isCompleted = input.to === "completed";
   const isConfirmed = input.to === "confirmed";
   return {
@@ -72,7 +73,7 @@ export function evaluateMatchTransition(input: {
     to: input.to,
     ...(isConfirmed
       ? { notificationType: "match_confirmed" as const, notificationTransitionKey: "status:confirmed" as const }
-      : isCancelled
+      : shouldNotifyCancellation
         ? { notificationType: "match_cancelled" as const, notificationTransitionKey: "status:cancelled" as const }
         : {}),
     publicCardAction: isCancelled || isCompleted ? "delete" : "retain",

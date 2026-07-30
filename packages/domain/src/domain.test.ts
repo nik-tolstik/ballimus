@@ -13,6 +13,7 @@ import {
   canTransitionMatch,
   countExternalParticipantQuantity,
   evaluateExternalParticipantChange,
+  evaluateMatchTransition,
   evaluateThresholdTransition,
   evaluateVoteTransition,
   escapeHtml,
@@ -176,6 +177,11 @@ describe("match lifecycle", () => {
     expect(canTransitionMatch("confirmed", "completed")).toBe(true);
     expect(canTransitionMatch("active", "cancelled")).toBe(true);
     expect(canTransitionMatch("confirmed", "cancelled")).toBe(true);
+    expect(evaluateMatchTransition({ from: "active", to: "cancelled" }).notificationType).toBeUndefined();
+    expect(evaluateMatchTransition({ from: "confirmed", to: "cancelled" })).toMatchObject({
+      notificationType: "match_cancelled",
+      notificationTransitionKey: "status:cancelled",
+    });
     expect(canTransitionMatch("draft", "confirmed")).toBe(false);
     expect(canTransitionMatch("active", "completed")).toBe(false);
 

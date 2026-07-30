@@ -689,6 +689,7 @@ export class OwnerRestService {
         next,
         this.config.telegramChatTopicId,
         this.config.groupTimezone,
+        current.status,
       );
       if (notification !== undefined) await repositories.outbox.insertInTransaction(notification);
       return {
@@ -1092,6 +1093,7 @@ export class OwnerRestService {
         next,
         this.config.telegramChatTopicId,
         this.config.groupTimezone,
+        current.status,
       );
       if (notification !== undefined) await repositories.outbox.insertInTransaction(notification);
       return {

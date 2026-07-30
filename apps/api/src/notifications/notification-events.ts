@@ -9,6 +9,7 @@ import {
 import type {
   InsertOutboxEventInput,
   Match,
+  MatchStatus,
   RosterCounts,
   TransactionRepositories,
   Vote,
@@ -95,8 +96,10 @@ export async function claimLifecycleNotificationEvent(
   match: Match,
   telegramTopicId: bigint,
   timezone: string,
+  previousStatus: MatchStatus,
 ): Promise<InsertOutboxEventInput | undefined> {
   if (match.status !== "confirmed" && match.status !== "cancelled") return undefined;
+  if (match.status === "cancelled" && previousStatus !== "confirmed") return undefined;
   const transition = match.status === "confirmed"
     ? await Promise.all([
       repositories.votes.listByMatchId(match.id),
