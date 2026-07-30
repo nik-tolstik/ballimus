@@ -1,6 +1,6 @@
 import type { Match, MatchTimeMode, Vote } from "./types.js";
 
-export const MIN_AVAILABILITY_TIME_OPTIONS = 2;
+export const MIN_AVAILABILITY_TIME_OPTIONS = 1;
 export const MAX_AVAILABILITY_TIME_OPTIONS = 6;
 
 const LOCAL_TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/u;
@@ -11,6 +11,10 @@ export function isLocalTime(value: unknown): value is string {
 
 export function matchTimeMode(match: Pick<Match, "timeMode">): MatchTimeMode {
   return match.timeMode ?? "exact";
+}
+
+export function isTimePollMode(mode: MatchTimeMode): mode is "exact_options" | "availability" {
+  return mode === "exact_options" || mode === "availability";
 }
 
 export function normalizeAvailabilityTimeOptions(values: readonly string[]): string[] {
@@ -34,13 +38,14 @@ export function isVoteEligibleAt(vote: Pick<Vote, "option" | "availableAfter">, 
 
 export function isVoteEligibleForMatch(
   match: Pick<Match, "timeMode" | "selectedTime">,
-  vote: Pick<Vote, "option" | "availableAfter">,
+  vote: Pick<Vote, "option" | "availableAfter" | "exactTimes">,
 ): boolean {
   if (vote.option !== "going") return false;
-  return matchTimeMode(match) === "exact"
-    || match.selectedTime === undefined
-    || match.selectedTime === null
-    || isVoteEligibleAt(vote, match.selectedTime);
+  const mode = matchTimeMode(match);
+  if (mode === "exact" || match.selectedTime === undefined || match.selectedTime === null) return true;
+  return mode === "availability"
+    ? isVoteEligibleAt(vote, match.selectedTime)
+    : vote.exactTimes?.includes(match.selectedTime) === true || vote.availableAfter === match.selectedTime;
 }
 
 export function cumulativeAvailabilityCount(
@@ -49,4 +54,14 @@ export function cumulativeAvailabilityCount(
   externalParticipants = 0,
 ): number {
   return votes.filter((vote) => isVoteEligibleAt(vote, time)).length + externalParticipants;
+}
+
+export function selectedTimeForFinalTime(
+  mode: MatchTimeMode,
+  timeOptions: readonly string[],
+  finalTime: string,
+): string | null | undefined {
+  if (mode === "exact") return null;
+  if (mode === "exact_options") return timeOptions.includes(finalTime) ? finalTime : undefined;
+  return timeOptions.filter((time) => time <= finalTime).at(-1);
 }

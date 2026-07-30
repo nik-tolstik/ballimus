@@ -46,20 +46,28 @@ export function formatThresholdNotification(
   title: string | null | undefined,
   goingCount: number,
   threshold: number,
-  requiresFinalDetails = false,
+  finalDetails: {
+    readonly exactTime: boolean;
+    readonly location: boolean;
+  } = { exactTime: false, location: false },
   scheduleDate?: string | null,
   location?: string | null,
 ): string {
   assertCount(goingCount, "goingCount");
   assertThreshold(threshold);
+  const nextStep = finalDetails.exactTime && finalDetails.location
+    ? "Нужно указать точное время и место проведения матча."
+    : finalDetails.exactTime
+      ? "Нужно указать точное время проведения матча."
+      : finalDetails.location
+        ? "Нужно указать место проведения матча."
+        : "Матч готов к подтверждению.";
   return [
     "⚽ <b>Минимальный состав собран!</b>",
     `<b>${formatThresholdMatchContext(matchId, title, scheduleDate, location)}</b>`,
     `👥 Игроков: <b>${goingCount} из ${threshold}</b>`,
     "",
-    requiresFinalDetails
-      ? "Нужно указать точное время и место проведения матча."
-      : "Матч готов к подтверждению в Ballimus.",
+    nextStep,
   ].join("\n");
 }
 
@@ -175,7 +183,8 @@ export function thresholdReachedNotificationTransition(input: {
   readonly goingCount: number;
   readonly threshold: number;
   readonly eventKey: string;
-  readonly requiresFinalDetails?: boolean;
+  readonly requiresExactTime?: boolean;
+  readonly requiresLocation?: boolean;
 }): FormattedNotificationTransition {
   if (input.eventKey.trim() === "") throw new Error("eventKey must not be empty");
   return {
@@ -187,7 +196,10 @@ export function thresholdReachedNotificationTransition(input: {
       input.title,
       input.goingCount,
       input.threshold,
-      input.requiresFinalDetails,
+      {
+        exactTime: input.requiresExactTime ?? false,
+        location: input.requiresLocation ?? false,
+      },
       input.scheduleDate,
       input.location,
     ),

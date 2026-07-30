@@ -12,5 +12,6 @@ export type PatchMatchDtoTimeMode = typeof PatchMatchDtoTimeMode[keyof typeof Pa
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const PatchMatchDtoTimeMode = {
   exact: 'exact',
+  exact_options: 'exact_options',
   availability: 'availability',
 } as const;

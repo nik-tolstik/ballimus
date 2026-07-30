@@ -39,6 +39,7 @@ export interface UpsertVoteInput {
   readonly displayNameSnapshot: string;
   readonly option: VoteOption;
   readonly availableAfter?: string | null;
+  readonly exactTimes?: readonly string[];
   readonly source?: VoteSource;
   readonly telegramUpdateId?: DatabaseIdentifier | null;
   readonly updatedAt?: Date;
@@ -50,6 +51,7 @@ export interface TelegramVoteInput {
   readonly identity: TelegramIdentityInput;
   readonly option: VoteOption;
   readonly availableAfter?: string | null;
+  readonly exactTimes?: readonly string[];
 }
 
 export interface OwnerVoteInput {
@@ -59,6 +61,7 @@ export interface OwnerVoteInput {
   readonly telegramUserId?: DatabaseIdentifier;
   readonly option: VoteOption;
   readonly availableAfter?: string | null;
+  readonly exactTimes?: readonly string[];
   readonly displayNameSnapshot?: string;
   readonly updatedAt?: Date;
 }
@@ -94,7 +97,7 @@ export interface VoteMutationResult {
 }
 
 export type TelegramVoteResult =
-  | VoteMutationResult & { readonly status: "applied" }
+  | VoteMutationResult
   | { readonly status: "duplicate"; readonly updateId: bigint }
   | { readonly status: "inactive"; readonly match: Match; readonly updateId: bigint };
 
@@ -139,23 +142,41 @@ function editableMatch(match: Match): boolean {
   return match.status === "active" || match.status === "confirmed";
 }
 
-function normalizedAvailableAfter(match: Match, option: VoteOption, value: string | null | undefined): string | null {
+function normalizedTimeSelection(
+  match: Match,
+  option: VoteOption,
+  availableAfterInput: string | null | undefined,
+  exactTimesInput: readonly string[] | undefined,
+): { readonly availableAfter: string | null; readonly exactTimes: string[] } {
   if (option !== "going") {
-    if (value !== undefined && value !== null) {
-      throw new ValidationRepositoryError("availableAfter is only valid for going votes");
+    if ((availableAfterInput !== undefined && availableAfterInput !== null) || (exactTimesInput?.length ?? 0) > 0) {
+      throw new ValidationRepositoryError("time selections are only valid for going votes");
     }
-    return null;
+    return { availableAfter: null, exactTimes: [] };
   }
   if (match.timeMode === "exact") {
-    if (value !== undefined && value !== null) {
-      throw new ValidationRepositoryError("exact matches do not accept availability times");
+    if ((availableAfterInput !== undefined && availableAfterInput !== null) || (exactTimesInput?.length ?? 0) > 0) {
+      throw new ValidationRepositoryError("fixed exact matches do not accept time selections");
     }
-    return null;
+    return { availableAfter: null, exactTimes: [] };
   }
-  if (value === undefined || value === null || !match.timeOptions.includes(value)) {
-    throw new ValidationRepositoryError("availableAfter must be one of the match time options");
+  if (match.timeMode === "availability") {
+    if (availableAfterInput === undefined || availableAfterInput === null || !match.timeOptions.includes(availableAfterInput)) {
+      throw new ValidationRepositoryError("availableAfter must be one of the match time options");
+    }
+    if ((exactTimesInput?.length ?? 0) > 0) {
+      throw new ValidationRepositoryError("availability votes do not accept exactTimes");
+    }
+    return { availableAfter: availableAfterInput, exactTimes: [] };
   }
-  return value;
+  const exactTimes = [...new Set(exactTimesInput ?? (availableAfterInput === undefined || availableAfterInput === null ? [] : [availableAfterInput]))].sort();
+  if (exactTimes.length === 0 || exactTimes.some((time) => !match.timeOptions.includes(time))) {
+    throw new ValidationRepositoryError("exactTimes must contain one or more match time options");
+  }
+  if (availableAfterInput !== undefined && availableAfterInput !== null && exactTimesInput !== undefined) {
+    throw new ValidationRepositoryError("availableAfter and exactTimes cannot be supplied together");
+  }
+  return { availableAfter: null, exactTimes };
 }
 
 /** Current votes and transaction-safe Telegram/owner mutations. */
@@ -228,27 +249,58 @@ export class VotesRepository {
     return this.countByOption(matchId, "going");
   }
 
+  /** Keeps going votes while removing poll-specific choices after a move to one fixed time. */
+  public async clearGoingTimeSelections(
+    matchId: DatabaseIdentifier,
+    updatedAt?: Date,
+  ): Promise<Vote[]> {
+    return this.db
+      .update(votes)
+      .set({
+        availableAfter: null,
+        exactTimes: [],
+        updatedAt: effectiveNow(updatedAt),
+      })
+      .where(and(
+        eq(votes.matchId, parsedMatchId(matchId)),
+        eq(votes.option, "going"),
+      ))
+      .returning();
+  }
+
   public async rosterCounts(matchId: DatabaseIdentifier): Promise<RosterCounts> {
     const parsedId = parsedMatchId(matchId);
     const matchRows = await this.db.select({
       requiredPlayers: matches.requiredPlayers,
       timeMode: matches.timeMode,
+      timeOptions: matches.timeOptions,
       selectedTime: matches.selectedTime,
     }).from(matches).where(eq(matches.id, parsedId)).limit(1);
     const match = matchRows[0];
-    const requiredPlayers = match?.requiredPlayers;
-    if (requiredPlayers === undefined) throw new NotFoundRepositoryError(`Match ${parsedId} was not found`);
-    const voteRows = await this.db
-      .select({ count: sql<unknown>`count(*)` })
-      .from(votes)
-      .where(and(
-        eq(votes.matchId, parsedId),
-        eq(votes.option, "going"),
-        ...(match?.timeMode === "availability" && match.selectedTime !== null
-          ? [sql`(${votes.availableAfter} is null or ${votes.availableAfter} <= ${match.selectedTime})`]
-          : []),
-      ));
-    const voteCount = safeCount(voteRows[0]?.count ?? 0, "eligible vote count");
+    if (match === undefined) throw new NotFoundRepositoryError(`Match ${parsedId} was not found`);
+    const requiredPlayers = match.requiredPlayers;
+    const exactOptionRows = match.timeMode === "exact_options" && match.selectedTime === null
+      ? await this.db
+        .select({ exactTimes: votes.exactTimes })
+        .from(votes)
+        .where(and(eq(votes.matchId, parsedId), eq(votes.option, "going")))
+      : [];
+    const voteCount = match.timeMode === "exact_options" && match.selectedTime === null
+      ? Math.max(0, ...match.timeOptions.map(
+        (time) => exactOptionRows.filter((row) => row.exactTimes.includes(time)).length,
+      ))
+      : safeCount((await this.db
+        .select({ count: sql<unknown>`count(*)` })
+        .from(votes)
+        .where(and(
+          eq(votes.matchId, parsedId),
+          eq(votes.option, "going"),
+          ...(match.timeMode === "availability" && match.selectedTime !== null
+            ? [sql`(${votes.availableAfter} is null or ${votes.availableAfter} <= ${match.selectedTime})`]
+            : match.timeMode === "exact_options" && match.selectedTime !== null
+              ? [sql`${votes.exactTimes} ? ${match.selectedTime}`]
+              : []),
+        )))[0]?.count ?? 0, "eligible vote count");
     const externalRows = await this.db
       .select({ quantity: externalParticipants.quantity })
       .from(externalParticipants)
@@ -274,7 +326,7 @@ export class VotesRepository {
     const telegramUserId = parsedTelegramUserId(input.telegramUserId);
     validOption(input.option);
     const match = await new MatchesRepository(this.db).getById(matchId);
-    const availableAfter = normalizedAvailableAfter(match, input.option, input.availableAfter);
+    const timeSelection = normalizedTimeSelection(match, input.option, input.availableAfter, input.exactTimes);
     const source = input.source ?? "owner_correction";
     if (source === "telegram_callback" && input.telegramUpdateId === undefined) {
       throw new ValidationRepositoryError("telegramUpdateId is required for Telegram votes");
@@ -307,7 +359,8 @@ export class VotesRepository {
         lastNameSnapshot: snapshot(input.lastNameSnapshot),
         displayNameSnapshot: displayName,
         option: input.option,
-        availableAfter,
+        availableAfter: timeSelection.availableAfter,
+        exactTimes: timeSelection.exactTimes,
         source,
         telegramUpdateId: updateId,
         createdAt: now,
@@ -322,7 +375,8 @@ export class VotesRepository {
           lastNameSnapshot: snapshot(input.lastNameSnapshot),
           displayNameSnapshot: displayName,
           option: input.option,
-          availableAfter,
+          availableAfter: timeSelection.availableAfter,
+          exactTimes: timeSelection.exactTimes,
           source,
           telegramUpdateId: updateId,
           updatedAt: now,
@@ -358,6 +412,49 @@ export class VotesRepository {
     const previousVote = await this.findByPlayerId(match.id, binding.player.id);
     const countsBefore = await this.rosterCounts(match.id);
     const identity = input.identity;
+    const toggledExactTime = match.timeMode === "exact_options"
+      && input.option === "going"
+      && input.availableAfter !== undefined
+      && input.availableAfter !== null
+      && input.exactTimes === undefined
+      ? input.availableAfter
+      : undefined;
+    const exactTimes = toggledExactTime === undefined
+      ? input.exactTimes
+      : (() => {
+        if (!match.timeOptions.includes(toggledExactTime)) {
+          throw new ValidationRepositoryError("exact time must be one of the match time options");
+        }
+        const current = previousVote?.option === "going"
+          ? previousVote.exactTimes
+          : [];
+        return current.includes(toggledExactTime)
+          ? current.filter((time) => time !== toggledExactTime)
+          : [...current, toggledExactTime].sort();
+      })();
+    if (toggledExactTime !== undefined && exactTimes?.length === 0) {
+      const removedRows = await this.db
+        .delete(votes)
+        .where(and(eq(votes.matchId, match.id), eq(votes.playerId, binding.player.id)))
+        .returning();
+      const removedVote = removedRows[0];
+      if (removedVote === undefined || previousVote === undefined) {
+        throw new NotFoundRepositoryError("The exact-time vote was removed concurrently");
+      }
+      const countsAfter = await this.rosterCounts(match.id);
+      await new TelegramUpdatesRepository(this.db).markProcessedInTransaction(updateId);
+      return {
+        status: "removed",
+        match,
+        playerId: binding.player.id,
+        removedVote,
+        previousVote,
+        countsBefore,
+        countsAfter,
+        thresholdReached: !countsBefore.thresholdReached && countsAfter.thresholdReached,
+        thresholdLost: countsBefore.thresholdReached && !countsAfter.thresholdReached,
+      };
+    }
     const vote = await this.upsertInTransaction({
       matchId: match.id,
       playerId: binding.player.id,
@@ -367,7 +464,8 @@ export class VotesRepository {
       lastNameSnapshot: identity.lastName ?? null,
       displayNameSnapshot: binding.player.displayName ?? identity.displayName ?? `Telegram user ${String(identity.telegramUserId)}`,
       option: input.option,
-      ...(input.availableAfter === undefined ? {} : { availableAfter: input.availableAfter }),
+      ...(toggledExactTime === undefined && input.availableAfter !== undefined ? { availableAfter: input.availableAfter } : {}),
+      ...(exactTimes === undefined ? {} : { exactTimes }),
       source: "telegram_callback",
       telegramUpdateId: updateId,
     });
@@ -408,6 +506,7 @@ export class VotesRepository {
       displayNameSnapshot: input.displayNameSnapshot ?? player.displayName ?? "Игрок",
       option: input.option,
       ...(input.availableAfter === undefined ? {} : { availableAfter: input.availableAfter }),
+      ...(input.exactTimes === undefined ? {} : { exactTimes: input.exactTimes }),
       source: "owner_correction",
       ...(input.updatedAt === undefined ? {} : { updatedAt: input.updatedAt }),
     });

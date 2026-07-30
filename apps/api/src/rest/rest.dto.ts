@@ -42,10 +42,10 @@ export class MatchCreateDto {
   @IsIn(matchTimeModes)
   timeMode?: (typeof matchTimeModes)[number];
 
-  @ApiPropertyOptional({ type: [String], example: ["19:00", "20:00"], minItems: 2, maxItems: 6 })
+  @ApiPropertyOptional({ type: [String], example: ["19:00", "20:00"], minItems: 1, maxItems: 6 })
   @IsOptional()
   @IsArray()
-  @ArrayMinSize(2)
+  @ArrayMinSize(1)
   @ArrayMaxSize(6)
   @IsString({ each: true })
   @Matches(LOCAL_TIME_PATTERN, { each: true })
@@ -112,10 +112,10 @@ export class PatchMatchDto {
   @IsIn(matchTimeModes)
   timeMode?: (typeof matchTimeModes)[number];
 
-  @ApiPropertyOptional({ type: [String], minItems: 2, maxItems: 6 })
+  @ApiPropertyOptional({ type: [String], minItems: 1, maxItems: 6 })
   @IsOptional()
   @IsArray()
-  @ArrayMinSize(2)
+  @ArrayMinSize(1)
   @ArrayMaxSize(6)
   @IsString({ each: true })
   @Matches(LOCAL_TIME_PATTERN, { each: true })
@@ -234,6 +234,15 @@ export class VoteCorrectionDto {
   @IsString()
   @Matches(LOCAL_TIME_PATTERN)
   availableAfter?: string | null;
+
+  @ApiPropertyOptional({ type: [String], minItems: 1, maxItems: 6, example: ["19:00", "20:00"] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(6)
+  @IsString({ each: true })
+  @Matches(LOCAL_TIME_PATTERN, { each: true })
+  exactTimes?: string[];
 }
 
 export class ExternalParticipantCreateDto {

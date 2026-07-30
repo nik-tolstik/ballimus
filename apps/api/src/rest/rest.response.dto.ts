@@ -78,6 +78,9 @@ export class MatchVoteResponseDto {
   @ApiProperty({ type: String, nullable: true, example: "19:00" })
   availableAfter!: string | null;
 
+  @ApiProperty({ type: [String], example: ["19:00", "20:00"] })
+  exactTimes!: string[];
+
   @ApiProperty({ type: String, enum: ["telegram_callback", "owner_correction"] })
   source!: "telegram_callback" | "owner_correction";
 
@@ -155,8 +158,8 @@ export class MatchResponseDto {
   @ApiProperty({ type: String, format: "date-time", nullable: true })
   scheduledAt!: string | null;
 
-  @ApiProperty({ type: String, enum: ["exact", "availability"] })
-  timeMode!: "exact" | "availability";
+  @ApiProperty({ type: String, enum: ["exact", "exact_options", "availability"] })
+  timeMode!: "exact" | "exact_options" | "availability";
 
   @ApiProperty({ type: [String], example: ["19:00", "20:00"] })
   timeOptions!: string[];

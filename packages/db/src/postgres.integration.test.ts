@@ -120,7 +120,7 @@ describe("PostgreSQL baseline migration and repositories", () => {
     const migrationRows = await database.sql.unsafe<{ hash: string; created_at: string }[]>(
       `select hash, created_at from ${quoteIdentifier(database.migrationSchemaName)}."__drizzle_migrations"`,
     );
-    expect(migrationRows).toHaveLength(4);
+    expect(migrationRows).toHaveLength(6);
     expect(migrationRows[0]?.hash).toMatch(/^[a-f0-9]{64}$/u);
 
     const constraintRows = await database.sql<{ conname: string }[]>`
@@ -261,6 +261,92 @@ describe("PostgreSQL baseline migration and repositories", () => {
     }
   }, TEST_TIMEOUT_MS);
 
+  it("stores a match with one after-time availability option", async () => {
+    const match = await new MatchesRepository(database.db).create({
+      telegramChatId: CHAT_ID,
+      scheduledAt: null,
+      scheduleDate: "2026-08-02",
+      timeMode: "availability",
+      timeOptions: ["19:00"],
+      location: "Local flexible field",
+      requiredPlayers: 2,
+      creatorTelegramUserId: OWNER_ID,
+      status: "active",
+    });
+
+    expect(match).toMatchObject({ timeMode: "availability", timeOptions: ["19:00"] });
+
+    const exactOptionsMatch = await new MatchesRepository(database.db).create({
+      telegramChatId: CHAT_ID,
+      scheduledAt: null,
+      scheduleDate: "2026-08-03",
+      timeMode: "exact_options",
+      timeOptions: ["19:00", "20:00"],
+      location: "Exact options field",
+      requiredPlayers: 2,
+      creatorTelegramUserId: OWNER_ID,
+      status: "active",
+    });
+    await runVoteChangeTransaction(database.db, {
+      updateId: 10_091n,
+      matchId: exactOptionsMatch.id,
+      identity: identity(20_091n, "exact_early_one", "Early one"),
+      option: "going",
+      availableAfter: "19:00",
+    });
+    await runVoteChangeTransaction(database.db, {
+      updateId: 10_094n,
+      matchId: exactOptionsMatch.id,
+      identity: identity(20_091n, "exact_early_one", "Early one"),
+      option: "going",
+      availableAfter: "20:00",
+    });
+    expect(await new VotesRepository(database.db).find(exactOptionsMatch.id, 20_091n)).toMatchObject({
+      availableAfter: null,
+      exactTimes: ["19:00", "20:00"],
+    });
+    await runVoteChangeTransaction(database.db, {
+      updateId: 10_092n,
+      matchId: exactOptionsMatch.id,
+      identity: identity(20_092n, "exact_early_two", "Early two"),
+      option: "going",
+      availableAfter: "19:00",
+    });
+    await runVoteChangeTransaction(database.db, {
+      updateId: 10_093n,
+      matchId: exactOptionsMatch.id,
+      identity: identity(20_093n, "exact_late", "Late"),
+      option: "going",
+      availableAfter: "20:00",
+    });
+    const exactCounts = new VotesRepository(database.db);
+    expect(await exactCounts.rosterCounts(exactOptionsMatch.id)).toMatchObject({ goingVotes: 2, thresholdReached: true });
+    await runVoteChangeTransaction(database.db, {
+      updateId: 10_095n,
+      matchId: exactOptionsMatch.id,
+      identity: identity(20_091n, "exact_early_one", "Early one"),
+      option: "going",
+      availableAfter: "19:00",
+    });
+    expect(await exactCounts.find(exactOptionsMatch.id, 20_091n)).toMatchObject({ exactTimes: ["20:00"] });
+    const removed = await runVoteChangeTransaction(database.db, {
+      updateId: 10_096n,
+      matchId: exactOptionsMatch.id,
+      identity: identity(20_091n, "exact_early_one", "Early one"),
+      option: "going",
+      availableAfter: "20:00",
+    });
+    expect(removed.status).toBe("removed");
+    expect(await exactCounts.find(exactOptionsMatch.id, 20_091n)).toBeUndefined();
+    expect(await exactCounts.rosterCounts(exactOptionsMatch.id)).toMatchObject({ goingVotes: 1, thresholdReached: false });
+    await new MatchesRepository(database.db).transitionStatus(exactOptionsMatch.id, {
+      to: "confirmed",
+      scheduledAt: new Date("2026-08-03T17:00:00.000Z"),
+      selectedTime: "20:00",
+    });
+    expect(await exactCounts.rosterCounts(exactOptionsMatch.id)).toMatchObject({ goingVotes: 1, thresholdReached: false });
+  }, TEST_TIMEOUT_MS);
+
   it("stores availability votes and counts only players eligible for the confirmed time", async () => {
     const match = await new MatchesRepository(database.db).create({
       telegramChatId: CHAT_ID,
@@ -307,6 +393,49 @@ describe("PostgreSQL baseline migration and repositories", () => {
       identity: identity(20_103n, "invalid_player", "Invalid"),
       option: "going",
     })).rejects.toThrow("availableAfter must be one of the match time options");
+  }, TEST_TIMEOUT_MS);
+
+  it("keeps going votes when their poll-specific time selections are cleared", async () => {
+    const match = await new MatchesRepository(database.db).create({
+      telegramChatId: CHAT_ID,
+      scheduledAt: null,
+      scheduleDate: "2026-08-02",
+      timeMode: "availability",
+      timeOptions: ["20:00"],
+      location: "Local flexible field",
+      requiredPlayers: 2,
+      creatorTelegramUserId: OWNER_ID,
+      status: "active",
+    });
+    await runVoteChangeTransaction(database.db, {
+      updateId: 10_111n,
+      matchId: match.id,
+      identity: identity(20_111n, "fixed_time_player", "Fixed time"),
+      option: "going",
+      availableAfter: "20:00",
+    });
+    await runVoteChangeTransaction(database.db, {
+      updateId: 10_112n,
+      matchId: match.id,
+      identity: identity(20_112n, "maybe_player", "Maybe"),
+      option: "maybe",
+    });
+
+    const votes = new VotesRepository(database.db);
+    const cleared = await votes.clearGoingTimeSelections(match.id, timestamp(10));
+
+    expect(cleared).toHaveLength(1);
+    expect(cleared[0]).toMatchObject({
+      telegramUserId: 20_111n,
+      option: "going",
+      availableAfter: null,
+      exactTimes: [],
+    });
+    expect(await votes.listByMatchId(match.id)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ telegramUserId: 20_111n, option: "going" }),
+      expect.objectContaining({ telegramUserId: 20_112n, option: "maybe" }),
+    ]));
+    expect(await votes.rosterCounts(match.id)).toMatchObject({ goingVotes: 1, goingCount: 1 });
   }, TEST_TIMEOUT_MS);
 
   it("binds a normalized pre-created alias once, tracks username changes, and keeps no-username identity stable", async () => {
@@ -814,6 +943,50 @@ describe("PostgreSQL baseline migration and repositories", () => {
     const deliveredEvent = await outbox.markDelivered(inserted.event.id, timestamp(16));
     expect(deliveredEvent).toMatchObject({ deliveryState: "delivered", deliveredAt: timestamp(16) });
     expect(await outbox.listUncertain()).toHaveLength(0);
+  }, TEST_TIMEOUT_MS);
+
+  it("automatically retries only weather claims that failed before Telegram delivery", async () => {
+    const notifications = new NotificationsRepository(database.db);
+    const input = {
+      telegramChatId: CHAT_ID,
+      weatherDay: "2026-08-04",
+      transitionKey: "forecast:-100700001:2026-08-04",
+      claimedAt: timestamp(1),
+    } as const;
+    const first = await notifications.claimWeatherForecastDay(input);
+    expect(first.status).toBe("claimed");
+    if (first.status !== "claimed") throw new Error("expected the initial weather claim");
+
+    await notifications.markFailed(first.notification.id, "Provider timeout", timestamp(2));
+    const retried = await notifications.claimWeatherForecastDay({
+      ...input,
+      claimedAt: timestamp(3),
+    });
+    expect(retried).toMatchObject({
+      status: "claimed",
+      notification: {
+        id: first.notification.id,
+        deliveryState: "pending",
+        sentAt: null,
+        uncertainAt: null,
+        lastError: null,
+      },
+    });
+    if (retried.status !== "claimed") throw new Error("expected the failed weather claim to retry");
+
+    await notifications.markUncertain(retried.notification.id, "Telegram outcome unknown", timestamp(4));
+    const duplicate = await notifications.claimWeatherForecastDay({
+      ...input,
+      claimedAt: timestamp(5),
+    });
+    expect(duplicate).toMatchObject({
+      status: "duplicate",
+      notification: {
+        id: first.notification.id,
+        deliveryState: "uncertain",
+        lastError: "Telegram outcome unknown",
+      },
+    });
   }, TEST_TIMEOUT_MS);
 
   it("prevents overlapping job leases, allows expiry takeover, and rejects stale completion", async () => {

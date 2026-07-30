@@ -317,11 +317,14 @@ export function validateCreateMatchInput(input: unknown): ValidationResult<Creat
       );
     }
   }
-  if (timeMode === "availability" && time !== null) {
-    addIssue(issues, "time", "invalid_value", "time must be null in availability mode");
+  if (timeMode !== "exact" && time !== null) {
+    addIssue(issues, "time", "invalid_value", "time must be null in time-option modes");
   }
-  if (timeMode === "availability" && (timeOptions?.length ?? 0) < MIN_AVAILABILITY_TIME_OPTIONS) {
-    addIssue(issues, "timeOptions", "invalid_value", "availability mode requires at least two time options");
+  if (timeMode === "exact" && time === null) {
+    addIssue(issues, "time", "invalid_value", "time is required in exact mode");
+  }
+  if (timeMode !== "exact" && (timeOptions?.length ?? 0) < MIN_AVAILABILITY_TIME_OPTIONS) {
+    addIssue(issues, "timeOptions", "invalid_value", "time-option modes require at least one time option");
   }
   if (timeMode === "exact" && (timeOptions?.length ?? 0) > 0) {
     addIssue(issues, "timeOptions", "invalid_value", "exact mode cannot contain availability time options");

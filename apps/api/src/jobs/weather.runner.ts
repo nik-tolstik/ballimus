@@ -40,6 +40,7 @@ export interface WeatherNotificationRepository {
   ): Promise<NotificationClaimResult>;
   markSent(id: bigint, sentAt?: Date, payload?: Record<string, unknown>): Promise<Notification>;
   markFailed(id: bigint, error: string, failedAt?: Date): Promise<Notification>;
+  markUncertain(id: bigint, error: string, uncertainAt?: Date): Promise<Notification>;
 }
 
 export interface WeatherRunSummary {
@@ -124,14 +125,26 @@ export class WeatherRunner {
       }
       claimed += 1;
 
+      let text: string;
       try {
         const forecast = await this.forecasts.getForecast(match, referenceTime);
-        const text = formatWeatherForecastNotification(
+        text = formatWeatherForecastNotification(
           forecast,
           match.scheduledAt,
           referenceTime,
           MINSK_TIMEZONE,
         );
+      } catch (error) {
+        await this.notifications.markFailed(
+          claim.notification.id,
+          errorText(error),
+          referenceTime,
+        );
+        failed += 1;
+        continue;
+      }
+
+      try {
         await this.effects.sendMessage({
           chatId: match.chatId,
           text,
@@ -145,7 +158,7 @@ export class WeatherRunner {
         });
         sent += 1;
       } catch (error) {
-        await this.notifications.markFailed(
+        await this.notifications.markUncertain(
           claim.notification.id,
           errorText(error),
           referenceTime,

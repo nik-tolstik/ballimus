@@ -24,6 +24,7 @@ import { API_CONFIG, type ApiConfig } from "../config/api-config.js";
 import {
   canonicalGeneralTopicId,
   callbackDataForAvailability,
+  callbackDataForExactTimeOption,
   callbackDataForVote,
   isConfiguredGeneralTopic,
   type TelegramCallbackSource,
@@ -73,13 +74,15 @@ export function publicCardSendOptions(generalTopicId: bigint): Pick<TelegramSend
 
 export function publicCardKeyboard(match: DatabaseMatch): InlineKeyboardMarkup {
   const matchId = match.id;
-  if (match.timeMode === "availability" && match.selectedTime === null) {
+  if (match.timeMode !== "exact" && match.selectedTime === null) {
     const options = match.timeOptions;
     const availabilityRows: InlineKeyboardMarkup["inline_keyboard"] = [];
     for (let index = 0; index < options.length; index += 2) {
       availabilityRows.push(options.slice(index, index + 2).map((time) => ({
-        text: `После ${time}`,
-        callback_data: callbackDataForAvailability(matchId, time),
+        text: match.timeMode === "availability" ? `После ${time}` : time,
+        callback_data: match.timeMode === "availability"
+          ? callbackDataForAvailability(matchId, time)
+          : callbackDataForExactTimeOption(matchId, time),
       })));
     }
     return {
@@ -131,6 +134,7 @@ function toDomainVote(vote: DatabaseVote): DomainVote {
     displayNameSnapshot: vote.displayNameSnapshot,
     option: vote.option,
     availableAfter: vote.availableAfter,
+    exactTimes: vote.exactTimes,
     updatedAt: vote.updatedAt,
   };
 }

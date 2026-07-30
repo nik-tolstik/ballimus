@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { DatePicker, TimePicker } from './date-time-picker'
 
 export type VenueType = 'outdoor' | 'indoor'
+type TimeFormat = 'exact' | 'availability'
 
 export interface EditorValues {
   readonly date: string
@@ -35,10 +36,10 @@ export function validateEditorValues(values: EditorValues): string | undefined {
   if (values.timeMode === 'exact' && !/^(?:[01]\d|2[0-3]):[0-5]\d$/u.test(values.time)) {
     return 'Выберите точное время матча.'
   }
-  if (values.timeMode === 'availability') {
+  if (values.timeMode !== 'exact') {
     const uniqueOptions = new Set(values.timeOptions)
-    if (values.timeOptions.length < 2 || values.timeOptions.length > 6 || uniqueOptions.size !== values.timeOptions.length || values.timeOptions.some((value) => !/^(?:[01]\d|2[0-3]):[0-5]\d$/u.test(value))) {
-      return 'Добавьте от двух до шести разных вариантов времени.'
+    if (values.timeOptions.length < 1 || values.timeOptions.length > 6 || uniqueOptions.size !== values.timeOptions.length || values.timeOptions.some((value) => !/^(?:[01]\d|2[0-3]):[0-5]\d$/u.test(value))) {
+      return 'Добавьте от одного до шести разных вариантов времени.'
     }
   }
   if (values.location.trim() !== '' && values.location.trim().length < 2) {
@@ -69,22 +70,27 @@ function nextAvailabilityTime(values: readonly string[]): string | undefined {
 
 function initialMatchTimes(match: NormalizedMatch | undefined): string[] {
   if (match === undefined) return ['']
-  if (match.timeMode === 'availability' && match.timeOptions.length > 0) return [...match.timeOptions]
+  if (match.timeMode !== 'exact' && match.timeOptions.length > 0) return [...match.timeOptions]
   return [match.time]
 }
 
-export function editorTimeConfiguration(matchTimes: readonly string[]): Pick<EditorValues, 'time' | 'timeMode' | 'timeOptions'> {
+export function editorTimeConfiguration(matchTimes: readonly string[], timeFormat: TimeFormat): Pick<EditorValues, 'time' | 'timeMode' | 'timeOptions'> {
   const normalizedTimes = matchTimes.map((value) => value.trim()).sort()
-  const timeMode: NormalizedTimeMode = normalizedTimes.length === 1 ? 'exact' : 'availability'
+  const timeMode: NormalizedTimeMode = timeFormat === 'availability'
+    ? 'availability'
+    : normalizedTimes.length > 1
+      ? 'exact_options'
+      : 'exact'
   return {
     time: timeMode === 'exact' ? normalizedTimes[0] ?? '' : '',
     timeMode,
-    timeOptions: timeMode === 'availability' ? normalizedTimes : [],
+    timeOptions: timeMode !== 'exact' ? normalizedTimes : [],
   }
 }
 
 export function MatchEditor({ match, onSave, conflict, onClearConflict, saving }: MatchEditorProps) {
   const [date, setDate] = useState(match?.date ?? '')
+  const [timeFormat, setTimeFormat] = useState<TimeFormat>(match?.timeMode === 'availability' ? 'availability' : 'exact')
   const [matchTimes, setMatchTimes] = useState<string[]>(() => initialMatchTimes(match))
   const [location, setLocation] = useState(match?.location === 'Место уточняется' ? '' : match?.location ?? '')
   const [venueType, setVenueType] = useState<VenueType | ''>(match?.venueType ?? 'outdoor')
@@ -94,7 +100,7 @@ export function MatchEditor({ match, onSave, conflict, onClearConflict, saving }
 
   const submit = () => {
     const threshold = Number(requiredPlayers)
-    const timeConfiguration = editorTimeConfiguration(matchTimes)
+    const timeConfiguration = editorTimeConfiguration(matchTimes, timeFormat)
     const values: EditorValues = {
       date,
       ...timeConfiguration,
@@ -140,7 +146,25 @@ export function MatchEditor({ match, onSave, conflict, onClearConflict, saving }
 
           <Field data-invalid={validation !== '' && matchTimes.some((value) => value === '')}>
             <FieldLabel>Время</FieldLabel>
-            <FieldDescription>{matchTimes.length === 1 ? 'Игроки ответят «Буду», «Под вопросом» или «Не смогу».' : 'Игроки выберут самое раннее время, после которого смогут приехать.'}</FieldDescription>
+            <RadioGroup
+              value={timeFormat}
+              onValueChange={(value) => {
+                setTimeFormat(value as TimeFormat)
+                setValidation('')
+              }}
+              className="grid grid-cols-2 gap-2"
+              aria-label="Формат времени"
+            >
+              <Field orientation="horizontal" className="rounded-lg border border-border p-3">
+                <RadioGroupItem id="time-mode-exact" value="exact" />
+                <FieldLabel htmlFor="time-mode-exact" className="font-normal">{matchTimes[0] || 'Точное время'}</FieldLabel>
+              </Field>
+              <Field orientation="horizontal" className="rounded-lg border border-border p-3">
+                <RadioGroupItem id="time-mode-availability" value="availability" />
+                <FieldLabel htmlFor="time-mode-availability" className="font-normal">{matchTimes[0] ? `После ${matchTimes[0]}` : 'После времени'}</FieldLabel>
+              </Field>
+            </RadioGroup>
+            <FieldDescription>{timeFormat === 'exact' ? (matchTimes.length === 1 ? 'Матч начнётся в указанное время.' : 'Игроки выберут один из точных вариантов времени.') : 'Игроки выберут самое раннее время, после которого смогут приехать.'}</FieldDescription>
             <FieldGroup className="gap-2">
               {matchTimes.map((option, index) => <Field key={index} orientation={matchTimes.length > 1 ? 'horizontal' : 'vertical'} className={matchTimes.length > 1 ? 'grid min-w-0 grid-cols-[minmax(0,1fr)_2.5rem] gap-2' : 'min-w-0'}>
                 <div className="min-w-0">

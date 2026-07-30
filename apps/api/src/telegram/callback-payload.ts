@@ -80,9 +80,9 @@ export function parseTelegramCallbackPayload(value: unknown): TelegramCallbackPa
   if (parts[0] === "vote" && isVoteOption(action)) {
     return { kind: "vote", matchId, option: action };
   }
-  const availabilityMatch = /^after_((?:[01]\d|2[0-3])[0-5]\d)$/u.exec(action);
-  if (parts[0] === "vote" && availabilityMatch?.[1] !== undefined) {
-    const compactTime = availabilityMatch[1];
+  const timeOptionMatch = /^(?:after|at)_((?:[01]\d|2[0-3])[0-5]\d)$/u.exec(action);
+  if (parts[0] === "vote" && timeOptionMatch?.[1] !== undefined) {
+    const compactTime = timeOptionMatch[1];
     return {
       kind: "vote",
       matchId,
@@ -105,6 +105,11 @@ export function callbackDataForVote(matchId: bigint, option: VoteOption): string
 export function callbackDataForAvailability(matchId: bigint, time: string): string {
   if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/u.test(time)) throw new TypeError("time must use HH:mm");
   return `vote:${matchId.toString(10)}:after_${time.replace(":", "")}`;
+}
+
+export function callbackDataForExactTimeOption(matchId: bigint, time: string): string {
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/u.test(time)) throw new TypeError("time must use HH:mm");
+  return `vote:${matchId.toString(10)}:at_${time.replace(":", "")}`;
 }
 
 function callbackIdentifier(

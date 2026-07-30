@@ -2,7 +2,7 @@
 
 Football Bot coordinates football matches through a Telegram public match card and an owner-only Telegram Mini App. The maintained application is a pnpm workspace with a NestJS API, a React/Vite frontend, PostgreSQL persistence, generated OpenAPI client code, and short-lived background jobs.
 
-Production is not claimed to be deployed. Railway topology and the production handoff are documented in [the Railway runbook](docs/railway.md). Deployment, Telegram webhook registration, Mini App URL changes, and BotFather changes require explicit owner authorization.
+Production is not claimed to be deployed. The Vercel/Railway topology, test-group validation, and clean production cutover are documented in [the production runbook](docs/railway.md). Deployment, Telegram webhook registration, Mini App URL changes, and BotFather changes require explicit owner authorization.
 
 ## Current architecture
 
@@ -16,13 +16,14 @@ Telegram members vote on buttons in the public card in the configured `General` 
 
 ## Start here
 
+- [How the application works and how to run it](docs/application-guide.md)
 - [Documentation index](docs/README.md)
 - [Architecture](docs/architecture.md)
 - [Bot and Mini App guide](docs/bot-guide.md)
 - [Development guide](docs/development.md)
 - [Project structure](docs/project-structure.md)
 - [Local PostgreSQL](docs/local-postgres.md)
-- [Railway topology and runbook](docs/railway.md)
+- [Vercel and Railway production runbook](docs/railway.md)
 
 ## Quality gates
 
@@ -38,3 +39,28 @@ pnpm api:contracts:check
 ```
 
 Use the API, web, PostgreSQL, authentication-fixture, and jobs commands in the [development guide](docs/development.md) for the maintained platform.
+
+## Quick local Telegram launch
+
+For the first setup, create a test-only `.env.local`, fill in the Telegram values described in the [application guide](docs/application-guide.md), and authenticate ngrok:
+
+```bash
+pnpm install --frozen-lockfile
+cp .env.local.example .env.local
+ngrok config add-authtoken <ngrok-authtoken>
+```
+
+Then start each development session with:
+
+```bash
+pnpm dev:ngrok -- --register-webhook
+```
+
+The command starts local PostgreSQL, applies migrations, opens the API and Web tunnels, starts NestJS and Vite, and registers the dynamic webhook URL. It prints the Mini App URL to open from the configured test bot. Background work is intentionally one-shot and can be run from another terminal:
+
+```bash
+set -a
+source .env.local
+set +a
+pnpm --filter @football/api jobs:run
+```

@@ -18,7 +18,7 @@ export interface MatchCreateDto {
   time: string | null;
   timeMode?: MatchCreateDtoTimeMode;
   /**
-   * @minItems 2
+   * @minItems 1
    * @maxItems 6
    */
   timeOptions?: string[];

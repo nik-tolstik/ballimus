@@ -181,7 +181,32 @@ export class NotificationsRepository {
     if (created !== undefined) return { status: "claimed", notification: created };
     const existing = await this.findWeather(telegramChatId, weatherDay);
     if (existing === undefined) throw new RepositoryConflictError("Weather notification claim was lost concurrently");
-    return { status: "duplicate", notification: existing };
+    if (existing.deliveryState !== "failed") {
+      return { status: "duplicate", notification: existing };
+    }
+
+    const retried = await this.db
+      .update(notifications)
+      .set({
+        transitionKey,
+        deliveryState: "pending",
+        sentAt: null,
+        uncertainAt: null,
+        lastError: null,
+        ...(input.payload === undefined ? {} : { payload: jsonPayload(input.payload) }),
+        updatedAt: now,
+      })
+      .where(and(
+        eq(notifications.id, existing.id),
+        eq(notifications.deliveryState, "failed"),
+      ))
+      .returning();
+    const retry = retried[0];
+    if (retry !== undefined) return { status: "claimed", notification: retry };
+
+    const current = await this.findWeather(telegramChatId, weatherDay);
+    if (current === undefined) throw new RepositoryConflictError("Weather notification retry was lost concurrently");
+    return { status: "duplicate", notification: current };
   }
 
   public async findWeather(telegramChatId: DatabaseIdentifier, weatherDay: string): Promise<Notification | undefined> {

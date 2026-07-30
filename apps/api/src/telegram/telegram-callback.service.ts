@@ -91,7 +91,9 @@ function callbackAnswerText(result: TelegramVoteResult): string {
     case "inactive":
       return "Матч больше не принимает голоса";
     case "applied":
-      return "Голос сохранён";
+      return result.match.timeMode === "exact_options" ? "Выбор времени обновлён" : "Голос сохранён";
+    case "removed":
+      return "Выбор времени снят";
   }
 }
 
@@ -113,7 +115,7 @@ function refreshEventFactory(
   apiConfig: ApiConfig,
 ): EventFactory<TelegramVoteResult> {
   return async (result, repositories): Promise<readonly InsertOutboxEventInput[]> => {
-    if (result.status !== "applied" || payload.kind !== "vote") return [];
+    if ((result.status !== "applied" && result.status !== "removed") || payload.kind !== "vote") return [];
     const notification = await claimThresholdNotificationEvent(
       repositories,
       result,
@@ -195,7 +197,7 @@ export async function processTelegramCallback(
   );
 
   await answerSafely(dependencies.effects, query.id, callbackAnswerText(result));
-  if (result.status === "applied") {
+  if (result.status === "applied" || result.status === "removed") {
     if (dependencies.dispatchOutboxBestEffort === undefined) {
       try {
         await dependencies.cards.refreshPublicCard(result.match.id);
@@ -219,7 +221,7 @@ export async function processTelegramCallback(
     return { status: "applied", updateId, matchId: result.match.id };
   }
   if (result.status === "duplicate") return { status: "duplicate", updateId: result.updateId };
-  return { status: "inactive", updateId: result.updateId };
+  return { status: "inactive", updateId };
 }
 
 @Injectable()

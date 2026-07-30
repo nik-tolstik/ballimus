@@ -1,38 +1,38 @@
-# Railway Topology and Runbook
+# Vercel and Railway Production Runbook
 
-This document describes the intended production shape. It is not evidence that production is deployed. The migration work log records that production changes are currently unauthorized.
+This document describes the intended production deployment and the validation-to-production cutover. It is not evidence that production is deployed.
 
-## Authorization gate
+## Authorization boundary
 
-The following actions require explicit owner authorization immediately before they are performed:
+The repository owner must explicitly authorize production infrastructure changes, PostgreSQL migrations, Telegram webhook changes, and BotFather Mini App changes. Production secrets must stay in provider variables or ignored local files and must never be committed.
 
-- creating or changing Railway production services, variables, domains, or deployments;
-- applying a production PostgreSQL migration;
-- registering, changing, or deleting the production Telegram webhook;
-- setting the production Mini App URL, menu button, or Main Mini App in BotFather.
+The initial validation uses a separate production bot in the existing `Футбол тест` forum group. The local dev bot, local PostgreSQL, ngrok webhook, and `.env.local` remain unchanged. Copy `.env.production.local.example` to `.env.production.local` for the production Telegram inputs; the populated file is ignored by Git.
 
-Do not use a local tunnel, test bot, local database, or local web origin as a production substitute. Do not infer authorization from a successful local quality gate.
-
-## Intended topology
+## Topology
 
 ```text
 Telegram Bot API -- HTTPS webhook --> Railway API service --+--> Railway PostgreSQL
                                                           |
-Railway Cron service -- `pnpm --filter @football/api jobs:run` --> API job process
+Railway Cron service -- compiled jobs CLI -----------------+
 
-Telegram owner -- Mini App URL --> Railway Web service -- HTTPS /v1 --> API service
+Telegram owner -- Main Mini App --> Vercel Web -- HTTPS /v1 --> Railway API
 ```
 
-The production environment has four services/resources and no Railway staging environment:
+The stack contains these resources:
 
-1. **API service** — persistent NestJS process, built from `apps/api`, listening on `0.0.0.0:$PORT`. It serves `/health`, `/v1/*`, and `/telegram/webhook`; `/health` and `/telegram/webhook` are the relevant non-Mini-App HTTP boundaries, and the API has no public `/cron` route.
-2. **PostgreSQL service** — Railway-managed PostgreSQL. Its connection string is supplied to the API and Cron as `DATABASE_URL`.
-3. **Cron service** — the same repository and API package, invoking `pnpm --filter @football/api jobs:run` on a short schedule such as every five minutes. Each invocation acquires a database lease, drains retryable outbox work, runs weather work, and exits.
-4. **Web service** — the Vite production build from `apps/web`, exposed at a stable HTTPS origin. `VITE_API_BASE_URL` is public build-time configuration; it must not contain bot credentials.
+1. **Vercel Web** — the static React/Vite build from `apps/web`.
+2. **Railway API** — a persistent NestJS process listening on `0.0.0.0:$PORT`, with `/health`, `/v1/*`, and `/telegram/webhook`.
+3. **Railway Jobs** — a five-minute cron service that drains outbox work, runs weather work, and exits.
+4. **Railway PostgreSQL** — `Postgres-validation` during the test-group smoke test, then a new clean `Postgres` service for the real group.
 
-## Required configuration
+API and Jobs use the repository root because they share `packages/db` and `packages/domain`. Their service-specific Railway configuration files are:
 
-API and Cron need the same production values:
+- API: `/apps/api/railway.api.json`
+- Jobs: `/apps/api/railway.jobs.json`
+
+## Required variables
+
+API and Jobs require the same application values:
 
 ```text
 DATABASE_URL
@@ -49,82 +49,74 @@ GROUP_TIMEZONE=Europe/Minsk
 LOG_LEVEL=info
 ```
 
-The web build needs:
+Use a Railway reference variable for `DATABASE_URL`. During validation it points to `${{Postgres-validation.DATABASE_URL}}`; after cutover it points to `${{Postgres.DATABASE_URL}}`. Railway provides `PORT` to the API.
+
+Vercel receives only this public build-time variable, scoped to Production:
 
 ```text
-VITE_API_BASE_URL=https://<production-api-domain>
+VITE_API_BASE_URL=https://<railway-api-domain>
 ```
 
-Use Railway-provided `PORT` for the API. Keep the API `WEB_ORIGIN` exactly equal to the web service origin, with no path. Never expose `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, or `DATABASE_URL` to the web build.
+`WEB_ORIGIN` and `TELEGRAM_MINI_APP_URL` must both equal the exact Vercel production origin without a path. Never expose Telegram or PostgreSQL secrets to the Vercel build.
 
-## Release runbook
+## Release preparation
 
-Perform these steps only after the authorization gate is satisfied:
+Run the local quality gate from the repository root:
 
-1. Run the local quality gates from the repository root:
+```bash
+pnpm install --frozen-lockfile
+pnpm lint
+pnpm test
+pnpm typecheck
+pnpm db:check
+pnpm api:contracts:check
+pnpm build
+```
 
-   ```bash
-   pnpm install --frozen-lockfile
-   pnpm lint
-   pnpm test
-   pnpm typecheck
-   pnpm build
-   pnpm api:contracts:check
-   ```
+The GitHub `main` workflow runs the same checks against PostgreSQL 18. Railway API and Jobs autodeploy from `main` only after that workflow succeeds.
 
-2. Provision or verify the production PostgreSQL, API, Cron, and Web resources in the same Railway production environment. Confirm that the API and Cron point to the production `DATABASE_URL` and that Web has only `VITE_API_BASE_URL` as its API connection setting.
-3. Build the API and web artifacts using the repository commands:
+## Initial validation deployment
 
-   ```bash
-   pnpm --filter @football/api build
-   pnpm --filter @football/web build
-   ```
+1. Create the Vercel project with `apps/web` as its Root Directory, enable source files outside the Root Directory, set the build command to `pnpm --filter @football/web... build`, and set the output directory to `dist`.
+2. Create a Railway project in EU West with `Postgres-validation`, `api`, and `jobs`. Link API and Jobs to the GitHub repository and select their separate config file paths.
+3. Add the production bot to `Футбол тест` as an administrator. Configure API and Jobs with the production bot token and the existing test group/topic IDs.
+4. Generate the Railway API domain, set the reciprocal Vercel and Railway origins, and deploy API first. The API pre-deploy command applies the committed migrations before `/health` can pass.
+5. Deploy Vercel Web, then deploy Jobs. Confirm that one scheduled invocation completes and exits.
+6. Register `https://<railway-api-domain>/telegram/webhook` with the production bot token, the configured secret token, and `allowed_updates=["callback_query"]`.
+7. Set the Vercel origin as the bot's Main Mini App/menu URL in BotFather.
 
-   The API entry point is `apps/api/dist/main.js`; the web static output is `apps/web/dist`.
-4. Run the explicit production migration as the release step, before sending traffic to the API:
+## Test-group smoke test
 
-   ```bash
-   pnpm --filter @football/db db:migrate
-   ```
+1. Verify API health, exact-origin CORS, the Vercel production build, owner Mini App authentication, bot administrator rights, and `getWebhookInfo`.
+2. Create `[TEST] Deployment smoke` in the Mini App and wait for Jobs to publish the card in the test General topic.
+3. Cast one Telegram vote, repeat the callback once, and verify that the vote and card remain idempotent.
+4. Cancel the test match and wait until the final card update is delivered and retryable outbox work is empty.
+5. Disable the Jobs cron before the real-group cutover.
 
-   The API does not run migrations on startup. Verify the migration command used the intended production `DATABASE_URL` and did not use a local shell environment.
-5. Deploy the API and verify `GET https://<production-api-domain>/health` returns `{"status":"ok","service":"api",...}`. Verify CORS from the exact web origin and confirm API logs do not print secret values.
-6. Deploy the Web service with `VITE_API_BASE_URL=https://<production-api-domain>`. Open the resulting URL only for a read-only smoke check until the Mini App URL is authorized and configured.
-7. Configure the Cron service with the same API/database environment and the command `pnpm --filter @football/api jobs:run`. Confirm one invocation exits and reports its summary; do not run the API as a scheduler.
-8. After the API has a stable HTTPS domain, register the production webhook using the production bot token and secret. This is an owner-authorized operation; the following is a template, not a command to run automatically:
+## Clean real-group cutover
 
-   ```bash
-   curl --fail-with-body --silent --show-error --request POST \
-     "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
-     --data-urlencode "url=https://<production-api-domain>/telegram/webhook" \
-     --data-urlencode "secret_token=${TELEGRAM_WEBHOOK_SECRET}" \
-     --data-urlencode 'allowed_updates=["callback_query"]'
-   ```
+1. Add the production bot as an administrator in the real forum group and collect the group ID plus the General and notification topic IDs.
+2. Create a new `Postgres` service in EU West and enable daily backups. Do not reuse or truncate `Postgres-validation` in place.
+3. Stage the new database reference and all three real group/topic IDs for both API and Jobs before triggering either deployment.
+4. Deploy API first. Its pre-deploy migration must succeed against the clean database and `/health` must pass.
+5. Deploy Jobs, restore the five-minute cron schedule, and confirm that an empty run exits successfully.
+6. Recheck the Mini App bootstrap and webhook without publishing a test card in the real group.
+7. Remove the production bot from `Футбол тест` and delete `Postgres-validation` only after the new stack is verified.
 
-9. Verify the webhook with `getWebhookInfo`, then perform the authorized BotFather configuration: set the production Mini App URL and configure the menu/Main Mini App entry point. The owner must open the app from Telegram, not from a private command flow.
-10. Run the production smoke checklist below with the owner and record the deployment, migration, webhook, and BotFather results outside secrets.
+## Acceptance checklist
 
-## Production checklist
+- [ ] GitHub CI passes for the deployed commit.
+- [ ] Vercel serves the production Mini App with only `VITE_API_BASE_URL` exposed.
+- [ ] Railway API health and exact-origin CORS pass.
+- [ ] All six migrations are present in the active database ledger.
+- [ ] Jobs completes, exits, and respects the database lease.
+- [ ] The Telegram webhook uses the Railway API URL and secret-token validation.
+- [ ] The full publish/vote/idempotency/cancel flow passes in `Футбол тест`.
+- [ ] The real group uses a new clean PostgreSQL service and receives no smoke-test messages.
+- [ ] No local URL, dev bot, local database, or ngrok URL appears in production configuration.
 
-- [ ] Owner authorization is recorded for the release and each Telegram configuration change.
-- [ ] API, PostgreSQL, Cron, and Web are separate production resources; no staging resource is assumed.
-- [ ] API and Cron use production-only secrets and the intended Railway PostgreSQL URL.
-- [ ] Web exposes only the public API base URL and has the exact API CORS origin.
-- [ ] PostgreSQL migration completed explicitly before API traffic.
-- [ ] API `/health` is reachable and API startup succeeds without applying migrations.
-- [ ] Cron runs once, exits, respects the PostgreSQL lease, and reports outbox/weather results.
-- [ ] Webhook URL is the production API `/telegram/webhook`, and Telegram secret-token validation is enabled.
-- [ ] `getWebhookInfo` reports the intended webhook and allowed update set.
-- [ ] BotFather Mini App URL and menu/Main Mini App point to the production Web origin.
-- [ ] The owner can open the Mini App, pass signed init-data validation, and create one test match that is immediately queued for publication.
-- [ ] A group member can vote on the public card and the API refreshes the card through webhook/outbox handling.
-- [ ] A repeated callback or job run does not duplicate votes, notifications, or forecasts.
-- [ ] No local URL, local bot, local database, or temporary tunnel appears in production configuration.
+## Incident notes
 
-Until this checklist is authorized and completed, production status is **not deployed / not verified**.
+If initial card publication is marked `uncertain`, do not publish again blindly. Inspect the configured General topic. Attach the existing Telegram message ID if the card exists; retry only after confirming that it does not.
 
-## Incident and reconciliation notes
-
-If a public-card publication is marked `uncertain`, do not publish again blindly: Telegram may already contain the card. Inspect the configured General topic. If the card exists, use the Mini App repair action to attach its Telegram message ID; the API then refreshes it or deletes it when the match has already ended. Only after confirming that no card exists may the operator choose the retry action, which resets the reference to `pending` and queues one new initial publication. Record that decision during production acceptance.
-
-If Cron reports `busy`, another invocation owns the lease; wait for the next schedule instead of deleting job-claim rows.
+If Jobs reports `busy`, another invocation holds the lease. Wait for the next schedule instead of deleting job-claim rows.

@@ -20,7 +20,7 @@ export const venueTypes = ["outdoor", "indoor"] as const;
 
 export type VenueType = (typeof venueTypes)[number];
 
-export const matchTimeModes = ["exact", "availability"] as const;
+export const matchTimeModes = ["exact", "exact_options", "availability"] as const;
 
 export type MatchTimeMode = (typeof matchTimeModes)[number];
 
@@ -68,8 +68,10 @@ export interface Vote {
   readonly usernameSnapshot: string | null;
   readonly displayNameSnapshot: string;
   readonly option: VoteOption;
-  /** Earliest local time the player can attend in availability mode. */
+  /** Chosen exact option or earliest local time the player can attend in a time poll. */
   readonly availableAfter?: string | null;
+  /** Multiple precise options selected by the player in an exact-time poll. */
+  readonly exactTimes?: readonly string[];
   readonly updatedAt?: Date;
 }
 

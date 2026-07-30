@@ -88,11 +88,17 @@ function createHarness(
   dueMatches: readonly WeatherDueMatch[],
   options: {
     readonly claimResult?: NotificationClaimResult;
+    readonly forecastError?: Error;
     readonly sendError?: Error;
   } = {},
 ) {
   const listDueMatches = vi.fn<WeatherDueMatchProvider["listDueMatches"]>().mockResolvedValue(dueMatches);
-  const getForecast = vi.fn<WeatherForecastProvider["getForecast"]>().mockResolvedValue(FORECAST);
+  const getForecast = vi.fn<WeatherForecastProvider["getForecast"]>();
+  if (options.forecastError === undefined) {
+    getForecast.mockResolvedValue(FORECAST);
+  } else {
+    getForecast.mockRejectedValue(options.forecastError);
+  }
   const claimWeatherForecastDay = vi
     .fn<WeatherNotificationRepository["claimWeatherForecastDay"]>()
     .mockResolvedValue(options.claimResult ?? { status: "claimed", notification: notification(1n) });
@@ -110,6 +116,14 @@ function createHarness(
       lastError: error,
       updatedAt: failedAt ?? NOW,
     }));
+  const markUncertain = vi
+    .fn<WeatherNotificationRepository["markUncertain"]>()
+    .mockImplementation(async (id, error, uncertainAt) => notification(id, {
+      deliveryState: "uncertain",
+      uncertainAt: uncertainAt ?? NOW,
+      lastError: error,
+      updatedAt: uncertainAt ?? NOW,
+    }));
   const sendMessage = vi.fn<TelegramEffects["sendMessage"]>();
   if (options.sendError === undefined) {
     sendMessage.mockResolvedValue({ messageId: 99n });
@@ -123,6 +137,7 @@ function createHarness(
     claimWeatherForecastDay,
     markSent,
     markFailed,
+    markUncertain,
   };
   const effects = { sendMessage };
   const runner = new WeatherRunner(
@@ -140,6 +155,7 @@ function createHarness(
     claimWeatherForecastDay,
     markSent,
     markFailed,
+    markUncertain,
     sendMessage,
   };
 }
@@ -228,6 +244,7 @@ describe("WeatherRunner", () => {
     expect(harness.sendMessage).not.toHaveBeenCalled();
     expect(harness.markSent).not.toHaveBeenCalled();
     expect(harness.markFailed).not.toHaveBeenCalled();
+    expect(harness.markUncertain).not.toHaveBeenCalled();
   });
 
   it("sends the forecast to the configured topic and marks the claim sent", async () => {
@@ -255,7 +272,23 @@ describe("WeatherRunner", () => {
     });
   });
 
-  it("marks the claim failed when sending the forecast fails", async () => {
+  it("marks the claim failed when fetching the forecast fails", async () => {
+    const forecastError = new Error("Open-Meteo unavailable");
+    const harness = createHarness(
+      [weatherMatch(1n, new Date(NOW.getTime() + WEATHER_FORECAST_LEAD_TIME_MS))],
+      { forecastError },
+    );
+
+    const result = await harness.runner.runOnce(NOW);
+
+    expect(result).toEqual({ candidates: 1, claimed: 1, duplicates: 0, sent: 0, failed: 1, skipped: 0 });
+    expect(harness.markFailed).toHaveBeenCalledWith(1n, "Open-Meteo unavailable", NOW);
+    expect(harness.markUncertain).not.toHaveBeenCalled();
+    expect(harness.sendMessage).not.toHaveBeenCalled();
+    expect(harness.markSent).not.toHaveBeenCalled();
+  });
+
+  it("marks the claim uncertain when sending the forecast fails", async () => {
     const sendError = new Error("Telegram unavailable");
     const harness = createHarness(
       [weatherMatch(1n, new Date(NOW.getTime() + WEATHER_FORECAST_LEAD_TIME_MS))],
@@ -265,7 +298,8 @@ describe("WeatherRunner", () => {
     const result = await harness.runner.runOnce(NOW);
 
     expect(result).toEqual({ candidates: 1, claimed: 1, duplicates: 0, sent: 0, failed: 1, skipped: 0 });
-    expect(harness.markFailed).toHaveBeenCalledWith(1n, "Telegram unavailable", NOW);
+    expect(harness.markUncertain).toHaveBeenCalledWith(1n, "Telegram unavailable", NOW);
+    expect(harness.markFailed).not.toHaveBeenCalled();
     expect(harness.markSent).not.toHaveBeenCalled();
   });
 });

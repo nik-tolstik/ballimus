@@ -18,6 +18,7 @@ import {
   type TelegramVoteTransactionRunner,
 } from "./telegram-callback.service.js";
 import {
+  publicCardKeyboard,
   publicCardSendOptions,
   validatePublicCardSource,
 } from "./telegram-card.service.js";
@@ -219,12 +220,46 @@ describe("Telegram callback processing", () => {
       option: "going",
       availableAfter: "19:30",
     });
+    expect(parseTelegramCallbackPayload("vote:32:at_2000")).toEqual({
+      kind: "vote",
+      matchId: 32n,
+      option: "going",
+      availableAfter: "20:00",
+    });
     expect(parseTelegramCallbackPayload("match:32:confirm")).toEqual({
       kind: "owner",
       matchId: 32n,
       action: "confirm",
     });
     expect(parseTelegramCallbackPayload("match:32:unknown")).toBeUndefined();
+  });
+
+  it("renders distinct buttons for exact and after-time polls", () => {
+    const exactKeyboard = publicCardKeyboard({
+      ...match,
+      scheduledAt: null,
+      scheduleDate: "2026-08-03",
+      timeMode: "exact_options",
+      timeOptions: ["19:00", "20:00"],
+      selectedTime: null,
+    });
+    const afterKeyboard = publicCardKeyboard({
+      ...match,
+      scheduledAt: null,
+      scheduleDate: "2026-08-03",
+      timeMode: "availability",
+      timeOptions: ["19:00", "20:00"],
+      selectedTime: null,
+    });
+
+    expect(exactKeyboard.inline_keyboard[0]).toEqual([
+      { text: "19:00", callback_data: "vote:32:at_1900" },
+      { text: "20:00", callback_data: "vote:32:at_2000" },
+    ]);
+    expect(afterKeyboard.inline_keyboard[0]).toEqual([
+      { text: "После 19:00", callback_data: "vote:32:after_1900" },
+      { text: "После 20:00", callback_data: "vote:32:after_2000" },
+    ]);
   });
 
   it("requires the configured group, General topic, and stored published card", () => {
@@ -294,6 +329,33 @@ describe("Telegram callback processing", () => {
     expect(result).toEqual({ status: "applied", updateId: 900n, matchId: 32n });
     expect(events).toEqual(["transaction", "ack", "refresh"]);
     expect(deps.runVote).toHaveBeenCalledOnce();
+  });
+
+  it("acknowledges removal of the last exact-time choice and refreshes the card", async () => {
+    const counts = {
+      goingVotes: 0,
+      externalParticipants: 0,
+      goingCount: 0,
+      requiredPlayers: 3,
+      thresholdReached: false,
+      remainingToThreshold: 3,
+    };
+    const removedResult: TelegramVoteResult = {
+      status: "removed",
+      match: { ...match, timeMode: "exact_options" } as DatabaseMatch,
+      playerId: 100n,
+      countsBefore: { ...counts, goingVotes: 1, goingCount: 1, remainingToThreshold: 2 },
+      countsAfter: counts,
+      thresholdReached: false,
+      thresholdLost: false,
+    };
+    const deps = dependencies(removedResult);
+
+    const result = await processTelegramCallback(callbackContext("vote:32:at_1900", 904), deps);
+
+    expect(result).toEqual({ status: "applied", updateId: 904n, matchId: 32n });
+    expect(deps.answerCallbackQuery).toHaveBeenCalledWith("callback-1", { text: "Выбор времени снят" });
+    expect(deps.refreshPublicCard).toHaveBeenCalledOnce();
   });
 
   it("adds a durable Chat-topic notification when a real vote crosses the threshold", async () => {

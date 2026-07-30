@@ -27,6 +27,7 @@ import {
   parseLocalDateTime,
   parseOpenMeteoForecast,
   renderMatchCard,
+  selectedTimeForFinalTime,
   thresholdLostNotificationTransition,
   thresholdReachedNotificationTransition,
   transitionMatch,
@@ -115,6 +116,17 @@ describe("public domain entrypoint and validation", () => {
   });
 
   it("normalizes availability choices and calculates cumulative attendance", () => {
+    const singleOption = assertValidCreateMatchInput({
+      date: "2026-08-03",
+      time: null,
+      timeMode: "availability",
+      timeOptions: ["19:00"],
+      location: "Ракета",
+      venueType: "outdoor",
+      requiredPlayers: 3,
+    });
+    expect(singleOption.timeOptions).toEqual(["19:00"]);
+
     const matchInput = assertValidCreateMatchInput({
       date: "2026-08-03",
       time: null,
@@ -126,6 +138,17 @@ describe("public domain entrypoint and validation", () => {
     });
     expect(matchInput.timeOptions).toEqual(["19:00", "20:00"]);
 
+    const exactOptions = assertValidCreateMatchInput({
+      date: "2026-08-03",
+      time: null,
+      timeMode: "exact_options",
+      timeOptions: ["20:00", "19:00"],
+      location: "Ракета",
+      venueType: "outdoor",
+      requiredPlayers: 3,
+    });
+    expect(exactOptions.timeOptions).toEqual(["19:00", "20:00"]);
+
     const availabilityVotes: Vote[] = [
       { ...vote(1, "going"), availableAfter: "19:00" },
       { ...vote(2, "going"), availableAfter: "20:00" },
@@ -135,6 +158,14 @@ describe("public domain entrypoint and validation", () => {
     expect(cumulativeAvailabilityCount(availabilityVotes, "20:00", 1)).toBe(3);
     expect(isVoteEligibleForMatch({ timeMode: "availability", selectedTime: "19:00" }, availabilityVotes[0] as Vote)).toBe(true);
     expect(isVoteEligibleForMatch({ timeMode: "availability", selectedTime: "19:00" }, availabilityVotes[1] as Vote)).toBe(false);
+    const multipleExactTimesVote = { ...vote(4, "going"), exactTimes: ["19:00", "20:00"] };
+    expect(isVoteEligibleForMatch({ timeMode: "exact_options", selectedTime: "20:00" }, availabilityVotes[0] as Vote)).toBe(false);
+    expect(isVoteEligibleForMatch({ timeMode: "exact_options", selectedTime: "20:00" }, availabilityVotes[1] as Vote)).toBe(true);
+    expect(isVoteEligibleForMatch({ timeMode: "exact_options", selectedTime: "19:00" }, multipleExactTimesVote)).toBe(true);
+    expect(isVoteEligibleForMatch({ timeMode: "exact_options", selectedTime: "20:00" }, multipleExactTimesVote)).toBe(true);
+    expect(selectedTimeForFinalTime("exact_options", ["19:00", "20:00"], "20:00")).toBe("20:00");
+    expect(selectedTimeForFinalTime("exact_options", ["19:00", "20:00"], "20:30")).toBeUndefined();
+    expect(selectedTimeForFinalTime("availability", ["19:00", "20:00"], "20:30")).toBe("20:00");
   });
 });
 
@@ -285,6 +316,7 @@ describe("HTML-safe card formatting", () => {
     expect(card.text).toContain("От Никиты: 2");
     expect(card.text).not.toContain("От От Никиты");
     expect(card.text).toContain("От Ваня: 1");
+    expect(card.text).not.toContain("Не смогут (0)");
     expect(card.isActive).toBe(true);
   });
 
@@ -296,6 +328,54 @@ describe("HTML-safe card formatting", () => {
     expect(card.text.match(/<b>/gu)?.length).toBe(card.text.match(/<\/b>/gu)?.length);
     expect(card.text.match(/<i>/gu)?.length).toBe(card.text.match(/<\/i>/gu)?.length);
     expect(card.text).not.toContain("<Player");
+  });
+
+  it("shows the exact required player count without a cumulative availability summary", () => {
+    const card = renderMatchCard({
+      match: {
+        ...baseMatch,
+        requiredPlayers: 10,
+        scheduledAt: null,
+        scheduleDate: "2026-08-01",
+        timeMode: "availability",
+        timeOptions: ["19:00", "20:00"],
+        selectedTime: null,
+      },
+      votes: [{ ...vote(1, "going", "Никита"), availableAfter: "19:00" }],
+    });
+
+    expect(card.text).toContain("🏠 Формат: на улице, 10 человек");
+    expect(card.text).not.toContain("Доступны к времени:");
+    expect(card.text).not.toContain("К 19:00 —");
+    expect(card.text).not.toContain("К 20:00 —");
+    expect(card.text).toContain("<b>После 19:00 (1)</b>");
+    expect(card.text).toContain("<b>После 20:00 (0)</b>");
+  });
+
+  it("renders several exact time options without after-time labels", () => {
+    const card = renderMatchCard({
+      match: {
+        ...baseMatch,
+        requiredPlayers: 2,
+        scheduledAt: null,
+        scheduleDate: "2026-08-01",
+        timeMode: "exact_options",
+        timeOptions: ["19:00", "20:00"],
+        selectedTime: null,
+      },
+      votes: [
+        { ...vote(1, "going", "Никита"), exactTimes: ["19:00", "20:00"] },
+        { ...vote(2, "going", "Максим"), exactTimes: ["20:00"] },
+      ],
+    });
+
+    expect(card.text).not.toContain("🕒 Время: выбираем из вариантов");
+    expect(card.text).toContain("<b>19:00 (1)</b>");
+    expect(card.text).toContain("<b>20:00 (2)</b>");
+    expect(card.text.match(/Nikita|Никита/gu)).toHaveLength(2);
+    expect(card.text).not.toContain("После 19:00");
+    expect(card.text).not.toContain("Не смогут (0)");
+    expect(card.text).toContain("<b>👯 Состав 2/2</b>");
   });
 
   it("shows the booked exact time and separates players who cannot make it", () => {
@@ -390,7 +470,7 @@ describe("Minsk time and weather rules", () => {
       goingCount: 1,
       threshold: 1,
       eventKey: "1",
-      requiresFinalDetails: true,
+      requiresExactTime: true,
     });
     const lost = thresholdLostNotificationTransition({ matchId: -100, goingCount: 2, threshold: 3, eventKey: "2" });
     expect(first).toMatchObject({ notificationType: "threshold_reached", transitionKey: "threshold:reached:1" });
@@ -398,8 +478,35 @@ describe("Minsk time and weather rules", () => {
       "⚽ <b>Минимальный состав собран!</b>\n" +
       "<b>#v9 · 02.08.2026 · BOX365</b>\n" +
       "👥 Игроков: <b>1 из 1</b>\n\n" +
-      "Нужно указать точное время и место проведения матча.",
+      "Нужно указать точное время проведения матча.",
     );
+    expect(thresholdReachedNotificationTransition({
+      matchId: 10,
+      goingCount: 1,
+      threshold: 1,
+      eventKey: "location-only",
+      requiresLocation: true,
+    }).text).toContain("Нужно указать место проведения матча.");
+    expect(thresholdReachedNotificationTransition({
+      matchId: 11,
+      goingCount: 1,
+      threshold: 1,
+      eventKey: "time-and-location",
+      requiresExactTime: true,
+      requiresLocation: true,
+    }).text).toContain("Нужно указать точное время и место проведения матча.");
+    expect(thresholdReachedNotificationTransition({
+      matchId: 12,
+      goingCount: 1,
+      threshold: 1,
+      eventKey: "ready",
+    }).text).toContain("Матч готов к подтверждению.");
+    expect(thresholdReachedNotificationTransition({
+      matchId: 12,
+      goingCount: 1,
+      threshold: 1,
+      eventKey: "ready-without-brand",
+    }).text).not.toContain("Ballimus");
     expect(lost).toMatchObject({ notificationType: "threshold_lost", transitionKey: "threshold:lost:2" });
     expect(formatConfirmationNotification({
       scheduledAt: new Date("2026-08-01T15:30:00.000Z"),

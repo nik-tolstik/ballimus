@@ -20,6 +20,7 @@ export interface MatchVoteResponseDto {
   option: MatchVoteResponseDtoOption;
   /** @nullable */
   availableAfter: string | null;
+  exactTimes: string[];
   source: MatchVoteResponseDtoSource;
   /** @nullable */
   updatedAt: string | null;

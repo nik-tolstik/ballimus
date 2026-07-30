@@ -27,7 +27,7 @@ import {
 } from "./weather.runner.js";
 
 export const OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast" as const;
-export const WEATHER_PROVIDER_TIMEOUT_MS = 5_000;
+export const WEATHER_PROVIDER_TIMEOUT_MS = 15_000;
 
 /** Reads only the short future window in which the weather job can be eligible. */
 @Injectable()
@@ -87,6 +87,10 @@ export class DatabaseWeatherNotificationRepository implements WeatherNotificatio
 
   public markFailed(id: bigint, error: string, failedAt?: Date): Promise<Notification> {
     return this.notifications.markFailed(id, error, failedAt);
+  }
+
+  public markUncertain(id: bigint, error: string, uncertainAt?: Date): Promise<Notification> {
+    return this.notifications.markUncertain(id, error, uncertainAt);
   }
 }
 

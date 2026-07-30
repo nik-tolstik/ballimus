@@ -43,7 +43,7 @@ import App, { MatchEditor, TabBar } from './App'
 import { brandForEnvironment } from './brand'
 import { DatePicker } from './components/football/date-time-picker'
 import { editorTimeConfiguration, validateEditorValues } from './components/football/match-editor'
-import { availabilityCountAt, cancellationReasonText, CancellationReasonFields, initialsForName, MatchesPanel, MatchRoster, MatchSettings, PlayersPanel, rosterGroupCount, validateCancellationReason, validateExternalParticipantName, validateExternalParticipantValues, validateFinalMatchDetails, validatePlayerPseudonym, voteDropZoneStyle, voteOptionFromDropTarget } from './components/football/panels'
+import { availabilityCountAt, cancellationReasonText, CancellationReasonFields, initialsForName, MatchesPanel, MatchRoster, MatchSettings, PlayersPanel, rosterGroupCount, validateCancellationReason, validateExternalParticipantName, validateExternalParticipantValues, validateFinalMatchDetails, validatePlayerPseudonym, voteDropZoneStyle, voteOptionFromDropTarget, voteRemovalAction } from './components/football/panels'
 import type { NormalizedMatch, NormalizedPlayer } from './normalize'
 import type { TelegramSession } from './telegram'
 
@@ -131,7 +131,9 @@ describe('API-backed surface states', () => {
   it('renders an explicit empty state when normalized API data is absent', () => {
     const markup = renderApp()
     expect(markup).toContain('Матчей пока нет')
-    expect(markup).toContain('Создать матч')
+    expect(markup).not.toContain('Создайте матч — карточка сразу появится в группе Telegram.')
+    expect(markup).not.toContain('Создать матч')
+    expect(markup).toContain('Новый матч')
     expect(markup).not.toContain('Предпросмотр карточки Telegram')
     expect(markup).not.toContain('Владелец')
     expect(markup).toContain('Ballimus Dev')
@@ -322,7 +324,7 @@ describe('API-backed surface states', () => {
     const match = {
       ...normalizedMatch,
       roster: {
-        votes: [{ playerId: 'player-1', telegramUserId: '1', username: 'ivan', readableName: 'Иван Петров', avatarUrl: 'data:image/jpeg;base64,YXZhdGFy', option: 'going' as const }],
+        votes: [{ playerId: 'player-1', telegramUserId: '1', username: 'ivan', readableName: 'Иван Петров', avatarUrl: 'data:image/jpeg;base64,YXZhdGFy', option: 'going' as const, exactTimes: [] }],
         externalParticipants: [
           { id: 'external-1', displayName: 'От Никиты #1', quantity: 1 },
           { id: 'external-2', displayName: 'От Никиты #2', quantity: 1 },
@@ -366,8 +368,8 @@ describe('API-backed surface states', () => {
       timeOptions: ['19:00', '20:00'],
       roster: {
         votes: [
-          { playerId: 'player-1', telegramUserId: '1', username: 'early', readableName: 'Ранний', avatarUrl: undefined, option: 'going', availableAfter: '19:00' },
-          { playerId: 'player-2', telegramUserId: '2', username: 'late', readableName: 'Поздний', avatarUrl: undefined, option: 'going', availableAfter: '20:00' },
+          { playerId: 'player-1', telegramUserId: '1', username: 'early', readableName: 'Ранний', avatarUrl: undefined, option: 'going', availableAfter: '19:00', exactTimes: [] },
+          { playerId: 'player-2', telegramUserId: '2', username: 'late', readableName: 'Поздний', avatarUrl: undefined, option: 'going', availableAfter: '20:00', exactTimes: [] },
         ],
         externalParticipants: [{ id: 'external-1', displayName: 'От Никиты #1', quantity: 1 }],
       },
@@ -375,10 +377,43 @@ describe('API-backed surface states', () => {
     const markup = renderToStaticMarkup(<MatchRoster match={match} onCorrectVote={vi.fn(async () => undefined)} onRemoveVote={vi.fn()} onAddExternal={vi.fn()} onUpdateExternal={vi.fn()} onRemoveExternal={vi.fn()} disabled={false} />)
     expect(markup).toContain('После 19:00')
     expect(markup).toContain('После 20:00')
+    expect(markup.match(/aria-label="Добавить дополнительных игроков"/gu)).toHaveLength(2)
     expect(voteOptionFromDropTarget('after:20:00')).toBe('after:20:00')
     expect(voteDropZoneStyle('after:19:00')).toMatchObject({ zone: expect.stringContaining('success') })
     expect(availabilityCountAt(match, '19:00')).toBe(2)
     expect(availabilityCountAt(match, '20:00')).toBe(3)
+  })
+
+  it('renders several precise time groups without after-time labels', () => {
+    const match: NormalizedMatch = {
+      ...normalizedMatch,
+      time: '',
+      timeMode: 'exact_options',
+      timeOptions: ['19:00', '20:00'],
+      roster: {
+        votes: [
+          { playerId: 'player-1', telegramUserId: '1', username: 'early', readableName: 'Ранний', avatarUrl: undefined, option: 'going', exactTimes: ['19:00', '20:00'] },
+          { playerId: 'player-2', telegramUserId: '2', username: 'late', readableName: 'Поздний', avatarUrl: undefined, option: 'going', exactTimes: ['20:00'] },
+        ],
+        externalParticipants: [],
+      },
+    }
+    const markup = renderToStaticMarkup(<MatchRoster match={match} onCorrectVote={vi.fn(async () => undefined)} onRemoveVote={vi.fn()} onAddExternal={vi.fn()} onUpdateExternal={vi.fn()} onRemoveExternal={vi.fn()} disabled={false} />)
+
+    expect(markup).toContain('aria-label="Группа 19:00"')
+    expect(markup).toContain('aria-label="Группа 20:00"')
+    expect(markup).toContain('aria-label="Удалить Ранний из 19:00"')
+    expect(markup).toContain('aria-label="Удалить Ранний из 20:00"')
+    expect(markup).not.toContain('После 19:00')
+    expect(markup.match(/>Ранний<\/span>/gu)).toHaveLength(2)
+    expect(voteRemovalAction(match, match.roster.votes[0]!, 'at:19:00')).toEqual({
+      type: 'replace_exact_times',
+      exactTimes: ['20:00'],
+    })
+    expect(voteRemovalAction(match, match.roster.votes[1]!, 'at:20:00')).toEqual({ type: 'remove_vote' })
+    expect(voteOptionFromDropTarget('at:20:00')).toBe('at:20:00')
+    expect(availabilityCountAt(match, '19:00')).toBe(1)
+    expect(availabilityCountAt(match, '20:00')).toBe(2)
   })
 
   it('only allows pseudonyms for players who already appeared through Telegram', () => {
@@ -416,19 +451,23 @@ describe('API-backed surface states', () => {
     expect(validateEditorValues({ date: '2026-08-03', time: '20:00', timeMode: 'exact', timeOptions: [], location: 'A', venueType: 'outdoor', requiredPlayers: 10, fieldPriceByn: '' })).toContain('два символа')
     expect(validateEditorValues({ date: '2026-08-03', time: '20:00', timeMode: 'exact', timeOptions: [], location: 'Поле', venueType: 'outdoor', requiredPlayers: 10, fieldPriceByn: '12.5' })).toContain('целым')
     expect(validateEditorValues({ date: '2026-08-03', time: '20:00', timeMode: 'exact', timeOptions: [], location: 'Поле', venueType: 'outdoor', requiredPlayers: 10, fieldPriceByn: '12' })).toBeUndefined()
+    expect(validateEditorValues({ date: '2026-08-03', time: '', timeMode: 'availability', timeOptions: ['19:00'], location: 'Поле', venueType: 'outdoor', requiredPlayers: 10, fieldPriceByn: '' })).toBeUndefined()
+    expect(validateEditorValues({ date: '2026-08-03', time: '', timeMode: 'exact_options', timeOptions: ['19:00', '20:00'], location: 'Поле', venueType: 'outdoor', requiredPlayers: 10, fieldPriceByn: '' })).toBeUndefined()
   })
 
-  it('derives the Telegram voting mode from the number of times', () => {
-    expect(editorTimeConfiguration(['19:00'])).toEqual({ time: '19:00', timeMode: 'exact', timeOptions: [] })
-    expect(editorTimeConfiguration(['20:00', '19:00'])).toEqual({ time: '', timeMode: 'availability', timeOptions: ['19:00', '20:00'] })
+  it('keeps exact and after-time modes separate for the same selected time', () => {
+    expect(editorTimeConfiguration(['19:00'], 'exact')).toEqual({ time: '19:00', timeMode: 'exact', timeOptions: [] })
+    expect(editorTimeConfiguration(['19:00'], 'availability')).toEqual({ time: '', timeMode: 'availability', timeOptions: ['19:00'] })
+    expect(editorTimeConfiguration(['20:00', '19:00'], 'exact')).toEqual({ time: '', timeMode: 'exact_options', timeOptions: ['19:00', '20:00'] })
+    expect(editorTimeConfiguration(['20:00', '19:00'], 'availability')).toEqual({ time: '', timeMode: 'availability', timeOptions: ['19:00', '20:00'] })
   })
 
-  it('uses one unified mobile time form for exact and availability voting', () => {
+  it('lets the owner choose exact time or after-time availability explicitly', () => {
     const match = { ...normalizedMatch, time: '', timeMode: 'availability' as const, timeOptions: ['19:00', '20:00'] }
     const markup = renderToStaticMarkup(<MatchEditor match={match} onSave={vi.fn()} conflict="" onClearConflict={vi.fn()} saving={false} />)
 
-    expect(markup).not.toContain('Как выбираем время')
-    expect(markup).not.toContain('Точное время')
+    expect(markup).toContain('aria-label="Формат времени"')
+    expect(markup).toContain('После 19:00')
     expect(markup).toContain('Добавить ещё время')
     expect(markup.match(/type="time"/gu)).toHaveLength(2)
     expect(markup).toContain('step="900"')
@@ -438,6 +477,9 @@ describe('API-backed surface states', () => {
     expect(markup).toContain('aria-label="Удалить время 20:00"')
 
     const exactMarkup = renderToStaticMarkup(<MatchEditor match={normalizedMatch} onSave={vi.fn()} conflict="" onClearConflict={vi.fn()} saving={false} />)
+    expect(exactMarkup).toContain('19:30')
+    expect(exactMarkup).toContain('После 19:30')
+    expect(exactMarkup).toContain('Добавить ещё время')
     expect(exactMarkup).not.toContain('aria-label="Удалить время')
   })
 

@@ -14,7 +14,7 @@ Railway Cron or local job command -------------------------> apps/api jobs:run
 
 `apps/api` is a NestJS application. It listens on `0.0.0.0:$PORT`, exposes a public health endpoint, serves the owner REST API under `/v1`, receives Telegram updates at `POST /telegram/webhook`, and composes the Telegram card and callback services. It does not start a Telegram long-polling loop and it does not own a permanent scheduler.
 
-`apps/web` is a React/Vite application. It initializes the Telegram Web App API, applies Telegram theme and safe-area values, sends the raw Mini App `initData` through the generated client's `X-Telegram-Init-Data` header, and uses TanStack Query for API state.
+`apps/web` is a React/Vite application deployed as a static Vercel project. It initializes the Telegram Web App API, applies Telegram theme and safe-area values, sends the raw Mini App `initData` through the generated client's `X-Telegram-Init-Data` header, and uses TanStack Query for API state. The NestJS API, PostgreSQL, and the separately scheduled jobs process run on Railway.
 
 `packages/domain` has no adapter imports. It owns lifecycle transitions, roster counts, vote transitions, HTML-safe card rendering, notification text, weather eligibility, and validation. `packages/db` owns PostgreSQL access and durable state. `packages/api-client` is generated from Nest Swagger/OpenAPI; handwritten REST contracts do not belong in the frontend.
 
@@ -70,7 +70,9 @@ Each callback claims its Telegram `update_id` in `telegram_updates`. The vote tr
 
 After an applied vote, the API also refreshes the player's Telegram profile photo when the cache is older than seven days. It downloads the smallest available image with a 256 KiB limit, stores the validated JPEG/PNG/WebP copy in PostgreSQL, and exposes it only inside authenticated REST responses as a `data:` URL. Telegram bot tokens and temporary Bot API file URLs never reach the browser. Missing or unavailable photos remain a normal initials fallback.
 
-An exact-time public card uses `going`, `maybe`, and `not_going` buttons. An availability poll instead offers choices such as `after 19:00` and `after 20:00` until the player threshold is reached. The bot then asks the owner to book a field and enter the exact time, location, venue type, and price in the Mini App. Finalization confirms the match atomically, refreshes the card, switches it to exact-attendance buttons, and queues the confirmation notification. A confirmed count is eligible going votes plus external participants. The required-player value is a threshold, not a hard roster capacity.
+An exact-time public card uses `going`, `maybe`, and `not_going` buttons. A time poll can instead contain precise options such as `19:00` and `20:00`, or availability thresholds such as `after 19:00` and `after 20:00`. Each player may toggle any number of precise options independently; pressing a selected option again removes only that choice. Precise-option thresholds are evaluated per option, while after-time thresholds are cumulative and remain single-choice. The bot then asks the owner to book a field and enter the final time, location, venue type, and price in the Mini App. Finalization confirms the match atomically, refreshes the card, switches it to exact-attendance buttons, and queues the confirmation notification. A confirmed count is eligible going votes plus external participants. The required-player value is a threshold, not a hard roster capacity.
+
+Before confirmation, the owner may replace a time poll with one fixed exact time. This conversion keeps every `going` vote, clears its poll-specific time selection in the same transaction, and intentionally accepts an exact time earlier than the original availability threshold as an owner decision. Ambiguous conversions into another poll mode remain blocked once votes exist.
 
 ## Persistence and consistency
 

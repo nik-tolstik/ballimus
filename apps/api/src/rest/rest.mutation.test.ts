@@ -226,6 +226,133 @@ describe("REST mutation transaction adapter", () => {
     }
   });
 
+  it("moves existing after-time votes to an earlier fixed time", async () => {
+    const service = new OwnerRestService(fakeDatabase, config);
+    const createdAt = new Date("2026-07-01T00:00:00.000Z");
+    const current = {
+      id: 1n,
+      telegramChatId: -100n,
+      scheduledAt: null,
+      scheduleDate: "2026-08-03",
+      timeMode: "availability",
+      timeOptions: ["20:00"],
+      selectedTime: null,
+      location: "BOX365",
+      venueType: "outdoor",
+      fieldPriceRubles: null,
+      title: "03.08.2026 время выбираем — BOX365",
+      requiredPlayers: 10,
+      status: "active",
+      cancellationReason: null,
+      creatorTelegramUserId: ownerId,
+      version: 1,
+      createdAt,
+      updatedAt: createdAt,
+    } as const;
+    const updated = {
+      ...current,
+      scheduledAt: new Date("2026-08-03T16:00:00.000Z"),
+      timeMode: "exact",
+      timeOptions: [],
+      title: "03.08.2026 19:00 — BOX365",
+      version: 2,
+    } as const;
+    const originalVote = {
+      matchId: 1n,
+      playerId: 2n,
+      telegramUserId: 20_001n,
+      usernameSnapshot: "available_player",
+      firstNameSnapshot: "Available",
+      lastNameSnapshot: "Player",
+      displayNameSnapshot: "Available Player",
+      option: "going",
+      availableAfter: "20:00",
+      exactTimes: [],
+      source: "telegram_callback",
+      telegramUpdateId: 10_001n,
+      createdAt,
+      updatedAt: createdAt,
+    } as const;
+    const movedVote = { ...originalVote, availableAfter: null } as const;
+    const counts = {
+      goingVotes: 1,
+      externalParticipants: 0,
+      goingCount: 1,
+      requiredPlayers: 10,
+      thresholdReached: false,
+      remainingToThreshold: 9,
+    } as const;
+    const player = {
+      id: 2n,
+      telegramUserId: 20_001n,
+      displayName: "Available Player",
+      telegramUsernameSnapshot: "available_player",
+      telegramFirstNameSnapshot: "Available",
+      telegramLastNameSnapshot: "Player",
+      telegramLanguageCode: "ru",
+      lastSeenAt: createdAt,
+      avatarFileUniqueId: null,
+      avatarContentType: null,
+      avatarDataBase64: null,
+      avatarRefreshedAt: null,
+      createdAt,
+      updatedAt: createdAt,
+    } as const;
+    const listByMatchId = vi.fn()
+      .mockResolvedValueOnce([originalVote])
+      .mockResolvedValue([movedVote]);
+    const repositories = {
+      idempotency: {
+        beginInTransaction: vi.fn().mockResolvedValue({ status: "started", record: { id: 1n } }),
+        complete: vi.fn().mockResolvedValue({}),
+      },
+      matches: {
+        getForUpdate: vi.fn().mockResolvedValue(current),
+        update: vi.fn().mockResolvedValue(updated),
+        getById: vi.fn().mockResolvedValue(updated),
+      },
+      matchMessages: { findByMatchId: vi.fn().mockResolvedValue(undefined) },
+      votes: {
+        listByMatchId,
+        clearGoingTimeSelections: vi.fn().mockResolvedValue([movedVote]),
+        rosterCounts: vi.fn().mockResolvedValue(counts),
+      },
+      externalParticipants: { listByMatchId: vi.fn().mockResolvedValue([]) },
+      players: { getById: vi.fn().mockResolvedValue(player) },
+      outbox: { insertInTransaction: vi.fn() },
+    } as unknown as TransactionRepositories;
+    withTransactionMock.mockImplementationOnce(async (_db, callback) => callback(repositories));
+
+    const response = await service.patchMatch(ownerId, "move-to-fixed-time", "1", 1n, {
+      date: "2026-08-03",
+      time: "19:00",
+      timeMode: "exact",
+      location: "BOX365",
+      venueType: "outdoor",
+      requiredPlayers: 10,
+      fieldPriceRubles: null,
+    });
+
+    expect(repositories.matches.update).toHaveBeenCalledWith(1n, expect.objectContaining({
+      scheduledAt: new Date("2026-08-03T16:00:00.000Z"),
+      timeMode: "exact",
+      timeOptions: [],
+      expectedVersion: 1,
+    }));
+    expect(repositories.votes.clearGoingTimeSelections).toHaveBeenCalledWith(1n);
+    expect(response).toMatchObject({
+      match: {
+        timeMode: "exact",
+        schedule: { date: "2026-08-03", time: "19:00" },
+        roster: {
+          counts: { goingCount: 1 },
+          votes: [{ option: "going", availableAfter: null, exactTimes: [] }],
+        },
+      },
+      action: { type: "match_updated" },
+    });
+  });
+
   it("sets booked details and confirms an availability match in one transaction", async () => {
     const service = new OwnerRestService(fakeDatabase, config);
     const current = {

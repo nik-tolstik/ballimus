@@ -15,4 +15,9 @@ export interface VoteCorrectionDto {
   option: VoteCorrectionDtoOption;
   /** @nullable */
   availableAfter?: string | null;
+  /**
+   * @minItems 1
+   * @maxItems 6
+   */
+  exactTimes?: string[];
 }

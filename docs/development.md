@@ -1,5 +1,7 @@
 # Development Guide
 
+For a single product-and-operations walkthrough, including member voting, owner workflows, time modes, and both launch paths, start with the [Application guide](application-guide.md). This document is the detailed development command reference.
+
 ## Prerequisites
 
 - Node.js `>=22.18.0`;

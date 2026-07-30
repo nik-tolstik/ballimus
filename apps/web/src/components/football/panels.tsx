@@ -97,7 +97,7 @@ interface MatchesPanelProps {
   readonly onComplete: (match: NormalizedMatch) => void
   readonly onCancel: (match: NormalizedMatch, reason: string) => void
   readonly onCorrectVote: (match: NormalizedMatch, vote: NormalizedVote, target: NormalizedRosterTarget) => Promise<void>
-  readonly onRemoveVote: (match: NormalizedMatch, vote: NormalizedVote) => void
+  readonly onRemoveVote: (match: NormalizedMatch, vote: NormalizedVote, target: NormalizedRosterTarget) => void
   readonly onAddExternal: (match: NormalizedMatch, values: ExternalParticipantCreateValues) => void
   readonly onUpdateExternal: (match: NormalizedMatch, participant: NormalizedExternalParticipant, displayName: string) => void
   readonly onRemoveExternal: (match: NormalizedMatch, participant: NormalizedExternalParticipant) => void
@@ -158,7 +158,9 @@ export function validateFinalMatchDetails(
   const validation: { time?: string; location?: string; fieldPriceRubles?: string } = {}
   if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/u.test(values.time)) {
     validation.time = 'Укажите точное время матча.'
-  } else if (match.timeMode === 'availability') {
+  } else if (match.timeMode === 'exact_options' && !match.timeOptions.includes(values.time)) {
+    validation.time = 'Выберите один из точных вариантов времени.'
+  } else if (match.timeMode !== 'exact') {
     const available = availabilityCountAt(match, values.time)
     if (available < match.requiredPlayers) {
       validation.time = `К этому времени смогут только ${available} из ${match.requiredPlayers} игроков.`
@@ -173,10 +175,10 @@ export function validateFinalMatchDetails(
   return validation
 }
 
-function EmptyState({ icon: Icon, title, copy, action }: { readonly icon: typeof CircleDot; readonly title: string; readonly copy: string; readonly action?: ReactNode }) {
+function EmptyState({ icon: Icon, title, copy, action }: { readonly icon: typeof CircleDot; readonly title: string; readonly copy?: string; readonly action?: ReactNode }) {
   return (
     <Empty className="min-h-60 bg-muted/55 shadow-inner">
-      <EmptyHeader><EmptyMedia variant="icon"><Icon /></EmptyMedia><EmptyTitle>{title}</EmptyTitle><EmptyDescription>{copy}</EmptyDescription></EmptyHeader>
+      <EmptyHeader><EmptyMedia variant="icon"><Icon /></EmptyMedia><EmptyTitle>{title}</EmptyTitle>{copy === undefined ? null : <EmptyDescription>{copy}</EmptyDescription>}</EmptyHeader>
       {action && <EmptyContent>{action}</EmptyContent>}
     </Empty>
   )
@@ -248,25 +250,39 @@ const VOTE_DROP_ZONE_STYLES: Record<NormalizedVoteOption, VoteDropZoneStyle> = {
 }
 
 function rosterTargetOption(target: NormalizedRosterTarget): NormalizedVoteOption {
-  return target.startsWith('after:') ? 'going' : target as NormalizedVoteOption
+  return target.startsWith('after:') || target.startsWith('at:') ? 'going' : target as NormalizedVoteOption
 }
 
 function rosterTargetLabel(target: NormalizedRosterTarget): string {
-  return target.startsWith('after:') ? `После ${target.slice('after:'.length)}` : VOTE_LABELS[target as NormalizedVoteOption]
+  if (target.startsWith('after:')) return `После ${target.slice('after:'.length)}`
+  if (target.startsWith('at:')) return target.slice('at:'.length)
+  return VOTE_LABELS[target as NormalizedVoteOption]
 }
 
 function rosterTargetForVote(match: NormalizedMatch, vote: NormalizedVote): NormalizedRosterTarget {
-  if (match.timeMode === 'availability' && match.selectedTime === undefined && vote.option === 'going') {
-    return `after:${vote.availableAfter ?? match.timeOptions[0] ?? '00:00'}`
+  if (match.timeMode !== 'exact' && match.selectedTime === undefined && vote.option === 'going') {
+    const prefix = match.timeMode === 'availability' ? 'after' : 'at'
+    return `${prefix}:${match.timeMode === 'exact_options' ? vote.exactTimes[0] ?? vote.availableAfter ?? match.timeOptions[0] ?? '00:00' : vote.availableAfter ?? match.timeOptions[0] ?? '00:00'}`
   }
   if (
-    match.timeMode === 'availability'
+    match.timeMode !== 'exact'
     && match.selectedTime !== undefined
     && vote.option === 'going'
-    && vote.availableAfter !== undefined
-    && vote.availableAfter > match.selectedTime
+    && (
+      match.timeMode === 'availability'
+        ? vote.availableAfter !== undefined && vote.availableAfter > match.selectedTime
+        : !vote.exactTimes.includes(match.selectedTime)
+    )
   ) return 'not_going'
   return vote.option
+}
+
+function voteMatchesRosterTarget(match: NormalizedMatch, vote: NormalizedVote, target: NormalizedRosterTarget): boolean {
+  if (match.timeMode === 'exact_options' && match.selectedTime === undefined && target.startsWith('at:') && vote.option === 'going') {
+    const time = target.slice('at:'.length)
+    return vote.exactTimes.includes(time) || (vote.exactTimes.length === 0 && vote.availableAfter === time)
+  }
+  return rosterTargetForVote(match, vote) === target
 }
 
 export function voteDropZoneStyle(target: NormalizedRosterTarget): VoteDropZoneStyle {
@@ -285,30 +301,56 @@ const ROSTER_DND_ANNOUNCEMENTS: Announcements = {
 }
 
 export function voteOptionFromDropTarget(value: unknown): NormalizedRosterTarget | undefined {
-  return value === 'going' || value === 'maybe' || value === 'not_going' || (typeof value === 'string' && /^after:(?:[01]\d|2[0-3]):[0-5]\d$/u.test(value)) ? value as NormalizedRosterTarget : undefined
+  return value === 'going' || value === 'maybe' || value === 'not_going' || (typeof value === 'string' && /^(?:after|at):(?:[01]\d|2[0-3]):[0-5]\d$/u.test(value)) ? value as NormalizedRosterTarget : undefined
+}
+
+export type VoteRemovalAction =
+  | { readonly type: 'remove_vote' }
+  | { readonly type: 'replace_exact_times'; readonly exactTimes: readonly string[] }
+
+export function voteRemovalAction(
+  match: NormalizedMatch,
+  vote: NormalizedVote,
+  target: NormalizedRosterTarget,
+): VoteRemovalAction {
+  if (match.timeMode !== 'exact_options' || match.selectedTime !== undefined || !target.startsWith('at:')) {
+    return { type: 'remove_vote' }
+  }
+  const selectedTimes = vote.exactTimes.length > 0
+    ? vote.exactTimes
+    : vote.availableAfter === undefined
+      ? []
+      : [vote.availableAfter]
+  const removedTime = target.slice('at:'.length)
+  const exactTimes = selectedTimes.filter((time) => time !== removedTime)
+  return exactTimes.length === 0
+    ? { type: 'remove_vote' }
+    : { type: 'replace_exact_times', exactTimes }
 }
 
 function VoteIdentity({ vote }: { readonly vote: NormalizedVote }) {
   return <><Avatar>{vote.avatarUrl !== undefined && <AvatarImage src={vote.avatarUrl} alt="" />}<AvatarFallback className="bg-primary/12 font-medium text-primary">{initialsForName(vote.readableName)}</AvatarFallback></Avatar><span className="min-w-0 flex-1 truncate text-sm font-medium">{vote.readableName}</span></>
 }
 
-function DraggableVote({ match, vote, onRemove, disabled }: {
+function DraggableVote({ match, vote, target, onRemove, disabled, draggable }: {
   readonly match: NormalizedMatch
   readonly vote: NormalizedVote
+  readonly target: NormalizedRosterTarget
   readonly onRemove: MatchesPanelProps['onRemoveVote']
   readonly disabled: boolean
+  readonly draggable: boolean
 }) {
   const { attributes, isDragging, listeners, setActivatorNodeRef, setNodeRef } = useDraggable({
-    id: vote.playerId,
-    data: { readableName: vote.readableName, option: vote.option },
-    disabled,
+    id: `${vote.playerId}:${target}`,
+    data: { playerId: vote.playerId, readableName: vote.readableName, option: vote.option },
+    disabled: disabled || !draggable,
   })
 
   return (
     <motion.div ref={setNodeRef} layout className={cn('flex items-center gap-2.5 rounded-lg border bg-background/80 p-2.5 shadow-sm transition-[border-color,box-shadow] duration-150', isDragging && 'opacity-30')}>
-      <button ref={setActivatorNodeRef} type="button" className="grid size-8 shrink-0 touch-none place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 active:cursor-grabbing" disabled={disabled} aria-label={`Перетащить ${vote.readableName}`} {...attributes} {...listeners}><GripVertical className="size-4" /></button>
+      <button ref={setActivatorNodeRef} type="button" className="grid size-8 shrink-0 touch-none place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 active:cursor-grabbing" disabled={disabled || !draggable} aria-label={`Перетащить ${vote.readableName}`} {...attributes} {...listeners}><GripVertical className="size-4" /></button>
       <VoteIdentity vote={vote} />
-      <Button size="icon-xs" variant="destructive" disabled={disabled} onClick={() => onRemove(match, vote)} aria-label={`Удалить голос ${vote.readableName}`}><Trash2 /></Button>
+      <Button size="icon-xs" variant="destructive" disabled={disabled} onClick={() => onRemove(match, vote, target)} aria-label={target.startsWith('at:') ? `Удалить ${vote.readableName} из ${rosterTargetLabel(target)}` : `Удалить голос ${vote.readableName}`}><Trash2 /></Button>
     </motion.div>
   )
 }
@@ -351,8 +393,8 @@ function VoteGroup({ match, votes, externalParticipants, target, onAddExternal, 
   const dropZoneStyle = voteDropZoneStyle(target)
   return (
     <section ref={setNodeRef} className={cn('-mx-2 min-h-24 rounded-xl border border-transparent p-2 transition-[background-color,border-color,box-shadow] duration-150', isOver && dropZoneStyle.zone)} aria-label={`Группа ${rosterTargetLabel(target)}`}>
-      <div className="mb-2 flex items-center justify-between"><p className={cn('text-xs font-medium text-muted-foreground transition-colors', isOver && dropZoneStyle.label)}>{rosterTargetLabel(target)}</p><div className="flex items-center gap-1"><Badge variant="secondary">{participantCount}</Badge>{externalParticipants.length > 0 || target === 'going' || target === `after:${match.timeOptions[0]}` ? <Button size="icon-xs" variant="ghost" disabled={disabled} onClick={onAddExternal} aria-label="Добавить дополнительных игроков" title="Добавить дополнительных игроков"><Plus /></Button> : null}</div></div>
-      {!hasParticipants ? <div className={cn('grid min-h-12 place-items-center rounded-lg border border-dashed text-xs text-muted-foreground transition-colors', isOver && dropZoneStyle.empty)}>{isOver ? 'Отпустите здесь' : 'Перетащите сюда'}</div> : <div className="flex flex-col gap-2">{votes.map((vote) => <DraggableVote key={vote.playerId} match={match} vote={vote} onRemove={onRemoveVote} disabled={disabled} />)}{externalParticipants.map((participant) => <ExternalParticipantCard key={participant.id} match={match} participant={participant} onEdit={onEditExternal} onRemove={onRemoveExternal} disabled={disabled} />)}</div>}
+      <div className="mb-2 flex items-center justify-between"><p className={cn('text-xs font-medium text-muted-foreground transition-colors', isOver && dropZoneStyle.label)}>{rosterTargetLabel(target)}</p><div className="flex items-center gap-1"><Badge variant="secondary">{participantCount}</Badge>{rosterTargetOption(target) === 'going' ? <Button size="icon-xs" variant="ghost" disabled={disabled} onClick={onAddExternal} aria-label="Добавить дополнительных игроков" title="Добавить дополнительных игроков"><Plus /></Button> : null}</div></div>
+      {!hasParticipants ? <div className={cn('grid min-h-12 place-items-center rounded-lg border border-dashed text-xs text-muted-foreground transition-colors', isOver && dropZoneStyle.empty)}>{isOver ? 'Отпустите здесь' : 'Перетащите сюда'}</div> : <div className="flex flex-col gap-2">{votes.map((vote) => <DraggableVote key={`${vote.playerId}:${target}`} match={match} vote={vote} target={target} onRemove={onRemoveVote} disabled={disabled} draggable={!target.startsWith('at:')} />)}{externalParticipants.map((participant) => <ExternalParticipantCard key={participant.id} match={match} participant={participant} onEdit={onEditExternal} onRemove={onRemoveExternal} disabled={disabled} />)}</div>}
     </section>
   )
 }
@@ -383,12 +425,12 @@ export function MatchRoster({ match, onCorrectVote, onRemoveVote, onAddExternal,
   const votes = useMemo(() => match.roster.votes.map((vote) => {
     const target = optimisticTargets[vote.playerId]
     if (target === undefined || target === rosterTargetForVote(match, vote)) return vote
-    return target.startsWith('after:')
-      ? { ...vote, option: 'going' as const, availableAfter: target.slice('after:'.length) }
+    return target.startsWith('after:') || target.startsWith('at:')
+      ? { ...vote, option: 'going' as const, availableAfter: target.startsWith('after:') ? target.slice(target.indexOf(':') + 1) : undefined, exactTimes: target.startsWith('at:') ? [target.slice(target.indexOf(':') + 1)] : [] }
       : { ...vote, option: target as NormalizedVoteOption, availableAfter: undefined }
   }), [match, optimisticTargets])
-  const rosterTargets: readonly NormalizedRosterTarget[] = match.timeMode === 'availability' && match.selectedTime === undefined
-    ? [...match.timeOptions.map((time) => `after:${time}` as const), 'maybe', 'not_going']
+  const rosterTargets: readonly NormalizedRosterTarget[] = match.timeMode !== 'exact' && match.selectedTime === undefined
+    ? [...match.timeOptions.map((time) => `${match.timeMode === 'availability' ? 'after' : 'at'}:${time}` as const), 'maybe', 'not_going']
     : VOTE_OPTIONS
   const activeVote = votes.find((vote) => vote.playerId === activePlayerId)
   const clearExternalForm = () => { setEditingId(undefined); setDisplayName(''); setQuantity('1'); setValidation('') }
@@ -411,7 +453,7 @@ export function MatchRoster({ match, onCorrectVote, onRemoveVote, onAddExternal,
   const finishDrag = ({ active, over }: DragEndEvent) => {
     setActivePlayerId(undefined)
     const nextTarget = voteOptionFromDropTarget(over?.id)
-    const vote = votes.find((item) => item.playerId === String(active.id))
+    const vote = votes.find((item) => item.playerId === String(active.data.current?.['playerId'] ?? active.id))
     if (vote === undefined || nextTarget === undefined || nextTarget === rosterTargetForVote(match, vote)) return
     setOptimisticTargets((current) => ({ ...current, [vote.playerId]: nextTarget }))
     void onCorrectVote(match, vote, nextTarget).catch(() => {
@@ -425,10 +467,10 @@ export function MatchRoster({ match, onCorrectVote, onRemoveVote, onAddExternal,
 
   return <>
     <Card size="sm">
-      <CardHeader><CardTitle>Состав</CardTitle><CardDescription>Перетащите игрока за маркер в нужную группу — изменение сохранится автоматически.</CardDescription></CardHeader>
+      <CardHeader><CardTitle>Состав</CardTitle><CardDescription>{match.timeMode === 'exact_options' ? 'Игрок может выбрать несколько точных времён в Telegram.' : 'Перетащите игрока за маркер в нужную группу — изменение сохранится автоматически.'}</CardDescription></CardHeader>
       <CardContent className="flex flex-col gap-5">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} accessibility={{ announcements: ROSTER_DND_ANNOUNCEMENTS, screenReaderInstructions: ROSTER_DND_INSTRUCTIONS }} onDragStart={({ active }: DragStartEvent) => setActivePlayerId(String(active.id))} onDragCancel={() => setActivePlayerId(undefined)} onDragEnd={finishDrag}>
-          <div className="flex flex-col gap-1">{rosterTargets.map((target, index) => <VoteGroup key={target} match={match} votes={votes.filter((vote) => rosterTargetForVote(match, vote) === target)} externalParticipants={rosterTargetOption(target) === 'going' && (match.timeMode === 'exact' || match.selectedTime !== undefined || index === 0) ? match.roster.externalParticipants : EMPTY_EXTERNAL_PARTICIPANTS} target={target} onAddExternal={beginCreate} onEditExternal={beginEdit} onRemoveVote={onRemoveVote} onRemoveExternal={onRemoveExternal} disabled={disabled} />)}</div>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} accessibility={{ announcements: ROSTER_DND_ANNOUNCEMENTS, screenReaderInstructions: ROSTER_DND_INSTRUCTIONS }} onDragStart={({ active }: DragStartEvent) => setActivePlayerId(String(active.data.current?.['playerId'] ?? active.id))} onDragCancel={() => setActivePlayerId(undefined)} onDragEnd={finishDrag}>
+          <div className="flex flex-col gap-1">{rosterTargets.map((target, index) => <VoteGroup key={target} match={match} votes={votes.filter((vote) => voteMatchesRosterTarget(match, vote, target))} externalParticipants={rosterTargetOption(target) === 'going' && (match.timeMode === 'exact' || match.selectedTime !== undefined || index === 0) ? match.roster.externalParticipants : EMPTY_EXTERNAL_PARTICIPANTS} target={target} onAddExternal={beginCreate} onEditExternal={beginEdit} onRemoveVote={onRemoveVote} onRemoveExternal={onRemoveExternal} disabled={disabled} />)}</div>
           <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' }}>{activeVote === undefined ? null : <DraggedVotePreview vote={activeVote} />}</DragOverlay>
         </DndContext>
       </CardContent>
@@ -491,14 +533,18 @@ function OverviewRow({ icon: Icon, title, description, onClick }: {
 }
 
 export function availabilityCountAt(match: NormalizedMatch, time: string): number {
-  const votes = match.roster.votes.filter((vote) => vote.option === 'going' && (vote.availableAfter === undefined || vote.availableAfter <= time)).length
+  const votes = match.roster.votes.filter((vote) => vote.option === 'going' && (
+    match.timeMode === 'exact_options'
+      ? vote.exactTimes.includes(time) || (vote.exactTimes.length === 0 && vote.availableAfter === time)
+      : vote.availableAfter === undefined || vote.availableAfter <= time
+  )).length
   const external = match.roster.externalParticipants.reduce((total, participant) => total + participant.quantity, 0)
   return votes + external
 }
 
 function AvailabilitySummary({ match }: { readonly match: NormalizedMatch }) {
-  if (match.timeMode !== 'availability' || match.selectedTime !== undefined) return null
-  return <Card size="sm"><CardHeader><CardTitle>Доступность по времени</CardTitle><CardDescription>Сколько игроков смогут участвовать к каждому времени.</CardDescription></CardHeader><CardContent className="flex flex-col gap-3">{match.timeOptions.map((time) => { const count = availabilityCountAt(match, time); return <div key={time} className="flex items-center gap-3"><span className="w-14 text-sm font-medium">К {time}</span><Progress value={Math.min(100, (count / match.requiredPlayers) * 100)} className={cn('h-1.5 flex-1', count >= match.requiredPlayers && '[&_[data-slot=progress-indicator]]:bg-success')} /><Badge variant={match.selectedTime === time ? 'default' : 'secondary'}>{count}/{match.requiredPlayers}</Badge></div> })}</CardContent></Card>
+  if (match.timeMode === 'exact' || match.selectedTime !== undefined) return null
+  return <Card size="sm"><CardHeader><CardTitle>Доступность по времени</CardTitle><CardDescription>{match.timeMode === 'availability' ? 'Сколько игроков смогут участвовать к каждому времени.' : 'Сколько игроков выбрали каждый точный вариант.'}</CardDescription></CardHeader><CardContent className="flex flex-col gap-3">{match.timeOptions.map((time) => { const count = availabilityCountAt(match, time); return <div key={time} className="flex items-center gap-3"><span className="w-14 text-sm font-medium">{match.timeMode === 'availability' ? `К ${time}` : time}</span><Progress value={Math.min(100, (count / match.requiredPlayers) * 100)} className={cn('h-1.5 flex-1', count >= match.requiredPlayers && '[&_[data-slot=progress-indicator]]:bg-success')} /><Badge variant={match.selectedTime === time ? 'default' : 'secondary'}>{count}/{match.requiredPlayers}</Badge></div> })}</CardContent></Card>
 }
 
 function MatchOverview({ match, onNavigate, onPublish, onFinalizeRequest, onConfirm, onComplete, onCancelRequest, disabled }: {
@@ -609,7 +655,7 @@ export function MatchesPanel(props: MatchesPanelProps) {
     <section className="flex flex-col gap-5">
       {selected === undefined ? <>
         <div className="flex items-end justify-between gap-4"><div><h1 className="text-2xl font-semibold tracking-tight">Матчи</h1><p className="mt-1 text-sm text-muted-foreground">{matches.length === 0 ? 'Запланируйте следующую игру' : `${matches.length} ${plural(matches.length, 'предстоящий матч', 'предстоящих матча', 'предстоящих матчей')}`}</p></div><Button className="h-10 px-3" onClick={openCreate}><Plus data-icon="inline-start" /> Новый матч</Button></div>
-        {matches.length === 0 ? <EmptyState icon={CalendarDays} title="Матчей пока нет" copy="Создайте матч — карточка сразу появится в группе Telegram." action={<Button onClick={openCreate}><Plus data-icon="inline-start" /> Создать матч</Button>} /> : <div className="flex flex-col gap-2" aria-label="Предстоящие матчи">{matches.map((match, index) => <motion.div key={match.id} layout initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: reduceMotion ? 0 : index * 0.025, duration: 0.18 }}><Card size="sm" className="py-0"><button type="button" className="w-full p-3 text-left" onClick={() => openMatch(match.id)}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="mb-2 flex items-center gap-2">{statusBadge(match)}<span className="truncate text-xs text-muted-foreground">#{match.id}</span></div><h2 className="truncate text-[15px] font-medium text-foreground">{match.title}</h2><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span className="inline-flex items-center gap-1.5"><Clock3 className="size-3.5" />{match.dateLabel}</span><span className="inline-flex items-center gap-1.5"><MapPin className="size-3.5" />{match.location}</span></div></div><div className="flex shrink-0 items-center gap-2 text-xs font-medium"><Users className="size-4 text-muted-foreground" />{match.goingCount}/{match.requiredPlayers}<ChevronRight className="size-4 text-muted-foreground" /></div></div></button></Card></motion.div>)}</div>}
+        {matches.length === 0 ? <EmptyState icon={CalendarDays} title="Матчей пока нет" /> : <div className="flex flex-col gap-2" aria-label="Предстоящие матчи">{matches.map((match, index) => <motion.div key={match.id} layout initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: reduceMotion ? 0 : index * 0.025, duration: 0.18 }}><Card size="sm" className="py-0"><button type="button" className="w-full p-3 text-left" onClick={() => openMatch(match.id)}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="mb-2 flex items-center gap-2">{statusBadge(match)}<span className="truncate text-xs text-muted-foreground">#{match.id}</span></div><h2 className="truncate text-[15px] font-medium text-foreground">{match.title}</h2><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span className="inline-flex items-center gap-1.5"><Clock3 className="size-3.5" />{match.dateLabel}</span><span className="inline-flex items-center gap-1.5"><MapPin className="size-3.5" />{match.location}</span></div></div><div className="flex shrink-0 items-center gap-2 text-xs font-medium"><Users className="size-4 text-muted-foreground" />{match.goingCount}/{match.requiredPlayers}<ChevronRight className="size-4 text-muted-foreground" /></div></div></button></Card></motion.div>)}</div>}
       </> : <motion.div key={selected.id} initial={reduceMotion ? false : { opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.18 }}>
         <div className="relative flex min-h-12 items-center justify-center"><Button variant="ghost" size="icon" className="absolute left-0" onClick={closeMatch} aria-label="Вернуться к списку матчей"><ArrowLeft /></Button><div className="text-center"><h1 className="text-xl font-semibold">Матч #{selected.id}</h1><p className={cn('mt-0.5 text-xs', selected.status === 'cancelled' ? 'text-destructive' : selected.status === 'confirmed' || selected.status === 'completed' || selected.planningStage === 'ready_to_confirm' ? 'text-success' : 'text-muted-foreground')}>{selected.statusLabel}</p></div></div>
         <div className="mt-5 flex flex-col gap-3 text-sm"><p className={cn('flex items-center gap-3', selected.reconciliationRequired ? 'text-destructive' : selected.publicCardState === 'published' ? 'text-success' : 'text-muted-foreground')}><Send className="size-5" />{publicCardStateLabel(selected)}</p><p className="flex items-center gap-3"><CalendarDays className="size-5 text-muted-foreground" />{selected.dateLabel}</p><p className="flex items-center gap-3"><MapPin className="size-5 text-muted-foreground" />{selected.location} · {venueLabel(selected)}</p><div><p className="mb-2 flex items-center gap-3"><Users className="size-5 text-muted-foreground" /><span>{selected.goingCount} из {selected.requiredPlayers} игроков</span></p><Progress value={Math.min(100, (selected.goingCount / selected.requiredPlayers) * 100)} className={cn('ml-8 h-1.5 w-[calc(100%-2rem)]', selected.goingCount >= selected.requiredPlayers && '[&_[data-slot=progress-indicator]]:bg-success')} /></div></div>
@@ -661,8 +707,8 @@ export function MatchesPanel(props: MatchesPanelProps) {
                   aria-invalid={finalizationValidation.time !== undefined || undefined}
                   required
                 />
-                {selected?.timeMode === 'availability' && /^(?:[01]\d|2[0-3]):[0-5]\d$/u.test(finalizationValues.time)
-                  ? <FieldDescription className={availabilityCountAt(selected, finalizationValues.time) >= selected.requiredPlayers ? 'text-success' : 'text-destructive'}>К {finalizationValues.time} смогут {availabilityCountAt(selected, finalizationValues.time)} из {selected.requiredPlayers} игроков</FieldDescription>
+                {selected !== undefined && selected.timeMode !== 'exact' && /^(?:[01]\d|2[0-3]):[0-5]\d$/u.test(finalizationValues.time)
+                  ? <FieldDescription className={availabilityCountAt(selected, finalizationValues.time) >= selected.requiredPlayers ? 'text-success' : 'text-destructive'}>{selected.timeMode === 'availability' ? `К ${finalizationValues.time} смогут` : `${finalizationValues.time} выбрали`} {availabilityCountAt(selected, finalizationValues.time)} из {selected.requiredPlayers} игроков</FieldDescription>
                   : null}
                 <FieldError>{finalizationValidation.time}</FieldError>
               </Field>

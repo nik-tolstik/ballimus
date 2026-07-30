@@ -155,12 +155,12 @@ function normalizeTimeConfiguration(input: {
     }
   } else if (
     scheduleDate === null
-    || timeOptions.length < 2
+    || timeOptions.length < 1
     || timeOptions.length > 6
     || timeOptions.some((value) => !LOCAL_TIME_PATTERN.test(value))
     || (selectedTime !== null && !timeOptions.includes(selectedTime))
   ) {
-    throw new ValidationRepositoryError("availability matches require a date, 2-6 unique time options, and an optional selected option");
+    throw new ValidationRepositoryError("time-option matches require a date, 1-6 unique time options, and an optional selected option");
   }
   return { timeMode, timeOptions, scheduleDate, selectedTime };
 }

@@ -1399,6 +1399,16 @@
             "nullable": true,
             "example": "19:00"
           },
+          "exactTimes": {
+            "example": [
+              "19:00",
+              "20:00"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "source": {
             "type": "string",
             "enum": [
@@ -1420,6 +1430,7 @@
           "avatarUrl",
           "option",
           "availableAfter",
+          "exactTimes",
           "source",
           "updatedAt"
         ]
@@ -1574,6 +1585,7 @@
             "type": "string",
             "enum": [
               "exact",
+              "exact_options",
               "availability"
             ]
           },
@@ -1796,6 +1808,7 @@
             "type": "string",
             "enum": [
               "exact",
+              "exact_options",
               "availability"
             ],
             "default": "exact"
@@ -1805,7 +1818,7 @@
               "19:00",
               "20:00"
             ],
-            "minItems": 2,
+            "minItems": 1,
             "maxItems": 6,
             "type": "array",
             "items": {
@@ -1906,11 +1919,12 @@
             "type": "string",
             "enum": [
               "exact",
+              "exact_options",
               "availability"
             ]
           },
           "timeOptions": {
-            "minItems": 2,
+            "minItems": 1,
             "maxItems": 6,
             "type": "array",
             "items": {
@@ -2084,6 +2098,18 @@
             "type": "string",
             "nullable": true,
             "example": "19:00"
+          },
+          "exactTimes": {
+            "minItems": 1,
+            "maxItems": 6,
+            "example": [
+              "19:00",
+              "20:00"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [

@@ -1,5 +1,5 @@
 import {
-  deriveMatchPlanningStage,
+  hasResolvedMatchTime,
   isVoteEligibleForMatch,
   lifecycleNotificationTransition,
   thresholdLostNotificationTransition,
@@ -56,7 +56,8 @@ export async function claimThresholdNotificationEvent(
       goingCount: result.countsAfter.goingCount,
       threshold: result.match.requiredPlayers,
       eventKey,
-      requiresFinalDetails: deriveMatchPlanningStage(result.match, result.countsAfter.goingCount) === "finalizing_details",
+      requiresExactTime: !hasResolvedMatchTime(result.match),
+      requiresLocation: result.match.location === null || result.match.location.trim() === "",
     })
     : result.thresholdLost
       ? thresholdLostNotificationTransition({

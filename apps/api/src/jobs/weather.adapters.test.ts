@@ -73,7 +73,7 @@ describe("OpenMeteoWeatherForecastProvider", () => {
     expect(String(input)).toContain("forecast_days=2");
     expect(init?.signal).toBeInstanceOf(AbortSignal);
     expect(init?.signal).toMatchObject({});
-    expect(WEATHER_PROVIDER_TIMEOUT_MS).toBe(5_000);
+    expect(WEATHER_PROVIDER_TIMEOUT_MS).toBe(15_000);
   });
 
   it("turns non-success responses into a retryable error", async () => {

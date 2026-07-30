@@ -7,7 +7,9 @@ import {
   getZonedDateParts,
   parseLocalDateTime,
   renderMatchCard,
+  selectedTimeForFinalTime,
   type Match as DomainMatch,
+  type MatchTimeMode,
   type ExternalParticipant as DomainExternalParticipant,
   type Vote as DomainVote,
 } from "@football/domain";
@@ -105,7 +107,7 @@ interface MatchDetailsBody extends Record<string, unknown> {
   readonly id: string;
   readonly chatId: string;
   readonly scheduledAt: string | null;
-  readonly timeMode: "exact" | "availability";
+  readonly timeMode: MatchTimeMode;
   readonly timeOptions: readonly string[];
   readonly selectedTime: string | null;
   readonly schedule: {
@@ -209,10 +211,10 @@ function formatDerivedTitle(input: {
   readonly fieldPriceRubles?: number | null;
   readonly dateLabel?: string;
   readonly timeLabel?: string;
-  readonly timeMode?: "exact" | "availability";
+  readonly timeMode?: MatchTimeMode;
 }): string {
   const date = input.dateLabel ?? input.date.split("-").reverse().join(".");
-  const time = input.timeLabel ?? input.time ?? (input.timeMode === "availability" ? "время выбираем" : "время уточняется");
+  const time = input.timeLabel ?? input.time ?? ((input.timeMode ?? "exact") !== "exact" ? "время выбираем" : "время уточняется");
   const priceLabel = input.fieldPriceRubles === undefined || input.fieldPriceRubles === null
     ? undefined
     : `${input.fieldPriceRubles} рублей`;
@@ -281,6 +283,7 @@ function toDomainVote(vote: DbVote): DomainVote {
     displayNameSnapshot: vote.displayNameSnapshot,
     option: vote.option,
     availableAfter: vote.availableAfter,
+    exactTimes: vote.exactTimes,
     updatedAt: vote.updatedAt,
   };
 }
@@ -437,6 +440,7 @@ export class OwnerRestService {
         throw new OptimisticConcurrencyError(expectedVersion ?? 0, current.version);
       }
       const patch = this.patchValues(current, input);
+      const movesPollVotesToFixedTime = current.timeMode !== "exact" && patch.timeMode === "exact";
       if (patch.timeMode !== undefined || patch.timeOptions !== undefined) {
         const currentVotes = await repositories.votes.listByMatchId(matchId);
         const goingVotes = currentVotes.filter((vote) => vote.option === "going");
@@ -451,17 +455,18 @@ export class OwnerRestService {
             "The time mode and availability options cannot be changed after confirmation.",
           );
         }
-        if (nextMode !== current.timeMode && goingVotes.length > 0) {
+        if (nextMode !== current.timeMode && goingVotes.length > 0 && !movesPollVotesToFixedTime) {
           throw restRequestError(
             409,
             "MATCH_TIME_MODE_HAS_VOTES",
             "The time mode cannot be changed after availability votes have been received.",
           );
         }
-        if (nextMode === "availability") {
+        if (nextMode !== "exact") {
           const nextOptionSet = new Set(nextOptions);
           const removedOptionHasVotes = goingVotes.some(
-            (vote) => vote.availableAfter !== null && !nextOptionSet.has(vote.availableAfter),
+            (vote) => (vote.availableAfter !== null && !nextOptionSet.has(vote.availableAfter))
+              || vote.exactTimes.some((time) => !nextOptionSet.has(time)),
           );
           if (removedOptionHasVotes) {
             throw restRequestError(
@@ -477,6 +482,9 @@ export class OwnerRestService {
         ...patch,
         expectedVersion,
       });
+      if (movesPollVotesToFixedTime) {
+        await repositories.votes.clearGoingTimeSelections(matchId);
+      }
       if (updated.status === "active" || updated.status === "confirmed") {
         await this.enqueueRefreshForMatch(repositories, updated, requestHash);
         const countsAfter = await repositories.votes.rosterCounts(matchId);
@@ -631,14 +639,19 @@ export class OwnerRestService {
       if (scheduledAt === null) {
         throw restRequestError(400, "MATCH_TIME_INVALID", "Set a valid final match time.");
       }
-      const selectedTime = current.timeMode === "availability"
-        ? current.timeOptions.filter((time) => time <= input.time).at(-1)
-        : null;
+      const selectedTime = selectedTimeForFinalTime(current.timeMode, current.timeOptions, input.time);
       if (current.timeMode === "availability" && selectedTime === undefined) {
         throw restRequestError(
           400,
           "MATCH_FINAL_TIME_BEFORE_AVAILABILITY",
           "The final time cannot be earlier than every availability option.",
+        );
+      }
+      if (current.timeMode === "exact_options" && selectedTime === undefined) {
+        throw restRequestError(
+          400,
+          "MATCH_FINAL_TIME_NOT_OPTION",
+          "The final time must be one of the exact time options.",
         );
       }
       const location = input.location.trim();
@@ -811,6 +824,7 @@ export class OwnerRestService {
         ...(input.telegramUserId === undefined ? {} : { telegramUserId: input.telegramUserId }),
         option: input.option,
         ...(input.availableAfter === undefined ? {} : { availableAfter: input.availableAfter }),
+        ...(input.exactTimes === undefined ? {} : { exactTimes: input.exactTimes }),
       });
       await this.enqueueRefreshForMatch(repositories, result.match, requestHash);
       await this.enqueueThresholdNotification(repositories, result, operationKey);
@@ -1123,7 +1137,7 @@ export class OwnerRestService {
   private patchValues(current: DbMatch, input: PatchMatchDto): {
     readonly scheduledAt?: Date | null;
     readonly scheduleDate?: string | null;
-    readonly timeMode?: "exact" | "availability";
+    readonly timeMode?: MatchTimeMode;
     readonly timeOptions?: readonly string[];
     readonly selectedTime?: string | null;
     readonly location?: string | null;
@@ -1145,7 +1159,7 @@ export class OwnerRestService {
     const values: {
       scheduledAt?: Date | null;
       scheduleDate?: string | null;
-      timeMode?: "exact" | "availability";
+      timeMode?: MatchTimeMode;
       timeOptions?: readonly string[];
       selectedTime?: string | null;
       location?: string | null;
@@ -1159,11 +1173,11 @@ export class OwnerRestService {
         throw restRequestError(400, "SCHEDULE_FIELDS_INVALID", "date must be a valid calendar date.");
       }
       const nextMode = input.timeMode ?? current.timeMode;
-      if (nextMode === "availability") {
-        if (input.time !== null) throw restRequestError(400, "SCHEDULE_FIELDS_INVALID", "time must be null in availability mode.");
+      if (nextMode !== "exact") {
+        if (input.time !== null) throw restRequestError(400, "SCHEDULE_FIELDS_INVALID", "time must be null in time-option modes.");
         const options = input.timeOptions ?? current.timeOptions;
-        if (options.length < 2) throw restRequestError(400, "TIME_OPTIONS_REQUIRED", "At least two availability times are required.");
-        const preservedSelectedTime = current.timeMode === "availability"
+        if (options.length < 1) throw restRequestError(400, "TIME_OPTIONS_REQUIRED", "At least one availability time is required.");
+        const preservedSelectedTime = current.timeMode === nextMode
           && current.selectedTime !== null
           && options.includes(current.selectedTime)
           ? current.selectedTime
@@ -1300,6 +1314,7 @@ export class OwnerRestService {
           avatarUrl: playerAvatarUrl(aggregate.currentPlayers.get(vote.playerId)),
           option: vote.option,
           availableAfter: vote.availableAfter,
+          exactTimes: vote.exactTimes,
           source: vote.source,
           updatedAt: vote.updatedAt,
         })),

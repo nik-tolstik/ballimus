@@ -21,7 +21,7 @@ export type MatchStatus = (typeof matchStatuses)[number];
 export const venueTypes = ["outdoor", "indoor"] as const;
 export type VenueType = (typeof venueTypes)[number];
 
-export const matchTimeModes = ["exact", "availability"] as const;
+export const matchTimeModes = ["exact", "exact_options", "availability"] as const;
 export type MatchTimeMode = (typeof matchTimeModes)[number];
 
 export const voteOptions = ["going", "not_going", "maybe"] as const;
@@ -235,10 +235,10 @@ export const matches = pgTable(
       sql`(
         (${table.timeMode} = 'exact' and jsonb_array_length(${table.timeOptions}) = 0 and ${table.selectedTime} is null)
         or (
-          ${table.timeMode} = 'availability'
+          ${table.timeMode} in ('exact_options', 'availability')
           and ${table.scheduleDate} is not null
           and jsonb_typeof(${table.timeOptions}) = 'array'
-          and jsonb_array_length(${table.timeOptions}) between 2 and 6
+          and jsonb_array_length(${table.timeOptions}) between 1 and 6
           and (${table.selectedTime} is null or ${table.timeOptions} ? ${table.selectedTime})
         )
       )`,
@@ -377,6 +377,7 @@ export const votes = pgTable(
     displayNameSnapshot: text("display_name_snapshot").notNull(),
     option: text("option", { enum: voteOptions }).notNull(),
     availableAfter: text("available_after"),
+    exactTimes: jsonb("exact_times").$type<string[]>().notNull().default([]),
     source: text("source", { enum: voteSources }).notNull(),
     telegramUpdateId: bigint("telegram_update_id", { mode: "bigint" }).references(
       () => telegramUpdates.updateId,
@@ -395,7 +396,12 @@ export const votes = pgTable(
     ),
     check(
       "votes_available_after_option_consistent",
-      sql`${table.option} = 'going' or ${table.availableAfter} is null`,
+      sql`${table.option} = 'going' or (${table.availableAfter} is null and jsonb_array_length(${table.exactTimes}) = 0)`,
+    ),
+    check("votes_exact_times_array", sql`jsonb_typeof(${table.exactTimes}) = 'array'`),
+    check(
+      "votes_time_selection_consistent",
+      sql`${table.availableAfter} is null or jsonb_array_length(${table.exactTimes}) = 0`,
     ),
     check("votes_source_valid", sql`${table.source} in (${voteSourceSql})`),
     check(

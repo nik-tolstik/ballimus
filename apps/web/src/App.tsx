@@ -34,7 +34,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { MatchesPanel, PlayersPanel, HistoryPanel, type FinalMatchDetailsValues } from '@/components/football/panels'
+import { MatchesPanel, PlayersPanel, HistoryPanel, voteRemovalAction, type FinalMatchDetailsValues } from '@/components/football/panels'
 import { TabBar, type Tab } from '@/components/football/navigation'
 import { StateScreen } from '@/components/football/state-screen'
 import { ThemeToggle } from '@/components/football/theme-toggle'
@@ -150,12 +150,12 @@ export function App({ telegramSession }: AppProps = {}) {
   const finishMutation = (matchId?: string) => { invalidateDashboard(matchId); setConflict('') }
 
   const handleCreate = async (values: EditorValues) => {
-    const data: MatchCreateDto = { date: values.date, time: values.timeMode === 'exact' ? values.time : null, timeMode: values.timeMode, ...(values.timeMode === 'availability' ? { timeOptions: [...values.timeOptions] } : {}), location: values.location || null, venueType: values.venueType || null, requiredPlayers: values.requiredPlayers, fieldPriceRubles: values.fieldPriceByn.trim() === '' ? null : Number(values.fieldPriceByn) }
+    const data: MatchCreateDto = { date: values.date, time: values.timeMode === 'exact' ? values.time : null, timeMode: values.timeMode, ...(values.timeMode !== 'exact' ? { timeOptions: [...values.timeOptions] } : {}), location: values.location || null, venueType: values.venueType || null, requiredPlayers: values.requiredPlayers, fieldPriceRubles: values.fieldPriceByn.trim() === '' ? null : Number(values.fieldPriceByn) }
     const response = await createMutation.mutateAsync({ data, headers: { 'Idempotency-Key': requestKey() } })
     finishMutation(response.match.id)
   }
   const handlePatch = (match: NormalizedMatch, values: EditorValues) => {
-    const data: PatchMatchDto = { date: values.date || null, time: values.timeMode === 'exact' ? values.time : null, timeMode: values.timeMode, ...(values.timeMode === 'availability' ? { timeOptions: [...values.timeOptions] } : {}), location: values.location || null, venueType: values.venueType || null, requiredPlayers: values.requiredPlayers, fieldPriceRubles: values.fieldPriceByn.trim() === '' ? null : Number(values.fieldPriceByn) }
+    const data: PatchMatchDto = { date: values.date || null, time: values.timeMode === 'exact' ? values.time : null, timeMode: values.timeMode, ...(values.timeMode !== 'exact' ? { timeOptions: [...values.timeOptions] } : {}), location: values.location || null, venueType: values.venueType || null, requiredPlayers: values.requiredPlayers, fieldPriceRubles: values.fieldPriceByn.trim() === '' ? null : Number(values.fieldPriceByn) }
     patchMutation.mutate({ id: match.id, data, headers: versionedHeaders(match) }, { onSuccess: () => finishMutation(match.id) })
   }
   const handlePublish = (match: NormalizedMatch) => publishMutation.mutate({ id: match.id, headers: versionedHeaders(match) }, { onSuccess: () => finishMutation(match.id) })
@@ -173,12 +173,21 @@ export function App({ telegramSession }: AppProps = {}) {
   const handleComplete = (match: NormalizedMatch) => completeMutation.mutate({ id: match.id, headers: versionedHeaders(match) }, { onSuccess: () => finishMutation(match.id) })
   const handleCancel = (match: NormalizedMatch, cancellationReason: string) => cancelMutation.mutate({ id: match.id, data: { cancellationReason }, headers: versionedHeaders(match) }, { onSuccess: () => finishMutation(match.id) })
   const handleCorrectVote = async (match: NormalizedMatch, vote: NormalizedVote, target: NormalizedRosterTarget) => {
-    const option: NormalizedVoteOption = target.startsWith('after:') ? 'going' : target as NormalizedVoteOption
-    const availableAfter = target.startsWith('after:') ? target.slice('after:'.length) : null
-    await correctVoteMutation.mutateAsync({ id: match.id, data: { playerId: vote.playerId, option, availableAfter }, headers: { 'Idempotency-Key': requestKey() } })
+    const timeTarget = target.startsWith('after:') || target.startsWith('at:')
+    const option: NormalizedVoteOption = timeTarget ? 'going' : target as NormalizedVoteOption
+    const availableAfter = target.startsWith('after:') ? target.slice(target.indexOf(':') + 1) : null
+    const exactTimes = target.startsWith('at:') ? [target.slice(target.indexOf(':') + 1)] : undefined
+    await correctVoteMutation.mutateAsync({ id: match.id, data: { playerId: vote.playerId, option, availableAfter, ...(exactTimes === undefined ? {} : { exactTimes }) }, headers: { 'Idempotency-Key': requestKey() } })
     finishMutation(match.id)
   }
-  const handleRemoveVote = (match: NormalizedMatch, vote: NormalizedVote) => removeVoteMutation.mutate({ id: match.id, playerId: vote.playerId, headers: { 'Idempotency-Key': requestKey() } }, { onSuccess: () => finishMutation(match.id) })
+  const handleRemoveVote = (match: NormalizedMatch, vote: NormalizedVote, target: NormalizedRosterTarget) => {
+    const action = voteRemovalAction(match, vote, target)
+    if (action.type === 'replace_exact_times') {
+      correctVoteMutation.mutate({ id: match.id, data: { playerId: vote.playerId, option: 'going', availableAfter: null, exactTimes: [...action.exactTimes] }, headers: { 'Idempotency-Key': requestKey() } }, { onSuccess: () => finishMutation(match.id) })
+      return
+    }
+    removeVoteMutation.mutate({ id: match.id, playerId: vote.playerId, headers: { 'Idempotency-Key': requestKey() } }, { onSuccess: () => finishMutation(match.id) })
+  }
   const handleAddExternal = (match: NormalizedMatch, values: { readonly displayName?: string; readonly quantity: number }) => createExternalMutation.mutate({ id: match.id, data: { quantity: values.quantity, displayName: values.displayName ?? null }, headers: { 'Idempotency-Key': requestKey() } }, { onSuccess: () => finishMutation(match.id) })
   const handleUpdateExternal = (match: NormalizedMatch, participant: NormalizedExternalParticipant, displayName: string) => updateExternalMutation.mutate({ id: match.id, participantId: participant.id, data: { displayName }, headers: { 'Idempotency-Key': requestKey() } }, { onSuccess: () => finishMutation(match.id) })
   const handleRemoveExternal = (match: NormalizedMatch, participant: NormalizedExternalParticipant) => removeExternalMutation.mutate({ id: match.id, participantId: participant.id, headers: { 'Idempotency-Key': requestKey() } }, { onSuccess: () => finishMutation(match.id) })

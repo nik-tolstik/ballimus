@@ -10,9 +10,9 @@ import { formatMatchDate } from './lib/date-format'
 
 export type NormalizedMatchStatus = MatchResponseDto['status']
 export type NormalizedVoteOption = 'going' | 'maybe' | 'not_going'
-export type NormalizedTimeMode = 'exact' | 'availability'
+export type NormalizedTimeMode = 'exact' | 'exact_options' | 'availability'
 export type NormalizedPlanningStage = NonNullable<MatchResponseDto['planningStage']>
-export type NormalizedRosterTarget = NormalizedVoteOption | `after:${string}`
+export type NormalizedRosterTarget = NormalizedVoteOption | `after:${string}` | `at:${string}`
 
 export interface NormalizedVote {
   readonly playerId: string
@@ -22,6 +22,7 @@ export interface NormalizedVote {
   readonly avatarUrl: string | undefined
   readonly option: NormalizedVoteOption
   readonly availableAfter?: string | undefined
+  readonly exactTimes: readonly string[]
 }
 
 export interface NormalizedExternalParticipant {
@@ -116,7 +117,7 @@ export function normalizeMatch(match: MatchResponseDto): NormalizedMatch {
   return {
     id: match.id,
     title: match.displayTitle || match.title || `Матч ${match.id}`,
-    dateLabel: formatMatchDate(date, match.timeMode === 'availability' && match.selectedTime === null ? 'время выбираем' : time),
+    dateLabel: formatMatchDate(date, match.timeMode !== 'exact' && match.selectedTime === null ? 'время выбираем' : time),
     date,
     time,
     timeMode: match.timeMode,
@@ -145,6 +146,7 @@ export function normalizeMatch(match: MatchResponseDto): NormalizedMatch {
         avatarUrl: vote.avatarUrl ?? undefined,
         option: vote.option,
         availableAfter: vote.availableAfter ?? undefined,
+        exactTimes: vote.exactTimes,
       })),
       externalParticipants: match.roster.externalParticipants.map((participant) => ({
         id: participant.id,

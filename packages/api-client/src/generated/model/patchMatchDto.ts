@@ -15,7 +15,7 @@ export interface PatchMatchDto {
   time?: string | null;
   timeMode?: PatchMatchDtoTimeMode;
   /**
-   * @minItems 2
+   * @minItems 1
    * @maxItems 6
    */
   timeOptions?: string[];

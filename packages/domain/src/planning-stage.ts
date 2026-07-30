@@ -1,4 +1,4 @@
-import { matchTimeMode } from "./availability.js";
+import { isTimePollMode, matchTimeMode } from "./availability.js";
 import type { Match } from "./types.js";
 
 export const matchPlanningStages = [
@@ -15,7 +15,7 @@ type PlanningMatch = Pick<
 >;
 
 export function hasResolvedMatchTime(match: PlanningMatch): boolean {
-  if (matchTimeMode(match) === "availability") {
+  if (isTimePollMode(matchTimeMode(match))) {
     return match.selectedTime !== null
       && match.selectedTime !== undefined
       && match.scheduledAt !== null;

@@ -2,7 +2,7 @@ import { groupExternalParticipants, totalExternalParticipantQuantity } from "./e
 import { escapeHtml, escapedTextWithinLimit, truncatePlainText } from "./html.js";
 import type { ExternalParticipant, Match, Vote, VoteOption } from "./types.js";
 import { calendarDateInTimeZone, formatDateInTimeZone, formatTimeInTimeZone, MINSK_TIMEZONE } from "./time.js";
-import { cumulativeAvailabilityCount, isVoteEligibleForMatch, matchTimeMode } from "./availability.js";
+import { isTimePollMode, isVoteEligibleForMatch, matchTimeMode } from "./availability.js";
 import { deriveMatchPlanningStage, matchPlanningStageLabel } from "./planning-stage.js";
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
@@ -32,8 +32,8 @@ function fieldPriceLabel(match: Match): string {
   return price === null ? "не указана" : `${price} рублей`;
 }
 
-function playerRangeLabel(requiredPlayers: number): string {
-  return `${requiredPlayers}-${requiredPlayers + 2} человек`;
+function playerCountLabel(requiredPlayers: number): string {
+  return `${requiredPlayers} человек`;
 }
 
 function locationLabel(match: Match): string {
@@ -42,8 +42,10 @@ function locationLabel(match: Match): string {
 }
 
 function timeLabel(match: Match, timezone: string): string {
-  if (matchTimeMode(match) !== "availability") return "";
-  if (match.selectedTime === null || match.selectedTime === undefined) return "выбираем по доступности";
+  if (!isTimePollMode(matchTimeMode(match))) return "";
+  if (match.selectedTime === null || match.selectedTime === undefined) {
+    return matchTimeMode(match) === "availability" ? "выбираем по доступности" : "выбираем из вариантов";
+  }
   return match.scheduledAt === null
     ? match.selectedTime
     : formatTimeInTimeZone(match.scheduledAt, timezone);
@@ -71,7 +73,7 @@ export function formatMatchCardTitle(
 ): string {
   const storedTitle = match.title?.trim() || `Матч #v${String(match.id)}`;
   if (
-    matchTimeMode(match) === "availability"
+    isTimePollMode(matchTimeMode(match))
     && (match.selectedTime === null || match.selectedTime === undefined)
     && match.scheduleDate !== null
     && match.scheduleDate !== undefined
@@ -238,7 +240,7 @@ function addVoteListSection(
   if (!isLast && participants.length > 0) appendLine(lines, "", maxLength);
 }
 
-function addAvailabilityParticipantSections(
+function addTimeOptionParticipantSections(
   lines: string[],
   match: Match,
   votes: readonly Vote[],
@@ -246,11 +248,15 @@ function addAvailabilityParticipantSections(
 ): void {
   const options = match.timeOptions ?? [];
   for (const [index, time] of options.entries()) {
-    const participants = votes.filter((vote) => vote.option === "going" && vote.availableAfter === time);
+    const participants = votes.filter((vote) => vote.option === "going" && (
+      matchTimeMode(match) === "exact_options"
+        ? vote.exactTimes?.includes(time) === true || vote.availableAfter === time
+        : vote.availableAfter === time
+    ));
     const selected = match.selectedTime === time;
     appendLine(
       lines,
-      `${selected ? "✅ " : ""}<b>После ${escapeHtml(time)} (${participants.length})</b>`,
+      `${selected ? "✅ " : ""}<b>${matchTimeMode(match) === "availability" ? "После " : ""}${escapeHtml(time)} (${participants.length})</b>`,
       maxLength,
     );
     let shown = 0;
@@ -278,7 +284,18 @@ export function renderMatchCard(
   const { match, votes, externalParticipants = [] } = data;
   const externalCount = data.externalCount ?? totalExternalParticipantQuantity(externalParticipants, match.id);
   if (!Number.isSafeInteger(externalCount) || externalCount < 0) throw new Error("externalCount must be a non-negative safe integer");
-  const goingCount = votes.filter((vote) => isVoteEligibleForMatch(match, vote)).length + externalCount;
+  const timeMode = matchTimeMode(match);
+  const timeSelectionPending = isTimePollMode(timeMode)
+    && (match.selectedTime === null || match.selectedTime === undefined);
+  const eligibleVoteCount = timeMode === "exact_options"
+    && (match.selectedTime === null || match.selectedTime === undefined)
+    ? Math.max(0, ...(match.timeOptions ?? []).map(
+      (time) => votes.filter((vote) => vote.option === "going" && (
+        vote.exactTimes?.includes(time) === true || vote.availableAfter === time
+      )).length,
+    ))
+    : votes.filter((vote) => isVoteEligibleForMatch(match, vote)).length;
+  const goingCount = eligibleVoteCount + externalCount;
   const cancellationReason = match.cancellationReason?.trim();
   const title = escapeHtml(truncatePlainText(formatMatchCardTitle(match, displayOptions), 512));
   const lines: string[] = [];
@@ -292,9 +309,9 @@ export function renderMatchCard(
       : [`Причина отмены: ${escapeHtml(truncatePlainText(cancellationReason, 512))}`]),
     "",
     `📍 Место: ${escapeHtml(truncatePlainText(locationLabel(match), 512))}`,
-    `🏠 Формат: ${venueLabel(match.venueType)}, ${playerRangeLabel(match.requiredPlayers)}`,
+    `🏠 Формат: ${venueLabel(match.venueType)}, ${playerCountLabel(match.requiredPlayers)}`,
     `🫰 Сумма: ${fieldPriceLabel(match)}`,
-    ...(matchTimeMode(match) === "availability"
+    ...(isTimePollMode(timeMode) && !(timeMode === "exact_options" && timeSelectionPending)
       ? [`🕒 Время: ${timeLabel(match, displayOptions.timezone ?? DEFAULT_MATCH_CARD_TIMEZONE)}`]
       : []),
     "",
@@ -302,18 +319,6 @@ export function renderMatchCard(
     ...(externalCount > 0 ? [`Внешние игроки: ${externalCount}`] : []),
   ];
   for (const line of baseLines) appendLine(lines, line, maxLength);
-  if (
-    matchTimeMode(match) === "availability"
-    && (match.selectedTime === null || match.selectedTime === undefined)
-    && (match.timeOptions?.length ?? 0) > 0
-  ) {
-    appendLine(lines, "", maxLength);
-    appendLine(lines, "Доступны к времени:", maxLength);
-    for (const time of match.timeOptions ?? []) {
-      const count = cumulativeAvailabilityCount(votes, time, externalCount);
-      appendLine(lines, `К ${escapeHtml(time)} — ${count}/${match.requiredPlayers}`, maxLength);
-    }
-  }
   if (externalCount > 0) {
     const externalLines = namedExternalParticipantLines(externalParticipants, match.id);
     let shownExternal = 0;
@@ -325,21 +330,30 @@ export function renderMatchCard(
   }
   appendLine(lines, "", maxLength);
 
-  if (matchTimeMode(match) === "availability" && (match.selectedTime === null || match.selectedTime === undefined)) {
-    addAvailabilityParticipantSections(lines, match, votes, maxLength);
+  if (timeSelectionPending) {
+    addTimeOptionParticipantSections(lines, match, votes, maxLength);
     appendLine(lines, "", maxLength);
-  } else if (matchTimeMode(match) === "availability") {
+  } else if (isTimePollMode(timeMode)) {
     const eligibleGoing = votes.filter((vote) => isVoteEligibleForMatch(match, vote));
     const unavailableGoing = votes.filter((vote) => vote.option === "going" && !isVoteEligibleForMatch(match, vote));
     addVoteListSection(lines, eligibleGoing, "Участвуют", true, maxLength, false);
     if (unavailableGoing.length > 0) {
-      addVoteListSection(lines, unavailableGoing, "Не смогут к выбранному времени", false, maxLength, false);
+      addVoteListSection(
+        lines,
+        unavailableGoing,
+        timeMode === "availability" ? "Не смогут к выбранному времени" : "Выбрали другое время",
+        false,
+        maxLength,
+        false,
+      );
     }
   } else {
     addParticipantSection(lines, votes, "going", maxLength, false);
   }
   addParticipantSection(lines, votes, "maybe", maxLength, false);
-  addParticipantSection(lines, votes, "not_going", maxLength, true);
+  if (votes.some((vote) => vote.option === "not_going")) {
+    addParticipantSection(lines, votes, "not_going", maxLength, true);
+  }
 
   return {
     text: lines.join("\n").trim(),

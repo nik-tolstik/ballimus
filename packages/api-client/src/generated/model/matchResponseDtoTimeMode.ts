@@ -12,5 +12,6 @@ export type MatchResponseDtoTimeMode = typeof MatchResponseDtoTimeMode[keyof typ
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const MatchResponseDtoTimeMode = {
   exact: 'exact',
+  exact_options: 'exact_options',
   availability: 'availability',
 } as const;

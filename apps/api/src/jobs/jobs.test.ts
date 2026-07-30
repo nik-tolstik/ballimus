@@ -282,6 +282,7 @@ describe("jobs", () => {
       }),
       markSent: vi.fn(async (id) => notification(id, "sent")),
       markFailed: vi.fn(async (id) => notification(id, "failed")),
+      markUncertain: vi.fn(async (id) => notification(id, "uncertain")),
     };
     const effects = { sendMessage: vi.fn().mockResolvedValue({ messageId: 1n }) };
     const runner = new WeatherRunner(config(), dueProvider, forecasts, notifications, effects as never);
