@@ -12,6 +12,7 @@
     "dev": "node scripts/dev.mjs",
     "dev:ngrok": "node scripts/dev-ngrok.mjs",
     "auth:fixture": "node scripts/generate-init-data.mjs",
+    "pretest": "pnpm --filter @football/api-client --filter @football/db --filter @football/domain run build",
     "test": "pnpm --if-present --filter './apps/*' --filter './packages/*' -r run test",
     "lint": "pnpm --if-present --filter './apps/*' --filter './packages/*' -r run lint",
     "typecheck": "pnpm --if-present --filter './apps/*' --filter './packages/*' -r run typecheck",
