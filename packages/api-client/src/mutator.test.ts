@@ -23,7 +23,7 @@ describe("customInstance", () => {
       telegramInitData: "query_id=123",
     });
 
-    await customInstance({ url: "/v1/matches/drafts", method: "POST" });
+    await customInstance({ url: "/v1/matches", method: "POST" });
 
     const requestConfig = request.mock.calls[0]?.[0];
     const headers = AxiosHeaders.from(requestConfig?.headers as unknown as RawAxiosHeaders | undefined);

@@ -25,7 +25,7 @@ const CALENDAR_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 const LOCAL_TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/u;
 const USERNAME_PATTERN = /^@?[A-Za-z][A-Za-z0-9_]{4,31}$/u;
 
-export class MatchDraftDto {
+export class MatchCreateDto {
   @ApiProperty({ type: String, example: "2026-08-03", pattern: "^\\d{4}-\\d{2}-\\d{2}$" })
   @IsString()
   @Matches(CALENDAR_DATE_PATTERN)

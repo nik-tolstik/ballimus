@@ -30,7 +30,7 @@ import {
   ExternalParticipantCreateDto,
   ExternalParticipantUpdateDto,
   FinalizeMatchDto,
-  MatchDraftDto,
+  MatchCreateDto,
   MatchListQueryDto,
   PatchMatchDto,
   ReconcileMatchDto,
@@ -101,21 +101,21 @@ export class MatchesController {
     return this.service.getMatch(ownerTelegramUserId, matchId);
   }
 
-  @Post("drafts")
+  @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ operationId: "createOwnerMatchDraft", summary: "Create a structured match draft" })
+  @ApiOperation({ operationId: "createOwnerMatch", summary: "Create and publish a match" })
   @ApiHeader({ name: "Idempotency-Key", required: true })
-  @ApiBody({ type: MatchDraftDto })
+  @ApiBody({ type: MatchCreateDto })
   @ApiCreatedResponse({
-    description: "Created draft match.",
+    description: "Created active match with publication accepted into the durable outbox.",
     type: MatchMutationResponseDto,
   })
-  public createDraft(
+  public createMatch(
     @CurrentOwnerId() ownerTelegramUserId: bigint,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
-    @Body() input: MatchDraftDto,
+    @Body() input: MatchCreateDto,
   ): Promise<Record<string, unknown>> {
-    return this.service.createDraft(ownerTelegramUserId, idempotencyKey, input);
+    return this.service.createMatch(ownerTelegramUserId, idempotencyKey, input);
   }
 
   @Patch(":id")
@@ -157,7 +157,7 @@ export class MatchesController {
 
   @Post(":id/publish")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ operationId: "publishOwnerMatch", summary: "Publish a draft public card" })
+  @ApiOperation({ operationId: "publishOwnerMatch", summary: "Publish a legacy unpublished match" })
   @ApiParam({ name: "id", description: "Decimal match identifier", type: String })
   @ApiHeader({ name: "Idempotency-Key", required: true })
   @ApiHeader({ name: "If-Match", required: false })

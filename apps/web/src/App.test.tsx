@@ -23,7 +23,7 @@ vi.mock('@football/api-client', () => ({
   useListOwnerMatches: () => queryState.matches,
   useListOwnerPlayers: () => queryState.players,
   usePatchOwnerMatch: () => queryState.mutation,
-  useCreateOwnerMatchDraft: () => queryState.mutation,
+  useCreateOwnerMatch: () => queryState.mutation,
   usePublishOwnerMatch: () => queryState.mutation,
   useRefreshOwnerMatchCard: () => queryState.mutation,
   useFinalizeOwnerMatch: () => queryState.mutation,
@@ -41,6 +41,7 @@ vi.mock('@football/api-client', () => ({
 
 import App, { MatchEditor, TabBar } from './App'
 import { brandForEnvironment } from './brand'
+import { DatePicker } from './components/football/date-time-picker'
 import { editorTimeConfiguration, validateEditorValues } from './components/football/match-editor'
 import { availabilityCountAt, cancellationReasonText, CancellationReasonFields, initialsForName, MatchesPanel, MatchRoster, MatchSettings, PlayersPanel, rosterGroupCount, validateCancellationReason, validateExternalParticipantName, validateExternalParticipantValues, validateFinalMatchDetails, validatePlayerPseudonym, voteDropZoneStyle, voteOptionFromDropTarget } from './components/football/panels'
 import type { NormalizedMatch, NormalizedPlayer } from './normalize'
@@ -159,6 +160,25 @@ describe('API-backed surface states', () => {
     expect(markup).toContain('md:text-sm')
   })
 
+  it('uses the native date input on mobile while keeping the custom desktop calendar', () => {
+    const markup = renderToStaticMarkup(<DatePicker value="2026-08-02" onChange={vi.fn()} />)
+
+    expect(markup).toContain('type="date"')
+    expect(markup).toContain('value="2026-08-02"')
+    expect(markup).toContain('mobile-native-date-picker')
+    expect(markup).toContain('desktop-custom-date-picker')
+    expect(markup).toContain('native-temporal-input-frame')
+    expect(markup).toContain('max-w-full')
+    expect(markup).toContain('p-0')
+  })
+
+  it('publishes a new match directly without a draft step', () => {
+    const markup = renderToStaticMarkup(<MatchEditor onSave={vi.fn()} conflict="" onClearConflict={vi.fn()} saving={false} />)
+
+    expect(markup).toContain('Опубликовать матч')
+    expect(markup).not.toContain('черновик')
+  })
+
   it('uses native submit semantics for every save form', async () => {
     const panelsSource = await readFile(new URL('./components/football/panels.tsx', import.meta.url), 'utf8')
 
@@ -170,6 +190,14 @@ describe('API-backed surface states', () => {
     expect(panelsSource).toContain('Форма сверки Telegram-карточки')
     expect(panelsSource).toContain('Форма отмены матча')
     expect(panelsSource).toContain('Форма псевдонима игрока')
+  })
+
+  it('prevents the match editor sheet from auto-focusing the native date picker', async () => {
+    const panelsSource = await readFile(new URL('./components/football/panels.tsx', import.meta.url), 'utf8')
+
+    expect(panelsSource).toContain('onOpenAutoFocus={(event) => {')
+    expect(panelsSource).toContain('event.preventDefault()')
+    expect(panelsSource).toContain("querySelector<HTMLButtonElement>('[data-slot=\"sheet-close\"]')?.focus()")
   })
 
   it('exposes all primary tabs and marks the active tab accessibly', () => {
@@ -184,7 +212,7 @@ describe('API-backed surface states', () => {
     const sharedProps = {
       matches: [normalizedMatch],
       onSelect: vi.fn(),
-      onCreate: vi.fn(),
+      onCreate: vi.fn().mockResolvedValue(undefined),
       onPatch: vi.fn(),
       onPublish: vi.fn(),
       onFinalize: vi.fn().mockResolvedValue(undefined),
@@ -223,7 +251,7 @@ describe('API-backed surface states', () => {
     const sharedProps = {
       matches: [normalizedMatch],
       onSelect: vi.fn(),
-      onCreate: vi.fn(),
+      onCreate: vi.fn().mockResolvedValue(undefined),
       onPatch: vi.fn(),
       onPublish: vi.fn(),
       onFinalize: vi.fn().mockResolvedValue(undefined),
@@ -405,9 +433,12 @@ describe('API-backed surface states', () => {
     expect(markup.match(/type="time"/gu)).toHaveLength(2)
     expect(markup).toContain('step="900"')
     expect(markup).not.toContain('Шаг — 15 минут')
-    expect(markup).toContain('min-w-0 flex-1')
+    expect(markup).toContain('grid-cols-[minmax(0,1fr)_2.5rem]')
     expect(markup).toContain('aria-label="Удалить время 19:00"')
     expect(markup).toContain('aria-label="Удалить время 20:00"')
+
+    const exactMarkup = renderToStaticMarkup(<MatchEditor match={normalizedMatch} onSave={vi.fn()} conflict="" onClearConflict={vi.fn()} saving={false} />)
+    expect(exactMarkup).not.toContain('aria-label="Удалить время')
   })
 
   it('only displays the venue type as radio buttons when a location is set', () => {

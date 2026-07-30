@@ -1,6 +1,6 @@
 import { HttpException, Inject, Injectable, Optional } from "@nestjs/common";
 import {
-  assertValidMatchDraft,
+  assertValidCreateMatchInput,
   deriveMatchPlanningStage,
   evaluateMatchTransition,
   formatMatchCardTitle,
@@ -54,7 +54,7 @@ import {
   type ExternalParticipantCreateDto,
   type ExternalParticipantUpdateDto,
   type FinalizeMatchDto,
-  type MatchDraftDto,
+  type MatchCreateDto,
   type MatchListQueryDto,
   type PatchMatchDto,
   type PlayerListQueryDto,
@@ -371,37 +371,49 @@ export class OwnerRestService {
     });
   }
 
-  public async createDraft(
+  public async createMatch(
     ownerTelegramUserId: bigint,
     idempotencyKey: string | undefined,
-    input: MatchDraftDto,
+    input: MatchCreateDto,
   ): Promise<Record<string, unknown>> {
-    const draft = this.normalizeDraft(input);
-    const scheduledAt = this.scheduledAt(draft.date, draft.time);
-    const title = formatDerivedTitle(draft);
+    const matchInput = this.normalizeCreateInput(input);
+    const scheduledAt = this.scheduledAt(matchInput.date, matchInput.time);
+    const title = formatDerivedTitle(matchInput);
     return this.mutate(ownerTelegramUserId, idempotencyKey, {
       method: "POST",
-      path: "/matches/drafts",
+      path: "/matches",
       body: input,
     }, 201, async (repositories) => {
       const match = await repositories.matches.create({
         telegramChatId: this.config.telegramGroupChatId,
         scheduledAt,
-        scheduleDate: draft.date,
-        timeMode: draft.timeMode ?? "exact",
-        timeOptions: draft.timeOptions ?? [],
-        location: draft.location,
-        venueType: draft.venueType,
-        fieldPriceRubles: draft.fieldPriceRubles ?? null,
+        scheduleDate: matchInput.date,
+        timeMode: matchInput.timeMode ?? "exact",
+        timeOptions: matchInput.timeOptions ?? [],
+        location: matchInput.location,
+        venueType: matchInput.venueType,
+        fieldPriceRubles: matchInput.fieldPriceRubles ?? null,
         title,
-        requiredPlayers: draft.requiredPlayers,
+        requiredPlayers: matchInput.requiredPlayers,
         creatorTelegramUserId: ownerTelegramUserId,
-        status: "draft",
+        status: "active",
       });
+      await repositories.matchMessages.createPending(
+        match.id,
+        match.telegramChatId,
+        publicCardTopicId(this.config),
+      );
       const aggregate = await this.loadAggregate(repositories, match.id);
+      await this.enqueueCardEvent(
+        repositories,
+        match,
+        "publish_public_card",
+        `publish:public-card:${match.id.toString(10)}`,
+        this.renderAggregate(aggregate),
+      );
       return {
         match: this.toDetails(aggregate),
-        action: { type: "draft_created" },
+        action: { type: "publish_requested", outboxState: "pending" },
       };
     });
   }
@@ -1078,8 +1090,8 @@ export class OwnerRestService {
     });
   }
 
-  private normalizeDraft(input: MatchDraftDto) {
-    return assertValidMatchDraft({
+  private normalizeCreateInput(input: MatchCreateDto) {
+    return assertValidCreateMatchInput({
       date: input.date,
       time: input.time,
       timeMode: input.timeMode ?? "exact",

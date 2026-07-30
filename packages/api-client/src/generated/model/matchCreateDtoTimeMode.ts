@@ -6,11 +6,11 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type MatchDraftDtoTimeMode = typeof MatchDraftDtoTimeMode[keyof typeof MatchDraftDtoTimeMode];
+export type MatchCreateDtoTimeMode = typeof MatchCreateDtoTimeMode[keyof typeof MatchCreateDtoTimeMode];
 
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const MatchDraftDtoTimeMode = {
+export const MatchCreateDtoTimeMode = {
   exact: 'exact',
   availability: 'availability',
 } as const;

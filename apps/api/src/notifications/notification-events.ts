@@ -51,6 +51,8 @@ export async function claimThresholdNotificationEvent(
     ? thresholdReachedNotificationTransition({
       matchId: result.match.id,
       title: result.match.title,
+      scheduleDate: result.match.scheduleDate,
+      location: result.match.location,
       goingCount: result.countsAfter.goingCount,
       threshold: result.match.requiredPlayers,
       eventKey,

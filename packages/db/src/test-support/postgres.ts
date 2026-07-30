@@ -9,7 +9,7 @@ import type { AppDatabase } from "../client.js";
 import { schema } from "../schema.js";
 
 const defaultLocalDatabaseUrl =
-  "postgresql://football_local:football_local_dev_password@127.0.0.1:54329/football_local";
+  "postgresql://football_local:football_local_dev_password@127.0.0.1:55432/football_local";
 const migrationsFolder = resolve(import.meta.dirname, "../../migrations");
 const applicationName = "football-bot-postgres-integration-tests";
 

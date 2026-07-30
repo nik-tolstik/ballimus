@@ -19,10 +19,10 @@ cp .env.local.example .env.local
 node scripts/postgres-local.mjs
 ```
 
-The local helper starts PostgreSQL on `127.0.0.1:54329` and waits for its health check. Extend `.env.local` with the required local API values:
+The local helper starts PostgreSQL on `127.0.0.1:55432` and waits for its health check. Extend `.env.local` with the required local API values:
 
 ```text
-DATABASE_URL=postgresql://football_local:football_local_dev_password@127.0.0.1:54329/football_local
+DATABASE_URL=postgresql://football_local:football_local_dev_password@127.0.0.1:55432/football_local
 TELEGRAM_BOT_TOKEN=<local-test-bot-token>
 TELEGRAM_WEBHOOK_SECRET=<local-test-webhook-secret>
 TELEGRAM_OWNER_USER_ID=<local-owner-telegram-id>
@@ -168,7 +168,7 @@ Use only the local bot, local group, local database, and local Mini App URL.
 
 1. Start PostgreSQL, apply `pnpm --filter @football/db db:migrate`, start the API, and verify `GET http://localhost:3000/health` returns API status `ok`.
 2. Open the Mini App from the local Telegram bot as the configured owner. Verify that an ordinary Telegram account is rejected and that opening the URL outside Telegram shows the Telegram-only state.
-3. Create a structured draft, preview its server-rendered card, publish it, and verify exactly one card is queued for `General`.
+3. Create and publish a match from the Mini App, then verify that one transaction created the active match and queued exactly one card for `General`.
 4. Vote from Telegram accounts on the public card. Verify callback source checks, one vote per player/match, card refresh, and duplicate-update safety.
 5. Edit with the current version, then retry with a stale `If-Match` value and verify a conflict without data loss.
 6. Verify confirmation, completion, cancellation, vote correction/removal, external participants, aliases, and retained history through the owner flow.

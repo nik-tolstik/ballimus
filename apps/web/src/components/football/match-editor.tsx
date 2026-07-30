@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Save, Trash2, TriangleAlert } from 'lucide-react'
+import { Plus, Save, Send, Trash2, TriangleAlert } from 'lucide-react'
 
 import type { NormalizedMatch, NormalizedTimeMode } from '@/normalize'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -142,11 +142,11 @@ export function MatchEditor({ match, onSave, conflict, onClearConflict, saving }
             <FieldLabel>Время</FieldLabel>
             <FieldDescription>{matchTimes.length === 1 ? 'Игроки ответят «Буду», «Под вопросом» или «Не смогу».' : 'Игроки выберут самое раннее время, после которого смогут приехать.'}</FieldDescription>
             <FieldGroup className="gap-2">
-              {matchTimes.map((option, index) => <Field key={index} orientation="horizontal" className="min-w-0">
-                <div className="min-w-0 flex-1">
+              {matchTimes.map((option, index) => <Field key={index} orientation={matchTimes.length > 1 ? 'horizontal' : 'vertical'} className={matchTimes.length > 1 ? 'grid min-w-0 grid-cols-[minmax(0,1fr)_2.5rem] gap-2' : 'min-w-0'}>
+                <div className="min-w-0">
                   <TimePicker ariaLabel={`Время ${index + 1}`} value={option} onChange={(value) => { setMatchTimes((current) => current.map((item, itemIndex) => itemIndex === index ? value : item)); setValidation('') }} invalid={validation !== '' && (option === '' || matchTimes.filter((item) => item === option).length > 1)} />
                 </div>
-                <Button type="button" size="icon" variant="ghost" disabled={matchTimes.length <= 1} onClick={() => setMatchTimes((current) => current.filter((_item, itemIndex) => itemIndex !== index))} aria-label={`Удалить время ${option || index + 1}`}><Trash2 /></Button>
+                {matchTimes.length > 1 ? <Button type="button" size="icon" variant="ghost" className="size-10" onClick={() => setMatchTimes((current) => current.filter((_item, itemIndex) => itemIndex !== index))} aria-label={`Удалить время ${option || index + 1}`}><Trash2 /></Button> : null}
               </Field>)}
               <Button type="button" variant="outline" disabled={matchTimes.length >= 6} onClick={() => { const next = nextAvailabilityTime(matchTimes); if (next !== undefined) setMatchTimes((current) => [...current, next]); setValidation('') }}><Plus data-icon="inline-start" />Добавить ещё время</Button>
             </FieldGroup>
@@ -193,7 +193,7 @@ export function MatchEditor({ match, onSave, conflict, onClearConflict, saving }
 
       <div className="sheet-actions bg-muted/60 px-4 pt-3 pb-[max(1rem,calc(1rem+var(--tg-safe-bottom)))]">
         <Button type="submit" className="h-10 w-full" disabled={saving}>
-          <Save data-icon="inline-start" /> {saving ? 'Сохранение…' : match ? 'Сохранить' : 'Создать черновик'}
+          {match ? <Save data-icon="inline-start" /> : <Send data-icon="inline-start" />} {saving ? (match ? 'Сохранение…' : 'Публикация…') : match ? 'Сохранить' : 'Опубликовать матч'}
         </Button>
       </div>
     </form>

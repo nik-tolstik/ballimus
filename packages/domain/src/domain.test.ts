@@ -5,7 +5,7 @@ import {
   LifecycleConflictError,
   MINSK_TIMEZONE,
   WEATHER_FORECAST_LEAD_TIME_MS,
-  assertValidMatchDraft,
+  assertValidCreateMatchInput,
   calculateRosterCounts,
   cumulativeAvailabilityCount,
   deriveMatchPlanningStage,
@@ -82,7 +82,7 @@ function external(
 }
 
 describe("public domain entrypoint and validation", () => {
-  it("rejects malformed structured drafts and accepts a normalized draft", () => {
+  it("rejects malformed creation input and accepts normalized match input", () => {
     const malformed = {
       date: "2026-02-30",
       time: "25:61",
@@ -91,9 +91,9 @@ describe("public domain entrypoint and validation", () => {
       requiredPlayers: 0,
       unexpected: true,
     };
-    expect(() => assertValidMatchDraft(malformed)).toThrow(DomainValidationError);
+    expect(() => assertValidCreateMatchInput(malformed)).toThrow(DomainValidationError);
 
-    expect(assertValidMatchDraft({
+    expect(assertValidCreateMatchInput({
       date: "2026-08-03",
       time: "20:00",
       timeMode: "exact",
@@ -115,7 +115,7 @@ describe("public domain entrypoint and validation", () => {
   });
 
   it("normalizes availability choices and calculates cumulative attendance", () => {
-    const draft = assertValidMatchDraft({
+    const matchInput = assertValidCreateMatchInput({
       date: "2026-08-03",
       time: null,
       timeMode: "availability",
@@ -124,7 +124,7 @@ describe("public domain entrypoint and validation", () => {
       venueType: "outdoor",
       requiredPlayers: 3,
     });
-    expect(draft.timeOptions).toEqual(["19:00", "20:00"]);
+    expect(matchInput.timeOptions).toEqual(["19:00", "20:00"]);
 
     const availabilityVotes: Vote[] = [
       { ...vote(1, "going"), availableAfter: "19:00" },
@@ -382,10 +382,24 @@ describe("Minsk time and weather rules", () => {
   });
 
   it("uses one stable Minsk calendar-day transition key and typed notification transitions", () => {
-    const first = thresholdReachedNotificationTransition({ matchId: -100, goingCount: 3, threshold: 3, eventKey: "1", requiresFinalDetails: true });
+    const first = thresholdReachedNotificationTransition({
+      matchId: 9,
+      title: "02.08.2026 время выбираем — BOX365",
+      scheduleDate: "2026-08-02",
+      location: "BOX365",
+      goingCount: 1,
+      threshold: 1,
+      eventKey: "1",
+      requiresFinalDetails: true,
+    });
     const lost = thresholdLostNotificationTransition({ matchId: -100, goingCount: 2, threshold: 3, eventKey: "2" });
     expect(first).toMatchObject({ notificationType: "threshold_reached", transitionKey: "threshold:reached:1" });
-    expect(first.text).toContain("Уточните точное время и место матча в Ballimus.");
+    expect(first.text).toBe(
+      "⚽ <b>Минимальный состав собран!</b>\n" +
+      "<b>#v9 · 02.08.2026 · BOX365</b>\n" +
+      "👥 Игроков: <b>1 из 1</b>\n\n" +
+      "Нужно указать точное время и место проведения матча.",
+    );
     expect(lost).toMatchObject({ notificationType: "threshold_lost", transitionKey: "threshold:lost:2" });
     expect(formatConfirmationNotification({
       scheduledAt: new Date("2026-08-01T15:30:00.000Z"),

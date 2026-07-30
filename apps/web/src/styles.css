@@ -213,6 +213,20 @@
   box-shadow: 0 16px 48px rgb(0 0 0 / 35%);
 }
 
+.mobile-native-date-picker {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .mobile-native-date-picker {
+    display: block;
+  }
+
+  .desktop-custom-date-picker {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

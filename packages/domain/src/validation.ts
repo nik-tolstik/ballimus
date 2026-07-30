@@ -6,7 +6,7 @@ import {
   type DomainId,
   type ExternalParticipant,
   type Match,
-  type MatchDraft,
+  type CreateMatchInput,
   type MatchStatus,
   type MatchTimeMode,
   type VenueType,
@@ -247,11 +247,11 @@ function optionalNonNegativeInteger(
   return value;
 }
 
-export function validateMatchDraft(input: unknown): ValidationResult<MatchDraft> {
+export function validateCreateMatchInput(input: unknown): ValidationResult<CreateMatchInput> {
   if (!isRecord(input)) {
     return {
       success: false,
-      issues: [{ path: "<root>", code: "invalid_type", message: "draft must be an object" }],
+      issues: [{ path: "<root>", code: "invalid_type", message: "match input must be an object" }],
     };
   }
 
@@ -368,8 +368,8 @@ export function validateMatchDraft(input: unknown): ValidationResult<MatchDraft>
   };
 }
 
-export function assertValidMatchDraft(input: unknown): MatchDraft {
-  const result = validateMatchDraft(input);
+export function assertValidCreateMatchInput(input: unknown): CreateMatchInput {
+  const result = validateCreateMatchInput(input);
   if (!result.success) throw new DomainValidationError(result.issues);
   return result.value;
 }

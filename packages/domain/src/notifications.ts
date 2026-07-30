@@ -11,6 +11,28 @@ function formatMatchContext(matchId: MatchId, title: string | null | undefined):
     : `#v${String(matchId)} «${escapeHtml(normalizedTitle)}»`;
 }
 
+function formatThresholdMatchContext(
+  matchId: MatchId,
+  title: string | null | undefined,
+  scheduleDate: string | null | undefined,
+  location: string | null | undefined,
+): string {
+  const dateMatch = scheduleDate?.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const formattedDate = dateMatch === null || dateMatch === undefined
+    ? undefined
+    : `${dateMatch[3]}.${dateMatch[2]}.${dateMatch[1]}`;
+  const normalizedLocation = location?.trim();
+  const details = [
+    formattedDate,
+    normalizedLocation === undefined || normalizedLocation === ""
+      ? undefined
+      : escapeHtml(normalizedLocation),
+  ].filter((value): value is string => value !== undefined);
+  return details.length === 0
+    ? formatMatchContext(matchId, title)
+    : [`#v${String(matchId)}`, ...details].join(" · ");
+}
+
 function assertCount(value: number, name: string): void {
   if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${name} must be a non-negative safe integer`);
 }
@@ -25,17 +47,18 @@ export function formatThresholdNotification(
   goingCount: number,
   threshold: number,
   requiresFinalDetails = false,
+  scheduleDate?: string | null,
+  location?: string | null,
 ): string {
   assertCount(goingCount, "goingCount");
   assertThreshold(threshold);
   return [
-    "⚽ <b>Минимальный состав набран!</b>",
-    "",
-    formatMatchContext(matchId, title),
-    `👥 ${goingCount}/${threshold} игроков`,
+    "⚽ <b>Минимальный состав собран!</b>",
+    `<b>${formatThresholdMatchContext(matchId, title, scheduleDate, location)}</b>`,
+    `👥 Игроков: <b>${goingCount} из ${threshold}</b>`,
     "",
     requiresFinalDetails
-      ? "Уточните точное время и место матча в Ballimus."
+      ? "Нужно указать точное время и место проведения матча."
       : "Матч готов к подтверждению в Ballimus.",
   ].join("\n");
 }
@@ -147,6 +170,8 @@ export interface FormattedNotificationTransition extends NotificationTransition 
 export function thresholdReachedNotificationTransition(input: {
   readonly matchId: MatchId;
   readonly title?: string | null;
+  readonly scheduleDate?: string | null;
+  readonly location?: string | null;
   readonly goingCount: number;
   readonly threshold: number;
   readonly eventKey: string;
@@ -163,6 +188,8 @@ export function thresholdReachedNotificationTransition(input: {
       input.goingCount,
       input.threshold,
       input.requiresFinalDetails,
+      input.scheduleDate,
+      input.location,
     ),
   };
 }

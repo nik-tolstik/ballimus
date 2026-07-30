@@ -85,7 +85,7 @@ export interface ExternalParticipant {
   readonly createdAt?: Date;
 }
 
-export interface MatchDraft {
+export interface CreateMatchInput {
   readonly date: string;
   readonly time: string | null;
   readonly timeMode?: MatchTimeMode;

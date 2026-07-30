@@ -34,7 +34,7 @@ Invalid or expired init data is rejected with `401`; a valid Telegram user who i
 The public contract is generated from `apps/api/openapi.json` and includes:
 
 - bootstrap, match listing, match details, and player listing;
-- structured draft creation, optimistic-concurrency edits, server-rendered card preview, publication, confirmation, completion, cancellation, refresh, and reconciliation;
+- atomic match creation and initial publication, optimistic-concurrency edits, server-rendered card preview, confirmation, completion, cancellation, refresh, and reconciliation;
 - owner vote correction/removal and external-participant management;
 - player aliases and readable-name updates.
 
@@ -51,10 +51,9 @@ Validate signed owner session
         v
 Load bootstrap, matches, and players
         |
-        +--> create structured draft
+        +--> create active match + pending card + durable publication event
         |        |
-        |        +--> preview server-rendered public card
-        |        +--> publish -> durable outbox event
+        |        +--> jobs publish the server-rendered public card
         |
         +--> edit with If-Match -> transaction -> card refresh event
         +--> manage roster/lifecycle -> transaction -> notification/card events

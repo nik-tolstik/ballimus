@@ -7,9 +7,9 @@ PostgreSQL is the only database path for the maintained API and packages. Local 
 The Compose service:
 
 - uses `postgres:18.4-alpine`;
-- binds only to `127.0.0.1:54329`;
+- binds only to `127.0.0.1:55432`;
 - uses the local database and role `football_local`;
-- stores data in the named volume `football-bot-local-postgres`;
+- stores data in the named volume `football-bot-local-postgres-data`;
 - has no connection to Railway or any production resource.
 
 Use `.env.local` for these settings. Keep production URLs, passwords, bot tokens, IDs, and webhook values out of the file:
@@ -18,8 +18,8 @@ Use `.env.local` for these settings. Keep production URLs, passwords, bot tokens
 POSTGRES_DB=football_local
 POSTGRES_USER=football_local
 POSTGRES_PASSWORD=football_local_dev_password
-POSTGRES_HOST_PORT=54329
-DATABASE_URL=postgresql://football_local:football_local_dev_password@127.0.0.1:54329/football_local
+POSTGRES_HOST_PORT=55432
+DATABASE_URL=postgresql://football_local:football_local_dev_password@127.0.0.1:55432/football_local
 ```
 
 ## Lifecycle

@@ -32,13 +32,13 @@ import type {
   ConfirmOwnerMatchHeaders,
   CorrectOwnerMatchVoteHeaders,
   CreateOwnerExternalParticipantHeaders,
-  CreateOwnerMatchDraftHeaders,
+  CreateOwnerMatchHeaders,
   ExternalParticipantCreateDto,
   ExternalParticipantUpdateDto,
   FinalizeMatchDto,
   FinalizeOwnerMatchHeaders,
   ListOwnerMatchesParams,
-  MatchDraftDto,
+  MatchCreateDto,
   MatchEnvelopeResponseDto,
   MatchListResponseDto,
   MatchMutationResponseDto,
@@ -161,6 +161,71 @@ export function useListOwnerMatches<TData = Awaited<ReturnType<typeof listOwnerM
 
 
 /**
+ * @summary Create and publish a match
+ */
+export const createOwnerMatch = (
+    matchCreateDto: MatchCreateDto,
+    headers: CreateOwnerMatchHeaders,
+ options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
+) => {
+
+
+      return customInstance<MatchMutationResponseDto>(
+      {url: `/v1/matches`, method: 'POST',
+      headers: {'Content-Type': 'application/json', ...headers},
+      data: matchCreateDto, ...(signal ? { signal }: {})
+    },
+      options);
+    }
+
+
+
+export const getCreateOwnerMatchMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOwnerMatch>>, TError,{data: MatchCreateDto;headers: CreateOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof createOwnerMatch>>, TError,{data: MatchCreateDto;headers: CreateOwnerMatchHeaders}, TContext> => {
+
+const mutationKey = ['createOwnerMatch'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createOwnerMatch>>, {data: MatchCreateDto;headers: CreateOwnerMatchHeaders}> = (props) => {
+          const {data,headers} = props ?? {};
+
+          return  createOwnerMatch(data,headers,requestOptions)
+        }
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateOwnerMatchMutationResult = NonNullable<Awaited<ReturnType<typeof createOwnerMatch>>>
+    export type CreateOwnerMatchMutationBody = MatchCreateDto
+    export type CreateOwnerMatchMutationError = unknown
+
+    /**
+ * @summary Create and publish a match
+ */
+export const useCreateOwnerMatch = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOwnerMatch>>, TError,{data: MatchCreateDto;headers: CreateOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createOwnerMatch>>,
+        TError,
+        {data: MatchCreateDto;headers: CreateOwnerMatchHeaders},
+        TContext
+      > => {
+
+      const mutationOptions = getCreateOwnerMatchMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
  * @summary Load an owner match and roster
  */
 export const getOwnerMatch = (
@@ -318,71 +383,6 @@ export const usePatchOwnerMatch = <TError = unknown,
       return useMutation(mutationOptions, queryClient);
     }
     /**
- * @summary Create a structured match draft
- */
-export const createOwnerMatchDraft = (
-    matchDraftDto: MatchDraftDto,
-    headers: CreateOwnerMatchDraftHeaders,
- options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
-) => {
-
-
-      return customInstance<MatchMutationResponseDto>(
-      {url: `/v1/matches/drafts`, method: 'POST',
-      headers: {'Content-Type': 'application/json', ...headers},
-      data: matchDraftDto, ...(signal ? { signal }: {})
-    },
-      options);
-    }
-
-
-
-export const getCreateOwnerMatchDraftMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOwnerMatchDraft>>, TError,{data: MatchDraftDto;headers: CreateOwnerMatchDraftHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof createOwnerMatchDraft>>, TError,{data: MatchDraftDto;headers: CreateOwnerMatchDraftHeaders}, TContext> => {
-
-const mutationKey = ['createOwnerMatchDraft'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createOwnerMatchDraft>>, {data: MatchDraftDto;headers: CreateOwnerMatchDraftHeaders}> = (props) => {
-          const {data,headers} = props ?? {};
-
-          return  createOwnerMatchDraft(data,headers,requestOptions)
-        }
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type CreateOwnerMatchDraftMutationResult = NonNullable<Awaited<ReturnType<typeof createOwnerMatchDraft>>>
-    export type CreateOwnerMatchDraftMutationBody = MatchDraftDto
-    export type CreateOwnerMatchDraftMutationError = unknown
-
-    /**
- * @summary Create a structured match draft
- */
-export const useCreateOwnerMatchDraft = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOwnerMatchDraft>>, TError,{data: MatchDraftDto;headers: CreateOwnerMatchDraftHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof createOwnerMatchDraft>>,
-        TError,
-        {data: MatchDraftDto;headers: CreateOwnerMatchDraftHeaders},
-        TContext
-      > => {
-
-      const mutationOptions = getCreateOwnerMatchDraftMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    /**
  * @summary Render the public match card preview
  */
 export const previewOwnerMatchCard = (
@@ -447,7 +447,7 @@ export const usePreviewOwnerMatchCard = <TError = unknown,
       return useMutation(mutationOptions, queryClient);
     }
     /**
- * @summary Publish a draft public card
+ * @summary Publish a legacy unpublished match
  */
 export const publishOwnerMatch = (
     id: string,
@@ -495,7 +495,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type PublishOwnerMatchMutationError = unknown
 
     /**
- * @summary Publish a draft public card
+ * @summary Publish a legacy unpublished match
  */
 export const usePublishOwnerMatch = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishOwnerMatch>>, TError,{id: string;headers: PublishOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}

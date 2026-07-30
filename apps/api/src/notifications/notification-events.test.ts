@@ -46,7 +46,7 @@ describe("application notification events", () => {
         timeMode: "availability",
         timeOptions: ["19:00", "20:00"],
         selectedTime: null,
-        location: null,
+        location: "BOX365",
       },
       countsAfter: { goingVotes: 3, externalParticipants: 0, goingCount: 3, requiredPlayers: 3, thresholdReached: true, remainingToThreshold: 0 },
       thresholdReached: true,
@@ -58,8 +58,12 @@ describe("application notification events", () => {
       transitionKey: "threshold:reached:owner-mutation:abc",
     }));
     expect(event).toMatchObject({ eventType: "send_notification", notificationId: 55n, telegramTopicId: 42n });
-    expect(event?.payload?.["text"]).toContain("&lt;match&gt;");
-    expect(event?.payload?.["text"]).toContain("Уточните точное время и место матча в Ballimus.");
+    expect(event?.payload?.["text"]).toBe(
+      "⚽ <b>Минимальный состав собран!</b>\n" +
+      "<b>#v12 · 03.08.2026 · BOX365</b>\n" +
+      "👥 Игроков: <b>3 из 3</b>\n\n" +
+      "Нужно указать точное время и место проведения матча.",
+    );
   });
 
   it("claims the stable lifecycle transition for cancellation", async () => {

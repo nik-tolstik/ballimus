@@ -93,6 +93,50 @@
         "tags": [
           "matches"
         ]
+      },
+      "post": {
+        "operationId": "createOwnerMatch",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatchCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created active match with publication accepted into the durable outbox.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchMutationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "Create and publish a match",
+        "tags": [
+          "matches"
+        ]
       }
     },
     "/v1/matches/{id}": {
@@ -194,52 +238,6 @@
         ]
       }
     },
-    "/v1/matches/drafts": {
-      "post": {
-        "operationId": "createOwnerMatchDraft",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MatchDraftDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Created draft match.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MatchMutationResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Create a structured match draft",
-        "tags": [
-          "matches"
-        ]
-      }
-    },
     "/v1/matches/{id}/preview": {
       "post": {
         "operationId": "previewOwnerMatchCard",
@@ -332,7 +330,7 @@
             "telegramMiniApp": []
           }
         ],
-        "summary": "Publish a draft public card",
+        "summary": "Publish a legacy unpublished match",
         "tags": [
           "matches"
         ]
@@ -1780,7 +1778,7 @@
           "match"
         ]
       },
-      "MatchDraftDto": {
+      "MatchCreateDto": {
         "type": "object",
         "properties": {
           "date": {

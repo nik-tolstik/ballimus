@@ -15,7 +15,7 @@ import {
   useConfirmOwnerMatch,
   useCorrectOwnerMatchVote,
   useCreateOwnerExternalParticipant,
-  useCreateOwnerMatchDraft,
+  useCreateOwnerMatch,
   useFinalizeOwnerMatch,
   useGetOwnerBootstrap,
   useGetOwnerMatch,
@@ -28,7 +28,7 @@ import {
   useRemoveOwnerMatchVote,
   useUpdateOwnerExternalParticipant,
   useUpdateOwnerPlayerReadableName,
-  type MatchDraftDto,
+  type MatchCreateDto,
   type PatchMatchDto,
 } from '@football/api-client'
 
@@ -117,7 +117,7 @@ export function App({ telegramSession }: AppProps = {}) {
   const selected = effectiveSelectedId === undefined ? undefined : normalizeMatchEnvelope(matchQuery.data) ?? selectedSummary
 
   const patchMutation = usePatchOwnerMatch(mutationOptions)
-  const createMutation = useCreateOwnerMatchDraft(mutationOptions)
+  const createMutation = useCreateOwnerMatch(mutationOptions)
   const publishMutation = usePublishOwnerMatch(mutationOptions)
   const finalizeMutation = useFinalizeOwnerMatch(mutationOptions)
   const confirmMutation = useConfirmOwnerMatch(mutationOptions)
@@ -149,9 +149,10 @@ export function App({ telegramSession }: AppProps = {}) {
   const versionedHeaders = (match: NormalizedMatch) => ({ 'If-Match': String(match.version), 'Idempotency-Key': requestKey() })
   const finishMutation = (matchId?: string) => { invalidateDashboard(matchId); setConflict('') }
 
-  const handleCreate = (values: EditorValues) => {
-    const data: MatchDraftDto = { date: values.date, time: values.timeMode === 'exact' ? values.time : null, timeMode: values.timeMode, ...(values.timeMode === 'availability' ? { timeOptions: [...values.timeOptions] } : {}), location: values.location || null, venueType: values.venueType || null, requiredPlayers: values.requiredPlayers, fieldPriceRubles: values.fieldPriceByn.trim() === '' ? null : Number(values.fieldPriceByn) }
-    createMutation.mutate({ data, headers: { 'Idempotency-Key': requestKey() } }, { onSuccess: (response) => finishMutation(response.match.id) })
+  const handleCreate = async (values: EditorValues) => {
+    const data: MatchCreateDto = { date: values.date, time: values.timeMode === 'exact' ? values.time : null, timeMode: values.timeMode, ...(values.timeMode === 'availability' ? { timeOptions: [...values.timeOptions] } : {}), location: values.location || null, venueType: values.venueType || null, requiredPlayers: values.requiredPlayers, fieldPriceRubles: values.fieldPriceByn.trim() === '' ? null : Number(values.fieldPriceByn) }
+    const response = await createMutation.mutateAsync({ data, headers: { 'Idempotency-Key': requestKey() } })
+    finishMutation(response.match.id)
   }
   const handlePatch = (match: NormalizedMatch, values: EditorValues) => {
     const data: PatchMatchDto = { date: values.date || null, time: values.timeMode === 'exact' ? values.time : null, timeMode: values.timeMode, ...(values.timeMode === 'availability' ? { timeOptions: [...values.timeOptions] } : {}), location: values.location || null, venueType: values.venueType || null, requiredPlayers: values.requiredPlayers, fieldPriceRubles: values.fieldPriceByn.trim() === '' ? null : Number(values.fieldPriceByn) }

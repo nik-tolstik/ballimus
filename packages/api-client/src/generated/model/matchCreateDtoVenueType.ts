@@ -9,11 +9,11 @@
 /**
  * @nullable
  */
-export type MatchDraftDtoVenueType = typeof MatchDraftDtoVenueType[keyof typeof MatchDraftDtoVenueType] | null;
+export type MatchCreateDtoVenueType = typeof MatchCreateDtoVenueType[keyof typeof MatchCreateDtoVenueType] | null;
 
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const MatchDraftDtoVenueType = {
+export const MatchCreateDtoVenueType = {
   outdoor: 'outdoor',
   indoor: 'indoor',
 } as const;

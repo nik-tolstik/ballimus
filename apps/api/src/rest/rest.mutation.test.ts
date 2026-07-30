@@ -92,6 +92,93 @@ describe("REST mutation transaction adapter", () => {
     }
   });
 
+  it("creates an active match and queues its initial publication in one transaction", async () => {
+    const service = new OwnerRestService(fakeDatabase, config);
+    const createdAt = new Date("2026-07-01T00:00:00.000Z");
+    const match = {
+      id: 1n,
+      telegramChatId: -100n,
+      scheduledAt: new Date("2026-08-03T17:00:00.000Z"),
+      scheduleDate: "2026-08-03",
+      timeMode: "exact",
+      timeOptions: [],
+      selectedTime: null,
+      location: "BOX365",
+      venueType: "outdoor",
+      fieldPriceRubles: null,
+      title: "03.08.2026 20:00 — BOX365",
+      requiredPlayers: 10,
+      status: "active",
+      cancellationReason: null,
+      creatorTelegramUserId: ownerId,
+      version: 1,
+      createdAt,
+      updatedAt: createdAt,
+    } as const;
+    const pendingMessage = {
+      matchId: 1n,
+      telegramChatId: -100n,
+      telegramTopicId: null,
+      telegramMessageId: null,
+      publicationState: "pending",
+      publicationAttemptedAt: null,
+      publicationUncertainAt: null,
+      lastError: null,
+      createdAt,
+      updatedAt: createdAt,
+    } as const;
+    const repositories = {
+      idempotency: {
+        beginInTransaction: vi.fn().mockResolvedValue({ status: "started", record: { id: 1n } }),
+        complete: vi.fn().mockResolvedValue({}),
+      },
+      matches: {
+        create: vi.fn().mockResolvedValue(match),
+        getById: vi.fn().mockResolvedValue(match),
+      },
+      matchMessages: {
+        createPending: vi.fn().mockResolvedValue(pendingMessage),
+        findByMatchId: vi.fn().mockResolvedValue(pendingMessage),
+      },
+      votes: {
+        listByMatchId: vi.fn().mockResolvedValue([]),
+        rosterCounts: vi.fn().mockResolvedValue({
+          goingVotes: 0,
+          externalParticipants: 0,
+          goingCount: 0,
+          requiredPlayers: 10,
+          thresholdReached: false,
+          remainingToThreshold: 10,
+        }),
+      },
+      externalParticipants: { listByMatchId: vi.fn().mockResolvedValue([]) },
+      players: { getById: vi.fn() },
+      outbox: { insertInTransaction: vi.fn().mockResolvedValue({}) },
+    } as unknown as TransactionRepositories;
+    withTransactionMock.mockImplementationOnce(async (_db, callback) => callback(repositories));
+
+    const response = await service.createMatch(ownerId, "create-key", {
+      date: "2026-08-03",
+      time: "20:00",
+      location: "BOX365",
+      venueType: "outdoor",
+      requiredPlayers: 10,
+      fieldPriceRubles: null,
+    });
+
+    expect(repositories.matches.create).toHaveBeenCalledWith(expect.objectContaining({ status: "active" }));
+    expect(repositories.matchMessages.createPending).toHaveBeenCalledWith(1n, -100n, null);
+    expect(repositories.outbox.insertInTransaction).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "publish_public_card",
+      deduplicationKey: "publish:public-card:1",
+      matchId: 1n,
+    }));
+    expect(response).toMatchObject({
+      match: { id: "1", status: "active", publicCard: { publicationState: "pending" } },
+      action: { type: "publish_requested", outboxState: "pending" },
+    });
+  });
+
   it("rejects a stale If-Match before a repository update and persists the failed result", async () => {
     const service = new OwnerRestService(fakeDatabase, config);
     const match = {

@@ -5,10 +5,10 @@
  * Owner-facing REST API for the Football Telegram Mini App.
  * OpenAPI spec version: 1.0.0
  */
-import type { MatchDraftDtoTimeMode } from './matchDraftDtoTimeMode.js';
-import type { MatchDraftDtoVenueType } from './matchDraftDtoVenueType.js';
+import type { MatchCreateDtoTimeMode } from './matchCreateDtoTimeMode.js';
+import type { MatchCreateDtoVenueType } from './matchCreateDtoVenueType.js';
 
-export interface MatchDraftDto {
+export interface MatchCreateDto {
   /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   date: string;
   /**
@@ -16,7 +16,7 @@ export interface MatchDraftDto {
    * @pattern ^(?:[01]\d|2[0-3]):[0-5]\d$
    */
   time: string | null;
-  timeMode?: MatchDraftDtoTimeMode;
+  timeMode?: MatchCreateDtoTimeMode;
   /**
    * @minItems 2
    * @maxItems 6
@@ -25,7 +25,7 @@ export interface MatchDraftDto {
   /** @nullable */
   location: string | null;
   /** @nullable */
-  venueType?: MatchDraftDtoVenueType;
+  venueType?: MatchCreateDtoVenueType;
   /**
    * @minimum 1
    * @maximum 100

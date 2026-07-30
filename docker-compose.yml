@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-football_local}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-football_local_dev_password}
     ports:
-      - "127.0.0.1:${POSTGRES_HOST_PORT:-54329}:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-55432}:5432"
     volumes:
       - football_postgres_local:/var/lib/postgresql
     healthcheck:
@@ -23,4 +23,4 @@ services:
 
 volumes:
   football_postgres_local:
-    name: football-bot-local-postgres
+    name: football-bot-local-postgres-data

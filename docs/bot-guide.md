@@ -25,12 +25,11 @@ The owner opens the Mini App from the bot's Telegram Mini App entry point. The f
 The owner dashboard contains Matches, Players, and History views. The current structured match flow is:
 
 1. Choose **New match** and enter a date plus either an exact time or several availability thresholds such as `19:00` and `20:00`.
-2. Save a `draft` through the API with an idempotency key.
-3. Publish the draft. Publication is represented by a durable Telegram outbox event.
-4. For an availability poll, wait for the threshold notification, book the field, and choose **Уточнить время и место**. Enter the exact booked time, location, venue type, and price; one transaction confirms the match, updates the public card, and queues the final chat notification.
-5. Edit an existing match with its current version in `If-Match`; a stale version produces a conflict instead of overwriting newer data.
-6. Repair an uncertain initial publication by attaching the existing Telegram message ID or confirming that no card exists before retrying.
-7. Use the owner match and roster operations for completion, cancellation, vote correction/removal, and external participants.
+2. Choose **Опубликовать матч**. One idempotent API transaction creates the active match, records the pending Telegram card, and queues its durable publication event.
+3. For an availability poll, wait for the threshold notification, book the field, and choose **Уточнить время и место**. Enter the exact booked time, location, venue type, and price; one transaction confirms the match, updates the public card, and queues the final chat notification.
+4. Edit an existing match with its current version in `If-Match`; a stale version produces a conflict instead of overwriting newer data.
+5. Repair an uncertain initial publication by attaching the existing Telegram message ID or confirming that no card exists before retrying.
+6. Use the owner match and roster operations for completion, cancellation, vote correction/removal, and external participants.
 
 All owner REST operations are protected by the Mini App guard and scoped to the configured Telegram owner and group. The API remains the source of truth; the Mini App is a client of the generated OpenAPI contract.
 
@@ -38,7 +37,7 @@ All owner REST operations are protected by the Mini App guard and scoped to the 
 
 The domain supports these states:
 
-- `draft` — saved privately in the owner dashboard and not yet published;
+- `draft` — legacy unpublished data retained for backward compatibility; the current creation flow skips this state;
 - `active` — published and accepting votes and roster changes;
 - `confirmed` — confirmed by the owner while the roster can still be updated;
 - `completed` — finished and retained as history;

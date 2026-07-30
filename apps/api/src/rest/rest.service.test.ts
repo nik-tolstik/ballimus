@@ -8,7 +8,7 @@ import {
 
 import { mapRestError } from "./rest.errors.js";
 import { canonicalRequestHash } from "./rest.canonical.js";
-import { MatchDraftDto } from "./rest.dto.js";
+import { MatchCreateDto } from "./rest.dto.js";
 import { parseIfMatch, OwnerRestService } from "./rest.service.js";
 import { serializeRestObject } from "./rest.serialization.js";
 import type { ApiConfig } from "../config/api-config.js";
@@ -46,7 +46,7 @@ const config: ApiConfig = {
   miniAppInitDataMaxAgeSeconds: 86_400,
 };
 
-function validDraft(): MatchDraftDto {
+function validMatchInput(): MatchCreateDto {
   return {
     date: "2026-08-03",
     time: "20:00",
@@ -95,7 +95,7 @@ describe("owner REST boundary", () => {
   it("requires mutation headers before touching a mocked database", async () => {
     const service = new OwnerRestService(null as unknown as AppDatabase, config);
 
-    await expectHttpError(service.createDraft(ownerId, undefined, validDraft()), {
+    await expectHttpError(service.createMatch(ownerId, undefined, validMatchInput()), {
       code: "IDEMPOTENCY_KEY_REQUIRED",
       message: "Idempotency-Key is required for mutations.",
     });

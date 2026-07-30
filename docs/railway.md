@@ -116,7 +116,7 @@ Perform these steps only after the authorization gate is satisfied:
 - [ ] Webhook URL is the production API `/telegram/webhook`, and Telegram secret-token validation is enabled.
 - [ ] `getWebhookInfo` reports the intended webhook and allowed update set.
 - [ ] BotFather Mini App URL and menu/Main Mini App point to the production Web origin.
-- [ ] The owner can open the Mini App, pass signed init-data validation, create a draft, preview, and publish one test match.
+- [ ] The owner can open the Mini App, pass signed init-data validation, and create one test match that is immediately queued for publication.
 - [ ] A group member can vote on the public card and the API refreshes the card through webhook/outbox handling.
 - [ ] A repeated callback or job run does not duplicate votes, notifications, or forecasts.
 - [ ] No local URL, local bot, local database, or temporary tunnel appears in production configuration.
