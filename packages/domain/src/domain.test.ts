@@ -472,7 +472,17 @@ describe("Minsk time and weather rules", () => {
       eventKey: "1",
       requiresExactTime: true,
     });
-    const lost = thresholdLostNotificationTransition({ matchId: -100, goingCount: 2, threshold: 3, eventKey: "2" });
+    const lost = thresholdLostNotificationTransition({
+      matchId: -100,
+      title: "02.08.2026 20:00 (BOX365, 200 рублей)",
+      scheduleDate: "2026-08-02",
+      location: "BOX365",
+      goingCount: 2,
+      threshold: 3,
+      cancelledByUsername: "@ivan",
+      cancelledByName: "Иван & <Пётр>",
+      eventKey: "2",
+    });
     expect(first).toMatchObject({ notificationType: "threshold_reached", transitionKey: "threshold:reached:1" });
     expect(first.text).toBe(
       "⚽ <b>Минимальный состав собран!</b>\n" +
@@ -508,6 +518,12 @@ describe("Minsk time and weather rules", () => {
       eventKey: "ready-without-brand",
     }).text).not.toContain("Ballimus");
     expect(lost).toMatchObject({ notificationType: "threshold_lost", transitionKey: "threshold:lost:2" });
+    expect(lost.text).toBe(
+      "⚠️ <b>Минимальный состав снова не набран</b>\n" +
+      "<b>#v-100 · 02.08.2026 · BOX365</b>\n" +
+      "👥 Игроков: <b>2 из 3</b>\n\n" +
+      "↩️ Голос отменил: <b>@ivan</b>",
+    );
     expect(formatConfirmationNotification({
       scheduledAt: new Date("2026-08-01T15:30:00.000Z"),
       location: "BOX365",

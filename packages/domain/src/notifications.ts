@@ -76,10 +76,26 @@ export function formatThresholdLostNotification(
   title: string | null | undefined,
   goingCount: number,
   threshold: number,
+  cancelledByUsername?: string | null,
+  cancelledByName?: string | null,
+  scheduleDate?: string | null,
+  location?: string | null,
 ): string {
   assertCount(goingCount, "goingCount");
   assertThreshold(threshold);
-  return `${formatMatchContext(matchId, title)} — Игроков снова меньше минимума. Сейчас: ${goingCount}/${threshold}`;
+  const normalizedCancelledByUsername = cancelledByUsername?.trim().replace(/^@+/u, "");
+  const normalizedCancelledByName = cancelledByName?.trim();
+  const cancelledBy = normalizedCancelledByUsername === undefined || normalizedCancelledByUsername === ""
+    ? normalizedCancelledByName
+    : `@${normalizedCancelledByUsername}`;
+  return [
+    "⚠️ <b>Минимальный состав снова не набран</b>",
+    `<b>${formatThresholdMatchContext(matchId, title, scheduleDate, location)}</b>`,
+    `👥 Игроков: <b>${goingCount} из ${threshold}</b>`,
+    ...(cancelledBy === undefined || cancelledBy === ""
+      ? []
+      : ["", `↩️ Голос отменил: <b>${escapeHtml(cancelledBy)}</b>`]),
+  ].join("\n");
 }
 
 export function formatCancellationNotification(
@@ -209,8 +225,12 @@ export function thresholdReachedNotificationTransition(input: {
 export function thresholdLostNotificationTransition(input: {
   readonly matchId: MatchId;
   readonly title?: string | null;
+  readonly scheduleDate?: string | null;
+  readonly location?: string | null;
   readonly goingCount: number;
   readonly threshold: number;
+  readonly cancelledByUsername?: string | null;
+  readonly cancelledByName?: string | null;
   readonly eventKey: string;
 }): FormattedNotificationTransition {
   if (input.eventKey.trim() === "") throw new Error("eventKey must not be empty");
@@ -218,7 +238,16 @@ export function thresholdLostNotificationTransition(input: {
     matchId: input.matchId,
     notificationType: "threshold_lost",
     transitionKey: `threshold:lost:${input.eventKey}`,
-    text: formatThresholdLostNotification(input.matchId, input.title, input.goingCount, input.threshold),
+    text: formatThresholdLostNotification(
+      input.matchId,
+      input.title,
+      input.goingCount,
+      input.threshold,
+      input.cancelledByUsername,
+      input.cancelledByName,
+      input.scheduleDate,
+      input.location,
+    ),
   };
 }
 

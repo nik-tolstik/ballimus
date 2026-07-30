@@ -66,6 +66,39 @@ describe("application notification events", () => {
     );
   });
 
+  it("includes the player whose vote caused the threshold to be lost", async () => {
+    const fixture = repositories();
+    const event = await claimThresholdNotificationEvent(fixture.value, {
+      match: { ...match, scheduleDate: "2026-08-03" },
+      countsAfter: { goingVotes: 0, externalParticipants: 0, goingCount: 0, requiredPlayers: 1, thresholdReached: false, remainingToThreshold: 1 },
+      thresholdReached: false,
+      thresholdLost: true,
+      previousVote: {
+        matchId: 12n,
+        playerId: 9n,
+        telegramUserId: 101n,
+        usernameSnapshot: "ivan",
+        firstNameSnapshot: "Иван",
+        lastNameSnapshot: null,
+        displayNameSnapshot: "Иван & Пётр",
+        option: "going",
+        availableAfter: null,
+        exactTimes: [],
+        source: "telegram_callback",
+        telegramUpdateId: 1n,
+        createdAt: new Date("2026-08-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-08-01T00:00:00.000Z"),
+      },
+    }, "telegram-update:123", 42n);
+
+    expect(event?.payload?.["text"]).toBe(
+      "⚠️ <b>Минимальный состав снова не набран</b>\n" +
+      "<b>#v12 · 03.08.2026 · Field</b>\n" +
+      "👥 Игроков: <b>0 из 3</b>\n\n" +
+      "↩️ Голос отменил: <b>@ivan</b>",
+    );
+  });
+
   it("claims the stable lifecycle transition for cancellation", async () => {
     const fixture = repositories();
     const event = await claimLifecycleNotificationEvent(fixture.value, {

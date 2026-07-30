@@ -11,6 +11,7 @@ import type {
   Match,
   RosterCounts,
   TransactionRepositories,
+  Vote,
 } from "@football/db";
 
 interface ThresholdMutation {
@@ -18,6 +19,7 @@ interface ThresholdMutation {
   readonly countsAfter: RosterCounts;
   readonly thresholdReached: boolean;
   readonly thresholdLost: boolean;
+  readonly previousVote?: Vote;
 }
 
 function notificationEvent(
@@ -63,8 +65,16 @@ export async function claimThresholdNotificationEvent(
       ? thresholdLostNotificationTransition({
         matchId: result.match.id,
         title: result.match.title,
+        scheduleDate: result.match.scheduleDate,
+        location: result.match.location,
         goingCount: result.countsAfter.goingCount,
         threshold: result.match.requiredPlayers,
+        ...(result.previousVote === undefined
+          ? {}
+          : {
+            cancelledByUsername: result.previousVote.usernameSnapshot,
+            cancelledByName: result.previousVote.displayNameSnapshot,
+          }),
         eventKey,
       })
       : undefined;
