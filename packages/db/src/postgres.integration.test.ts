@@ -120,7 +120,7 @@ describe("PostgreSQL baseline migration and repositories", () => {
     const migrationRows = await database.sql.unsafe<{ hash: string; created_at: string }[]>(
       `select hash, created_at from ${quoteIdentifier(database.migrationSchemaName)}."__drizzle_migrations"`,
     );
-    expect(migrationRows).toHaveLength(6);
+    expect(migrationRows).toHaveLength(7);
     expect(migrationRows[0]?.hash).toMatch(/^[a-f0-9]{64}$/u);
 
     const constraintRows = await database.sql<{ conname: string }[]>`

@@ -81,3 +81,5 @@ export * from './updateOwnerPlayerReadableNameHeaders.js';
 export * from './updatePlayerDto.js';
 export * from './voteCorrectionDto.js';
 export * from './voteCorrectionDtoOption.js';
+export * from './weatherSendResponseDto.js';
+export * from './weatherSendResponseDtoStatus.js';

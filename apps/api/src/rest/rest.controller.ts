@@ -45,6 +45,7 @@ import {
   MatchEnvelopeResponseDto,
   MatchListResponseDto,
   MatchMutationResponseDto,
+  WeatherSendResponseDto,
 } from "./rest.response.dto.js";
 
 @ApiTags("bootstrap")
@@ -271,6 +272,21 @@ export class MatchesController {
     @Body() input: RefreshMatchDto | undefined,
   ): Promise<Record<string, unknown>> {
     return this.service.refreshMatch(ownerTelegramUserId, idempotencyKey, matchId, input);
+  }
+
+  @Post(":id/weather")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ operationId: "sendOwnerMatchWeather", summary: "Send the weather forecast immediately" })
+  @ApiParam({ name: "id", description: "Decimal match identifier", type: String })
+  @ApiOkResponse({
+    description: "Weather forecast sent to the configured chat topic.",
+    type: WeatherSendResponseDto,
+  })
+  public sendWeather(
+    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @Param("id", PositiveBigIntPipe) matchId: bigint,
+  ): Promise<Record<string, unknown>> {
+    return this.service.sendWeatherForecast(ownerTelegramUserId, matchId);
   }
 
   @Post(":id/reconcile")

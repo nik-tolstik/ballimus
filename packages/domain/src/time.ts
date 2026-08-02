@@ -60,6 +60,31 @@ export function formatDateInTimeZone(value: Date, timezone: string = MINSK_TIMEZ
   return `${String(parts.day).padStart(2, "0")}.${String(parts.month).padStart(2, "0")}.${String(parts.year).padStart(4, "0")}`;
 }
 
+function capitalizeRussian(value: string): string {
+  return value.length === 0
+    ? value
+    : `${value.charAt(0).toLocaleUpperCase("ru-RU")}${value.slice(1)}`;
+}
+
+/** Formats a user-facing calendar date without a redundant year. */
+export function formatWeekdayDateInTimeZone(
+  value: Date,
+  timezone: string = MINSK_TIMEZONE,
+): string {
+  assertValidDate(value, "date");
+  try {
+    const formatted = new Intl.DateTimeFormat("ru-RU", {
+      timeZone: timezone,
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    }).format(value);
+    return capitalizeRussian(formatted);
+  } catch (error) {
+    throw new Error(`Invalid timezone: ${timezone}`, { cause: error });
+  }
+}
+
 export function formatTimeInTimeZone(value: Date, timezone: string = MINSK_TIMEZONE): string {
   const parts = getZonedDateParts(value, timezone);
   return `${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}`;
@@ -85,6 +110,28 @@ function isCalendarDate(value: string): boolean {
   const day = Number(match[3]);
   const candidate = new Date(Date.UTC(year, month - 1, day));
   return candidate.getUTCFullYear() === year && candidate.getUTCMonth() === month - 1 && candidate.getUTCDate() === day;
+}
+
+/** Formats a YYYY-MM-DD calendar value independently of the host timezone. */
+export function formatWeekdayCalendarDate(value: string): string {
+  if (!isCalendarDate(value)) throw new Error("date must be a real calendar date in YYYY-MM-DD format");
+  const [yearText, monthText, dayText] = value.split("-");
+  const calendarNoonUtc = new Date(Date.UTC(Number(yearText), Number(monthText) - 1, Number(dayText), 12));
+  return formatWeekdayDateInTimeZone(calendarNoonUtc, "UTC");
+}
+
+/** Rewrites an old DD.MM.YYYY prefix into the current user-facing date format. */
+export function formatLegacyDatePrefix(value: string): string {
+  const match = /^(\d{2})\.(\d{2})\.(\d{4})(?=\s|$)/u.exec(value);
+  if (match === null) return value;
+  try {
+    const date = `${match[3]}-${match[2]}-${match[1]}`;
+    const formattedDate = formatWeekdayCalendarDate(date);
+    const remainder = value.slice(match[0].length).trimStart().replace(/^·\s*/u, "");
+    return remainder === "" ? formattedDate : `${formattedDate} · ${remainder}`;
+  } catch {
+    return value;
+  }
 }
 
 function utcMillisFromParts(parts: {

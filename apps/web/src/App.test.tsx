@@ -31,6 +31,7 @@ vi.mock('@football/api-client', () => ({
   useCompleteOwnerMatch: () => queryState.mutation,
   useCancelOwnerMatch: () => queryState.mutation,
   useReconcileOwnerMatchCard: () => queryState.mutation,
+  useSendOwnerMatchWeather: () => queryState.mutation,
   useCorrectOwnerMatchVote: () => queryState.mutation,
   useRemoveOwnerMatchVote: () => queryState.mutation,
   useCreateOwnerExternalParticipant: () => queryState.mutation,
@@ -39,7 +40,7 @@ vi.mock('@football/api-client', () => ({
   useUpdateOwnerPlayerReadableName: () => queryState.mutation,
 }))
 
-import App, { MatchEditor, TabBar } from './App'
+import App, { MatchEditor, TabBar, weatherWarningMessage } from './App'
 import { brandForEnvironment } from './brand'
 import { DatePicker } from './components/football/date-time-picker'
 import { editorTimeConfiguration, validateEditorValues } from './components/football/match-editor'
@@ -65,7 +66,7 @@ const readySession: TelegramSession = {
 const normalizedMatch: NormalizedMatch = {
   id: '9',
   title: 'Матч',
-  dateLabel: 'Среда · 19:30',
+  dateLabel: 'Среда, 29 июля · 19:30',
   date: '2026-07-29',
   time: '19:30',
   timeMode: 'exact',
@@ -128,6 +129,11 @@ describe('Mini App access states', () => {
 })
 
 describe('API-backed surface states', () => {
+  it('uses a warning for repeated manual weather delivery', () => {
+    expect(weatherWarningMessage({ code: 'WEATHER_ALREADY_SENT_MANUALLY' })).toBe('Вы уже отправляли прогноз погоды для этого дня.')
+    expect(weatherWarningMessage({ code: 'WEATHER_ALREADY_SENT' })).toBe('Прогноз погоды для этого дня уже отправлен ботом.')
+  })
+
   it('renders an explicit empty state when normalized API data is absent', () => {
     const markup = renderApp()
     expect(markup).toContain('Матчей пока нет')
@@ -220,6 +226,7 @@ describe('API-backed surface states', () => {
       onFinalize: vi.fn().mockResolvedValue(undefined),
       onConfirm: vi.fn(),
       onComplete: vi.fn(),
+      onSendWeather: vi.fn(),
       onCancel: vi.fn(),
       onCorrectVote: vi.fn(),
       onRemoveVote: vi.fn(),
@@ -259,6 +266,7 @@ describe('API-backed surface states', () => {
       onFinalize: vi.fn().mockResolvedValue(undefined),
       onConfirm: vi.fn(),
       onComplete: vi.fn(),
+      onSendWeather: vi.fn(),
       onCancel: vi.fn(),
       onCorrectVote: vi.fn(),
       onRemoveVote: vi.fn(),
@@ -273,10 +281,12 @@ describe('API-backed surface states', () => {
     }
     const finalizing = { ...normalizedMatch, timeMode: 'availability' as const, timeOptions: ['19:00', '20:00'], time: '', goingCount: 7, location: 'Место уточняется', planningStage: 'finalizing_details' as const, statusLabel: 'Уточняем время и место', statusShortLabel: 'Уточнить детали' }
     const ready = { ...normalizedMatch, goingCount: 7, planningStage: 'ready_to_confirm' as const, statusLabel: 'Готов к подтверждению', statusShortLabel: 'Можно подтверждать' }
+    const outdoor = { ...normalizedMatch, venueType: 'outdoor' as const }
 
     expect(renderToStaticMarkup(<MatchesPanel {...sharedProps} selected={normalizedMatch} />)).toContain('Посмотреть состав')
     expect(renderToStaticMarkup(<MatchesPanel {...sharedProps} selected={finalizing} />)).toContain('Уточнить время и место')
     expect(renderToStaticMarkup(<MatchesPanel {...sharedProps} selected={ready} />)).toContain('Подтвердить матч')
+    expect(renderToStaticMarkup(<MatchesPanel {...sharedProps} selected={outdoor} />)).toContain('Отправить погоду сейчас')
   })
 
   it('validates the booked details before final confirmation', () => {

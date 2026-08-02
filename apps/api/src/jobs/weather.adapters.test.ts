@@ -87,4 +87,25 @@ describe("OpenMeteoWeatherForecastProvider", () => {
       "Open-Meteo request failed with HTTP 503",
     );
   });
+
+  it("requests enough forecast days for an early manual send", async () => {
+    const distantMatch = {
+      ...match,
+      scheduledAt: new Date("2026-08-12T17:00:00.000Z"),
+    };
+    const fetchImpl = vi.fn<typeof globalThis.fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        hourly: {
+          ...payload.hourly,
+          time: ["2026-08-12T20:00"],
+        },
+      }),
+    } as Response);
+    const provider = new OpenMeteoWeatherForecastProvider(config, fetchImpl);
+
+    await provider.getForecast(distantMatch, new Date("2026-08-02T04:00:00.000Z"));
+
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain("forecast_days=11");
+  });
 });

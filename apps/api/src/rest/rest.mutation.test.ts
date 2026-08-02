@@ -166,7 +166,10 @@ describe("REST mutation transaction adapter", () => {
       fieldPriceRubles: null,
     });
 
-    expect(repositories.matches.create).toHaveBeenCalledWith(expect.objectContaining({ status: "active" }));
+    expect(repositories.matches.create).toHaveBeenCalledWith(expect.objectContaining({
+      status: "active",
+      title: "Понедельник, 3 августа · 20:00 — BOX365",
+    }));
     expect(repositories.matchMessages.createPending).toHaveBeenCalledWith(1n, -100n, null);
     expect(repositories.outbox.insertInTransaction).toHaveBeenCalledWith(expect.objectContaining({
       eventType: "publish_public_card",

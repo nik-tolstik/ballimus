@@ -623,6 +623,43 @@
         ]
       }
     },
+    "/v1/matches/{id}/weather": {
+      "post": {
+        "operationId": "sendOwnerMatchWeather",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Decimal match identifier",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Weather forecast sent to the configured chat topic.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeatherSendResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "Send the weather forecast immediately",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
     "/v1/matches/{id}/reconcile": {
       "post": {
         "operationId": "reconcileOwnerMatchCard",
@@ -2050,6 +2087,29 @@
             "description": "Reserved for forward-compatible refresh options."
           }
         }
+      },
+      "WeatherSendResponseDto": {
+        "type": "object",
+        "properties": {
+          "matchId": {
+            "type": "string"
+          },
+          "weatherDay": {
+            "type": "string",
+            "format": "date"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "sent"
+            ]
+          }
+        },
+        "required": [
+          "matchId",
+          "weatherDay",
+          "status"
+        ]
       },
       "ReconcileMatchDto": {
         "type": "object",

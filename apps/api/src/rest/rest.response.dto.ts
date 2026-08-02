@@ -292,6 +292,17 @@ export class CardPreviewResponseDto {
   card!: CardPreviewBodyResponseDto;
 }
 
+export class WeatherSendResponseDto {
+  @ApiProperty({ type: String })
+  matchId!: string;
+
+  @ApiProperty({ type: String, format: "date" })
+  weatherDay!: string;
+
+  @ApiProperty({ type: String, enum: ["sent"] })
+  status!: "sent";
+}
+
 export class PlayerUsernameResponseDto {
   @ApiProperty({ type: String })
   normalizedUsername!: string;

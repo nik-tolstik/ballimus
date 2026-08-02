@@ -26,6 +26,7 @@ import {
   useReconcileOwnerMatchCard,
   useRemoveOwnerExternalParticipant,
   useRemoveOwnerMatchVote,
+  useSendOwnerMatchWeather,
   useUpdateOwnerExternalParticipant,
   useUpdateOwnerPlayerReadableName,
   type MatchCreateDto,
@@ -73,6 +74,14 @@ function errorMessage(error: unknown): string {
   return 'Не удалось выполнить запрос. Попробуйте ещё раз.'
 }
 
+export function weatherWarningMessage(error: unknown): string | undefined {
+  const code = getErrorCode(error)
+  if (code === 'WEATHER_ALREADY_SENT_MANUALLY') return 'Вы уже отправляли прогноз погоды для этого дня.'
+  if (code === 'WEATHER_ALREADY_SENT') return 'Прогноз погоды для этого дня уже отправлен ботом.'
+  if (code === 'WEATHER_FORECAST_NOT_AVAILABLE') return 'Прогноз можно отправить только для будущего матча в пределах 16 дней.'
+  return undefined
+}
+
 function authFailureFor(error: unknown): AuthFailure {
   if (getErrorCode(error) === 'TELEGRAM_INIT_DATA_EXPIRED') return 'expired'
   const status = getErrorStatus(error)
@@ -103,6 +112,11 @@ export function App({ telegramSession }: AppProps = {}) {
     if (getErrorStatus(error) === 409 && getErrorCode(error) === 'MATCH_VERSION_STALE') { setConflict('Матч уже изменился на сервере. Обновите данные и повторите попытку.'); return }
     toast.error(errorMessage(error))
   }
+  const handleWeatherError = (error: unknown) => {
+    const warning = weatherWarningMessage(error)
+    if (warning !== undefined) { toast.warning(warning); return }
+    handleMutationError(error)
+  }
   const mutationOptions = { mutation: { onError: handleMutationError } }
 
   const queryEnabled = session.status === 'ready' && session.initData !== undefined && authFailure === undefined
@@ -124,6 +138,7 @@ export function App({ telegramSession }: AppProps = {}) {
   const completeMutation = useCompleteOwnerMatch(mutationOptions)
   const cancelMutation = useCancelOwnerMatch(mutationOptions)
   const reconcileMutation = useReconcileOwnerMatchCard(mutationOptions)
+  const weatherMutation = useSendOwnerMatchWeather({ mutation: { onError: handleWeatherError } })
   const correctVoteMutation = useCorrectOwnerMatchVote(mutationOptions)
   const removeVoteMutation = useRemoveOwnerMatchVote(mutationOptions)
   const createExternalMutation = useCreateOwnerExternalParticipant(mutationOptions)
@@ -192,9 +207,10 @@ export function App({ telegramSession }: AppProps = {}) {
   const handleUpdateExternal = (match: NormalizedMatch, participant: NormalizedExternalParticipant, displayName: string) => updateExternalMutation.mutate({ id: match.id, participantId: participant.id, data: { displayName }, headers: { 'Idempotency-Key': requestKey() } }, { onSuccess: () => finishMutation(match.id) })
   const handleRemoveExternal = (match: NormalizedMatch, participant: NormalizedExternalParticipant) => removeExternalMutation.mutate({ id: match.id, participantId: participant.id, headers: { 'Idempotency-Key': requestKey() } }, { onSuccess: () => finishMutation(match.id) })
   const handleReconcile = (match: NormalizedMatch, action: 'attach' | 'retry', telegramMessageId?: string) => reconcileMutation.mutate({ id: match.id, data: { action, ...(telegramMessageId === undefined ? {} : { telegramMessageId }) }, headers: { 'Idempotency-Key': requestKey() } }, { onSuccess: () => finishMutation(match.id) })
+  const handleSendWeather = (match: NormalizedMatch) => weatherMutation.mutate({ id: match.id }, { onSuccess: () => toast.success('Прогноз погоды отправлен в чат.') })
   const handleUpdatePlayer = (player: NormalizedPlayer, displayName: string) => updatePlayerMutation.mutate({ id: player.id, data: { displayName }, headers: { 'Idempotency-Key': requestKey() } }, { onSuccess: () => finishMutation() })
 
-  const actionPending = [publishMutation, finalizeMutation, confirmMutation, completeMutation, cancelMutation, reconcileMutation, correctVoteMutation, removeVoteMutation, createExternalMutation, updateExternalMutation, removeExternalMutation].some((mutation) => mutation.isPending)
+  const actionPending = [publishMutation, finalizeMutation, confirmMutation, completeMutation, cancelMutation, reconcileMutation, weatherMutation, correctVoteMutation, removeVoteMutation, createExternalMutation, updateExternalMutation, removeExternalMutation].some((mutation) => mutation.isPending)
   const playerSaving = updatePlayerMutation.isPending
   const mutationError = [patchMutation, createMutation, publishMutation, finalizeMutation, confirmMutation, completeMutation, cancelMutation, reconcileMutation, correctVoteMutation, removeVoteMutation, createExternalMutation, updateExternalMutation, removeExternalMutation, updatePlayerMutation].map((mutation) => mutation.error).find((error) => error !== null && error !== undefined)
   const matchDetailOpen = tab === 'matches' && selectedId !== undefined
@@ -204,7 +220,7 @@ export function App({ telegramSession }: AppProps = {}) {
     <main className="app-shell">
       {!matchDetailOpen && <header className="flex h-14 items-center justify-between bg-background/90 shadow-sm backdrop-blur-sm"><div className="flex items-center gap-2.5"><img src={applicationBrand.logo} alt="" width="36" height="36" className="size-9 rounded-full object-cover" /><p className="text-base font-semibold leading-none">{applicationBrand.name}</p></div><ThemeToggle /></header>}
       <div className={matchDetailOpen ? 'px-4 pt-3 pb-24' : 'px-4 py-5 pb-24'}>{mutationError !== undefined && <Alert variant="destructive" className="mb-4"><TriangleAlert /><AlertTitle>Не удалось сохранить изменения</AlertTitle><AlertDescription>{errorMessage(mutationError)}</AlertDescription></Alert>}<AnimatePresence mode="wait" initial={false}><motion.div key={tab} initial={reduceMotion ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? {} : { opacity: 0, y: -4 }} transition={{ duration: 0.18, ease: 'easeOut' }}>
-        {tab === 'matches' && <MatchesPanel matches={upcoming} selected={selected} onSelect={setSelectedId} onCreate={handleCreate} onPatch={handlePatch} onPublish={handlePublish} onFinalize={handleFinalize} onConfirm={handleConfirm} onComplete={handleComplete} onCancel={handleCancel} onCorrectVote={handleCorrectVote} onRemoveVote={handleRemoveVote} onAddExternal={handleAddExternal} onUpdateExternal={handleUpdateExternal} onRemoveExternal={handleRemoveExternal} onReconcile={handleReconcile} conflict={conflict} onClearConflict={() => setConflict('')} saving={createMutation.isPending || patchMutation.isPending} actionPending={actionPending} />}
+        {tab === 'matches' && <MatchesPanel matches={upcoming} selected={selected} onSelect={setSelectedId} onCreate={handleCreate} onPatch={handlePatch} onPublish={handlePublish} onFinalize={handleFinalize} onConfirm={handleConfirm} onComplete={handleComplete} onSendWeather={handleSendWeather} onCancel={handleCancel} onCorrectVote={handleCorrectVote} onRemoveVote={handleRemoveVote} onAddExternal={handleAddExternal} onUpdateExternal={handleUpdateExternal} onRemoveExternal={handleRemoveExternal} onReconcile={handleReconcile} conflict={conflict} onClearConflict={() => setConflict('')} saving={createMutation.isPending || patchMutation.isPending} actionPending={actionPending} />}
         {tab === 'players' && <PlayersPanel players={dashboard.players} onUpdatePlayer={handleUpdatePlayer} saving={playerSaving} />}
         {tab === 'history' && <HistoryPanel history={dashboard.history} />}
       </motion.div></AnimatePresence></div>

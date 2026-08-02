@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   ChevronRight,
   CircleDot,
+  CloudSun,
   Clock3,
   GripVertical,
   Link2,
@@ -95,6 +96,7 @@ interface MatchesPanelProps {
   readonly onFinalize: (match: NormalizedMatch, values: FinalMatchDetailsValues) => Promise<void>
   readonly onConfirm: (match: NormalizedMatch) => void
   readonly onComplete: (match: NormalizedMatch) => void
+  readonly onSendWeather: (match: NormalizedMatch) => void
   readonly onCancel: (match: NormalizedMatch, reason: string) => void
   readonly onCorrectVote: (match: NormalizedMatch, vote: NormalizedVote, target: NormalizedRosterTarget) => Promise<void>
   readonly onRemoveVote: (match: NormalizedMatch, vote: NormalizedVote, target: NormalizedRosterTarget) => void
@@ -547,17 +549,22 @@ function AvailabilitySummary({ match }: { readonly match: NormalizedMatch }) {
   return <Card size="sm"><CardHeader><CardTitle>Доступность по времени</CardTitle><CardDescription>{match.timeMode === 'availability' ? 'Сколько игроков смогут участвовать к каждому времени.' : 'Сколько игроков выбрали каждый точный вариант.'}</CardDescription></CardHeader><CardContent className="flex flex-col gap-3">{match.timeOptions.map((time) => { const count = availabilityCountAt(match, time); return <div key={time} className="flex items-center gap-3"><span className="w-14 text-sm font-medium">{match.timeMode === 'availability' ? `К ${time}` : time}</span><Progress value={Math.min(100, (count / match.requiredPlayers) * 100)} className={cn('h-1.5 flex-1', count >= match.requiredPlayers && '[&_[data-slot=progress-indicator]]:bg-success')} /><Badge variant={match.selectedTime === time ? 'default' : 'secondary'}>{count}/{match.requiredPlayers}</Badge></div> })}</CardContent></Card>
 }
 
-function MatchOverview({ match, onNavigate, onPublish, onFinalizeRequest, onConfirm, onComplete, onCancelRequest, disabled }: {
+function MatchOverview({ match, onNavigate, onPublish, onFinalizeRequest, onConfirm, onComplete, onSendWeather, onCancelRequest, disabled }: {
   readonly match: NormalizedMatch
   readonly onNavigate: (tab: MatchDetailTab) => void
   readonly onPublish: MatchesPanelProps['onPublish']
   readonly onFinalizeRequest: () => void
   readonly onConfirm: MatchesPanelProps['onConfirm']
   readonly onComplete: MatchesPanelProps['onComplete']
+  readonly onSendWeather: MatchesPanelProps['onSendWeather']
   readonly onCancelRequest: () => void
   readonly disabled: boolean
 }) {
   const remaining = Math.max(0, match.requiredPlayers - match.goingCount)
+  const canSendWeather = (match.status === 'active' || match.status === 'confirmed')
+    && match.venueType === 'outdoor'
+    && match.date !== ''
+    && match.time !== ''
   const primaryAction = match.status === 'draft'
     ? { label: 'Опубликовать матч', copy: 'Черновик готов к публикации', run: () => onPublish(match), icon: Send }
     : match.status === 'active'
@@ -577,7 +584,7 @@ function MatchOverview({ match, onNavigate, onPublish, onFinalizeRequest, onConf
         <OverviewRow icon={CalendarDays} title="Параметры" description={`${match.dateLabel} · ${match.location}`} onClick={() => onNavigate('settings')} />
       </div></section>
       <AvailabilitySummary match={match} />
-      {primaryAction && <section aria-labelledby="next-match-action"><h2 id="next-match-action" className="text-lg font-semibold">Ближайшее действие</h2><p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground"><Clock3 className="size-4 text-primary" />{primaryAction.copy}</p><div className="mt-4 flex flex-col gap-2"><Button className="h-11 w-full" onClick={primaryAction.run} disabled={disabled}><primaryAction.icon data-icon="inline-start" />{primaryAction.label}</Button>{(match.status === 'active' || match.status === 'confirmed') && <Button variant="destructive" className="h-11 w-full" onClick={onCancelRequest} disabled={disabled}><XCircle data-icon="inline-start" />Отменить матч</Button>}</div></section>}
+      {primaryAction && <section aria-labelledby="next-match-action"><h2 id="next-match-action" className="text-lg font-semibold">Ближайшее действие</h2><p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground"><Clock3 className="size-4 text-primary" />{primaryAction.copy}</p><div className="mt-4 flex flex-col gap-2"><Button className="h-11 w-full" onClick={primaryAction.run} disabled={disabled}><primaryAction.icon data-icon="inline-start" />{primaryAction.label}</Button>{canSendWeather && <Button variant="outline" className="h-11 w-full" onClick={() => onSendWeather(match)} disabled={disabled}><CloudSun data-icon="inline-start" />Отправить погоду сейчас</Button>}{(match.status === 'active' || match.status === 'confirmed') && <Button variant="destructive" className="h-11 w-full" onClick={onCancelRequest} disabled={disabled}><XCircle data-icon="inline-start" />Отменить матч</Button>}</div></section>}
     </div>
   )
 }
@@ -660,7 +667,7 @@ export function MatchesPanel(props: MatchesPanelProps) {
         <div className="relative flex min-h-12 items-center justify-center"><Button variant="ghost" size="icon" className="absolute left-0" onClick={closeMatch} aria-label="Вернуться к списку матчей"><ArrowLeft /></Button><div className="text-center"><h1 className="text-xl font-semibold">Матч #{selected.id}</h1><p className={cn('mt-0.5 text-xs', selected.status === 'cancelled' ? 'text-destructive' : selected.status === 'confirmed' || selected.status === 'completed' || selected.planningStage === 'ready_to_confirm' ? 'text-success' : 'text-muted-foreground')}>{selected.statusLabel}</p></div></div>
         <div className="mt-5 flex flex-col gap-3 text-sm"><p className={cn('flex items-center gap-3', selected.reconciliationRequired ? 'text-destructive' : selected.publicCardState === 'published' ? 'text-success' : 'text-muted-foreground')}><Send className="size-5" />{publicCardStateLabel(selected)}</p><p className="flex items-center gap-3"><CalendarDays className="size-5 text-muted-foreground" />{selected.dateLabel}</p><p className="flex items-center gap-3"><MapPin className="size-5 text-muted-foreground" />{selected.location} · {venueLabel(selected)}</p><div><p className="mb-2 flex items-center gap-3"><Users className="size-5 text-muted-foreground" /><span>{selected.goingCount} из {selected.requiredPlayers} игроков</span></p><Progress value={Math.min(100, (selected.goingCount / selected.requiredPlayers) * 100)} className={cn('ml-8 h-1.5 w-[calc(100%-2rem)]', selected.goingCount >= selected.requiredPlayers && '[&_[data-slot=progress-indicator]]:bg-success')} /></div></div>
         <ToggleGroup type="single" value={detailTab} onValueChange={(value) => { if (value !== '') setDetailTab(value as MatchDetailTab) }} variant="segment" spacing={1} className="mt-5 w-full rounded-xl border bg-muted p-1" aria-label="Разделы матча">{MATCH_DETAIL_TABS.map((item) => <ToggleGroupItem key={item.value} value={item.value} className="h-10 flex-1 rounded-lg">{item.label}</ToggleGroupItem>)}</ToggleGroup>
-        <motion.div key={detailTab} className="mt-6" initial={reduceMotion ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }}>{detailTab === 'overview' ? <MatchOverview match={selected} onNavigate={setDetailTab} onPublish={props.onPublish} onFinalizeRequest={openFinalization} onConfirm={props.onConfirm} onComplete={props.onComplete} onCancelRequest={openCancellation} disabled={props.actionPending} /> : detailTab === 'roster' ? (selected.status === 'active' || selected.status === 'confirmed' ? <MatchRoster match={selected} onCorrectVote={props.onCorrectVote} onRemoveVote={props.onRemoveVote} onAddExternal={props.onAddExternal} onUpdateExternal={props.onUpdateExternal} onRemoveExternal={props.onRemoveExternal} disabled={props.actionPending} /> : <EmptyState icon={Users} title="Состав пока недоступен" copy="Опубликуйте матч, чтобы участники могли проголосовать." />) : <MatchSettings match={selected} openEdit={openEdit} onReconcile={props.onReconcile} disabled={props.actionPending} />}</motion.div>
+        <motion.div key={detailTab} className="mt-6" initial={reduceMotion ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }}>{detailTab === 'overview' ? <MatchOverview match={selected} onNavigate={setDetailTab} onPublish={props.onPublish} onFinalizeRequest={openFinalization} onConfirm={props.onConfirm} onComplete={props.onComplete} onSendWeather={props.onSendWeather} onCancelRequest={openCancellation} disabled={props.actionPending} /> : detailTab === 'roster' ? (selected.status === 'active' || selected.status === 'confirmed' ? <MatchRoster match={selected} onCorrectVote={props.onCorrectVote} onRemoveVote={props.onRemoveVote} onAddExternal={props.onAddExternal} onUpdateExternal={props.onUpdateExternal} onRemoveExternal={props.onRemoveExternal} disabled={props.actionPending} /> : <EmptyState icon={Users} title="Состав пока недоступен" copy="Опубликуйте матч, чтобы участники могли проголосовать." />) : <MatchSettings match={selected} openEdit={openEdit} onReconcile={props.onReconcile} disabled={props.actionPending} />}</motion.div>
       </motion.div>}
 
       <Sheet open={editorOpen} onOpenChange={setEditorOpen}>

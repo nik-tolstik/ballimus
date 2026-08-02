@@ -53,7 +53,8 @@ import type {
   RemoveOwnerExternalParticipantHeaders,
   RemoveOwnerMatchVoteHeaders,
   UpdateOwnerExternalParticipantHeaders,
-  VoteCorrectionDto
+  VoteCorrectionDto,
+  WeatherSendResponseDto
 } from '.././model/index.js';
 
 import { customInstance } from '../../mutator.js';
@@ -833,6 +834,68 @@ export const useRefreshOwnerMatchCard = <TError = unknown,
       > => {
 
       const mutationOptions = getRefreshOwnerMatchCardMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * @summary Send the weather forecast immediately
+ */
+export const sendOwnerMatchWeather = (
+    id: string,
+ options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
+) => {
+
+
+      return customInstance<WeatherSendResponseDto>(
+      {url: `/v1/matches/${id}/weather`, method: 'POST', ...(signal ? { signal }: {})
+    },
+      options);
+    }
+
+
+
+export const getSendOwnerMatchWeatherMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendOwnerMatchWeather>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendOwnerMatchWeather>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['sendOwnerMatchWeather'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendOwnerMatchWeather>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  sendOwnerMatchWeather(id,requestOptions)
+        }
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendOwnerMatchWeatherMutationResult = NonNullable<Awaited<ReturnType<typeof sendOwnerMatchWeather>>>
+
+    export type SendOwnerMatchWeatherMutationError = unknown
+
+    /**
+ * @summary Send the weather forecast immediately
+ */
+export const useSendOwnerMatchWeather = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendOwnerMatchWeather>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof sendOwnerMatchWeather>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+
+      const mutationOptions = getSendOwnerMatchWeatherMutationOptions(options);
 
       return useMutation(mutationOptions, queryClient);
     }
