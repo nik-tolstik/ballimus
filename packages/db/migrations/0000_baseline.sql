@@ -242,7 +242,7 @@ CREATE TABLE "notifications" (
   "updated_at" timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT "notifications_match_fk" FOREIGN KEY ("match_id") REFERENCES "matches" ("id") ON UPDATE CASCADE ON DELETE CASCADE,
   CONSTRAINT "notifications_telegram_chat_id_non_zero" CHECK ("telegram_chat_id" <> 0),
-  CONSTRAINT "notifications_type_valid" CHECK ("notification_type" IN ('threshold_reached', 'threshold_lost', 'withdrawal', 'match_confirmed', 'match_cancelled', 'weather_forecast')),
+  CONSTRAINT "notifications_type_valid" CHECK ("notification_type" IN ('threshold_reached', 'threshold_lost', 'match_confirmed', 'match_cancelled', 'weather_forecast')),
   CONSTRAINT "notifications_transition_key_not_empty" CHECK (length(trim("transition_key")) > 0),
   CONSTRAINT "notifications_scope_consistent" CHECK (
     ("notification_type" = 'weather_forecast' AND "match_id" IS NULL AND "weather_day" IS NOT NULL)

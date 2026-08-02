@@ -8,6 +8,7 @@ import {
   type NotificationClaimResult,
 } from "@football/db";
 import {
+  getZonedDateParts,
   MINSK_LATITUDE,
   MINSK_LONGITUDE,
   parseOpenMeteoForecast,
@@ -28,6 +29,16 @@ import {
 
 export const OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast" as const;
 export const WEATHER_PROVIDER_TIMEOUT_MS = 15_000;
+export const OPEN_METEO_MAX_FORECAST_DAYS = 16;
+
+function forecastDaysFor(scheduledAt: Date, now: Date, timezone: string): number {
+  const current = getZonedDateParts(now, timezone);
+  const scheduled = getZonedDateParts(scheduledAt, timezone);
+  const currentDay = Date.UTC(current.year, current.month - 1, current.day);
+  const scheduledDay = Date.UTC(scheduled.year, scheduled.month - 1, scheduled.day);
+  const daysAhead = Math.round((scheduledDay - currentDay) / (24 * 60 * 60 * 1000));
+  return Math.min(OPEN_METEO_MAX_FORECAST_DAYS, Math.max(2, daysAhead + 1));
+}
 
 /** Reads only the short future window in which the weather job can be eligible. */
 @Injectable()
@@ -127,7 +138,10 @@ export class OpenMeteoWeatherForecastProvider implements WeatherForecastProvider
         "wind_gusts_10m",
       ].join(","),
     );
-    url.searchParams.set("forecast_days", "2");
+    url.searchParams.set(
+      "forecast_days",
+      String(forecastDaysFor(match.scheduledAt, now, this.config.groupTimezone)),
+    );
     url.searchParams.set("timezone", this.config.groupTimezone);
     url.searchParams.set("temperature_unit", "celsius");
     url.searchParams.set("wind_speed_unit", "ms");

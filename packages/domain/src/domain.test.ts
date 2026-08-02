@@ -20,7 +20,10 @@ import {
   eligibleWeatherForecastMatches,
   formatCancellationNotification,
   formatConfirmationNotification,
+  formatLegacyDatePrefix,
   formatMatchCardTitle,
+  formatWeekdayCalendarDate,
+  formatWeekdayDateInTimeZone,
   formatWeatherForecastNotification,
   isEditableMatchStatus,
   isVoteEligibleForMatch,
@@ -310,19 +313,28 @@ describe("HTML-safe card formatting", () => {
     expect(escapeHtml(`<&>"`)).toBe("&lt;&amp;&gt;&quot;");
     const card = renderMatchCard({
       match: baseMatch,
-      votes: [vote(1, "going", "Иван <важный>"), vote(2, "maybe", "Пётр & Саша")],
+      votes: [
+        { ...vote(1, "going", "Иван <важный>"), usernameSnapshot: "ivan" },
+        { ...vote(2, "maybe", "Пётр & Саша"), usernameSnapshot: "petr" },
+        { ...vote(3, "not_going", "Дима"), usernameSnapshot: "dima" },
+      ],
       externalParticipants: [external(1, 3, "от Никиты"), external(2, -1, "от Никиты"), external(3, 1, null, "Ваня")],
     });
-    expect(card.text).toContain("27.07.2026 20:00");
+    expect(card.text).toContain("Понедельник, 27 июля · 20:00");
+    expect(card.text).not.toContain("27.07.2026");
     expect(card.text).not.toContain("BOX365 &lt;main&gt;, 100 рублей)");
     expect(card.text).toContain("Иван &lt;важный&gt;");
     expect(card.text).toContain("Пётр &amp; Саша");
-    expect(card.text).toContain("Внешние игроки: 3");
-    expect(card.text).toContain("Статус: Готов к подтверждению");
-    expect(card.text).toContain("От Никиты: 2");
+    expect(card.text).toContain("➕ <b>Доп. участники · 3</b>");
+    expect(card.text).toContain("🟢 <b>Готов к подтверждению</b>");
+    expect(card.text).toContain("• От Никиты: 2");
     expect(card.text).not.toContain("От От Никиты");
-    expect(card.text).toContain("От Ваня: 1");
-    expect(card.text).not.toContain("Не смогут (0)");
+    expect(card.text).toContain("• От Ваня: 1");
+    expect(card.text).toContain("🟢 <b>Участвуют · 1</b>");
+    expect(card.text).toContain("🟡 <b>Под вопросом · 1</b>");
+    expect(card.text).toContain("🔴 <b>Не смогут · 1</b>");
+    expect(card.text).toContain('<a href="tg://user?id=1">Иван &lt;важный&gt;</a>');
+    expect(card.text).not.toContain("@ivan");
     expect(card.isActive).toBe(true);
   });
 
@@ -350,12 +362,14 @@ describe("HTML-safe card formatting", () => {
       votes: [{ ...vote(1, "going", "Никита"), availableAfter: "19:00" }],
     });
 
-    expect(card.text).toContain("🏠 Формат: на улице, 10 человек");
+    expect(card.text).toContain("🏠 На улице");
+    expect(card.text).toContain("👥 <b>1 из 10</b> · осталось 9 мест");
+    expect(card.text).toContain("Суббота, 1 августа · время выбираем");
     expect(card.text).not.toContain("Доступны к времени:");
     expect(card.text).not.toContain("К 19:00 —");
     expect(card.text).not.toContain("К 20:00 —");
-    expect(card.text).toContain("<b>После 19:00 (1)</b>");
-    expect(card.text).toContain("<b>После 20:00 (0)</b>");
+    expect(card.text).toContain("🟢 <b>Могут после 19:00 · 1</b>");
+    expect(card.text).toContain("⚪ <b>Могут после 20:00 · пока никого</b>");
   });
 
   it("renders several exact time options without after-time labels", () => {
@@ -375,13 +389,13 @@ describe("HTML-safe card formatting", () => {
       ],
     });
 
-    expect(card.text).not.toContain("🕒 Время: выбираем из вариантов");
-    expect(card.text).toContain("<b>19:00 (1)</b>");
-    expect(card.text).toContain("<b>20:00 (2)</b>");
+    expect(card.text).toContain("🕒 Выбираем время из вариантов");
+    expect(card.text).toContain("🟢 <b>19:00 · 1</b>");
+    expect(card.text).toContain("🟢 <b>20:00 · 2</b>");
     expect(card.text.match(/Nikita|Никита/gu)).toHaveLength(2);
     expect(card.text).not.toContain("После 19:00");
-    expect(card.text).not.toContain("Не смогут (0)");
-    expect(card.text).toContain("<b>👯 Состав 2/2</b>");
+    expect(card.text).not.toContain("🔴 <b>Не смогут");
+    expect(card.text).toContain("👥 <b>2 из 2</b> · состав собран");
   });
 
   it("shows the booked exact time and separates players who cannot make it", () => {
@@ -401,10 +415,10 @@ describe("HTML-safe card formatting", () => {
       ],
     });
 
-    expect(card.text).toContain("🕒 Время: 20:30");
+    expect(card.text).toContain("🕒 Выбрано время: 20:30");
     expect(card.text).not.toContain("Доступны к времени:");
-    expect(card.text).toContain("<b>Участвуют (1)</b>");
-    expect(card.text).toContain("Не смогут к выбранному времени (1)");
+    expect(card.text).toContain("🟢 <b>Участвуют · 1</b>");
+    expect(card.text).toContain("🔴 <b>Не смогут к выбранному времени · 1</b>");
   });
 });
 
@@ -426,7 +440,15 @@ describe("Minsk time and weather rules", () => {
     expect(formatMatchCardTitle({ ...baseMatch, scheduledAt: new Date("2026-07-27T21:30:00.000Z") }, {
       timezone: MINSK_TIMEZONE,
       now: new Date("2026-07-27T21:15:00.000Z"),
-    })).toBe("Сегодня 00:30");
+    })).toBe("Вторник, 28 июля · 00:30");
+    expect(formatWeekdayDateInTimeZone(new Date("2026-08-03T17:00:00.000Z"), MINSK_TIMEZONE)).toBe(
+      "Понедельник, 3 августа",
+    );
+    expect(formatWeekdayCalendarDate("2026-08-05")).toBe("Среда, 5 августа");
+    expect(formatMatchCardTitle({ ...baseMatch, scheduledAt: new Date("2026-08-05T17:00:00.000Z") })).toBe(
+      "Среда, 5 августа · 20:00",
+    );
+    expect(formatLegacyDatePrefix("05.08.2026 20:00 — Поле")).toBe("Среда, 5 августа · 20:00 — Поле");
     expect(parseLocalDateTime("2026-08-03", "20:00").toISOString()).toBe("2026-08-03T17:00:00.000Z");
     expect(() => parseLocalDateTime("2026-02-30", "20:00")).toThrow();
   });
@@ -492,7 +514,7 @@ describe("Minsk time and weather rules", () => {
     expect(first).toMatchObject({ notificationType: "threshold_reached", transitionKey: "threshold:reached:1" });
     expect(first.text).toBe(
       "⚽ <b>Минимальный состав собран!</b>\n" +
-      "<b>#v9 · 02.08.2026 · BOX365</b>\n" +
+      "<b>#v9 · Воскресенье, 2 августа · BOX365</b>\n" +
       "👥 Игроков: <b>1 из 1</b>\n\n" +
       "Нужно указать точное время проведения матча.",
     );
@@ -526,7 +548,7 @@ describe("Minsk time and weather rules", () => {
     expect(lost).toMatchObject({ notificationType: "threshold_lost", transitionKey: "threshold:lost:2" });
     expect(lost.text).toBe(
       "⚠️ <b>Минимальный состав снова не набран</b>\n" +
-      "<b>#v-100 · 02.08.2026 · BOX365</b>\n" +
+      "<b>#v-100 · Воскресенье, 2 августа · BOX365</b>\n" +
       "👥 Игроков: <b>2 из 3</b>\n\n" +
       "↩️ Голос отменил: <b>@ivan</b>",
     );

@@ -226,6 +226,7 @@ describe("WeatherRunner", () => {
       telegramChatId: CHAT_ID,
       weatherDay: "2026-08-03",
       transitionKey: "forecast:-100:2026-08-03",
+      payload: { source: "automatic", matchId: "1" },
       claimedAt: now,
     });
   });
@@ -245,6 +246,29 @@ describe("WeatherRunner", () => {
     expect(harness.markSent).not.toHaveBeenCalled();
     expect(harness.markFailed).not.toHaveBeenCalled();
     expect(harness.markUncertain).not.toHaveBeenCalled();
+  });
+
+  it("lets a manual send atomically suppress both a repeated manual send and the scheduled job", async () => {
+    const match = weatherMatch(1n, new Date(NOW.getTime() + WEATHER_FORECAST_LEAD_TIME_MS));
+    const harness = createHarness([match]);
+    let existing: Notification | undefined;
+    harness.claimWeatherForecastDay.mockImplementation(async (input) => {
+      if (existing !== undefined) return { status: "duplicate", notification: existing };
+      existing = notification(1n, { payload: input.payload ?? {} });
+      return { status: "claimed", notification: existing };
+    });
+
+    const first = await harness.runner.sendForecast(match, NOW, "manual");
+    const second = await harness.runner.sendForecast(match, NOW, "manual");
+    const scheduled = await harness.runner.runOnce(NOW);
+
+    expect(first.status).toBe("sent");
+    expect(second).toMatchObject({
+      status: "duplicate",
+      notification: { payload: { source: "manual", matchId: "1" } },
+    });
+    expect(scheduled).toEqual({ candidates: 1, claimed: 0, duplicates: 1, sent: 0, failed: 0, skipped: 0 });
+    expect(harness.sendMessage).toHaveBeenCalledTimes(1);
   });
 
   it("sends the forecast to the configured topic and marks the claim sent", async () => {

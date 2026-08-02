@@ -32,7 +32,6 @@ export type VoteChoice = VoteOption | null;
 export const notificationTypes = [
   "threshold_reached",
   "threshold_lost",
-  "withdrawal",
   "match_confirmed",
   "match_cancelled",
   "weather_forecast",

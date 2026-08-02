@@ -1,6 +1,12 @@
 import type { MatchId, NotificationTransition, Vote } from "./types.js";
 import { escapeHtml, truncatePlainText } from "./html.js";
-import { formatTimeInTimeZone, MINSK_TIMEZONE } from "./time.js";
+import {
+  formatLegacyDatePrefix,
+  formatTimeInTimeZone,
+  formatWeekdayCalendarDate,
+  formatWeekdayDateInTimeZone,
+  MINSK_TIMEZONE,
+} from "./time.js";
 
 const TELEGRAM_NOTIFICATION_MAX_LENGTH = 4096;
 
@@ -8,7 +14,7 @@ function formatMatchContext(matchId: MatchId, title: string | null | undefined):
   const normalizedTitle = title?.trim();
   return normalizedTitle === undefined || normalizedTitle === ""
     ? `#v${String(matchId)}`
-    : `#v${String(matchId)} «${escapeHtml(normalizedTitle)}»`;
+    : `#v${String(matchId)} «${escapeHtml(formatLegacyDatePrefix(normalizedTitle))}»`;
 }
 
 function formatThresholdMatchContext(
@@ -17,10 +23,14 @@ function formatThresholdMatchContext(
   scheduleDate: string | null | undefined,
   location: string | null | undefined,
 ): string {
-  const dateMatch = scheduleDate?.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  const formattedDate = dateMatch === null || dateMatch === undefined
-    ? undefined
-    : `${dateMatch[3]}.${dateMatch[2]}.${dateMatch[1]}`;
+  let formattedDate: string | undefined;
+  try {
+    formattedDate = scheduleDate === null || scheduleDate === undefined
+      ? undefined
+      : formatWeekdayCalendarDate(scheduleDate.trim());
+  } catch {
+    formattedDate = undefined;
+  }
   const normalizedLocation = location?.trim();
   const details = [
     formattedDate,
@@ -128,16 +138,7 @@ export function formatConfirmationNotification(
   const timezone = input.timezone ?? MINSK_TIMEZONE;
   const schedule = input.scheduledAt === null
     ? "Дата и время уточняются"
-    : (() => {
-      const formattedDate = new Intl.DateTimeFormat("ru-RU", {
-        timeZone: timezone,
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-      }).format(input.scheduledAt);
-      const capitalizedDate = `${formattedDate.charAt(0).toLocaleUpperCase("ru-RU")}${formattedDate.slice(1)}`;
-      return `${capitalizedDate} · ${formatTimeInTimeZone(input.scheduledAt, timezone)}`;
-    })();
+    : `${formatWeekdayDateInTimeZone(input.scheduledAt, timezone)} · ${formatTimeInTimeZone(input.scheduledAt, timezone)}`;
   const location = input.location?.trim() || "Место уточняется";
   const fieldPrice = input.fieldPriceRubles === null ? "не указана" : `${input.fieldPriceRubles} руб.`;
   const playerWord = (() => {
@@ -176,15 +177,6 @@ export function formatConfirmationNotification(
   return shownMentions.length === 0
     ? baseText
     : `${baseText}\n\n${shownMentions.join(", ")}${suffix}`;
-}
-
-export function formatWithdrawalNotification(
-  matchId: MatchId,
-  title: string | null | undefined,
-  playerName: string,
-): string {
-  const normalizedPlayerName = playerName.trim() || "Игрок";
-  return `${formatMatchContext(matchId, title)} — ${escapeHtml(normalizedPlayerName)} больше не участвует.`;
 }
 
 export interface FormattedNotificationTransition extends NotificationTransition {

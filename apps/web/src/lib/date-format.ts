@@ -10,45 +10,19 @@ function parseCalendarDate(value: string): Date | undefined {
   return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date : undefined
 }
 
-function startOfDay(value: Date): Date {
-  return new Date(value.getFullYear(), value.getMonth(), value.getDate())
-}
-
-function addDays(value: Date, amount: number): Date {
-  const result = new Date(value)
-  result.setDate(result.getDate() + amount)
-  return result
-}
-
 function capitalize(value: string): string {
   return value.length === 0 ? value : `${value[0]?.toUpperCase() ?? ''}${value.slice(1)}`
 }
 
-export function formatMatchDate(dateValue: string, timeValue: string, now: Date = new Date()): string {
+export function formatMatchDate(dateValue: string, timeValue: string): string {
   const date = parseCalendarDate(dateValue)
   if (date === undefined) return timeValue === '' ? 'Дата уточняется' : `Дата уточняется · ${timeValue}`
 
-  const today = startOfDay(now)
-  const target = startOfDay(date)
-  const differenceInDays = Math.round((target.getTime() - today.getTime()) / 86_400_000)
-  const mondayOffset = (today.getDay() + 6) % 7
-  const nextMonday = addDays(today, 7 - mondayOffset)
-
-  let dateLabel: string
-  if (differenceInDays === 0) {
-    dateLabel = 'Сегодня'
-  } else if (differenceInDays === 1) {
-    dateLabel = 'Завтра'
-  } else if (target > today && target < nextMonday) {
-    dateLabel = capitalize(new Intl.DateTimeFormat(RUSSIAN_LOCALE, { weekday: 'long' }).format(target))
-  } else {
-    dateLabel = new Intl.DateTimeFormat(RUSSIAN_LOCALE, {
-      day: 'numeric',
-      month: 'long',
-      ...(target.getFullYear() === today.getFullYear() ? {} : { year: 'numeric' }),
-    }).format(target)
-  }
-
+  const dateLabel = capitalize(new Intl.DateTimeFormat(RUSSIAN_LOCALE, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).format(date))
   return timeValue === '' ? dateLabel : `${dateLabel} · ${timeValue}`
 }
 

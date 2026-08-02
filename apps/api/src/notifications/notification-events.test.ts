@@ -60,7 +60,7 @@ describe("application notification events", () => {
     expect(event).toMatchObject({ eventType: "send_notification", notificationId: 55n, telegramTopicId: 42n });
     expect(event?.payload?.["text"]).toBe(
       "⚽ <b>Минимальный состав собран!</b>\n" +
-      "<b>#v12 · 03.08.2026 · BOX365</b>\n" +
+      "<b>#v12 · Понедельник, 3 августа · BOX365</b>\n" +
       "👥 Игроков: <b>3 из 3</b>\n\n" +
       "Нужно указать точное время проведения матча.",
     );
@@ -93,7 +93,7 @@ describe("application notification events", () => {
 
     expect(event?.payload?.["text"]).toBe(
       "⚠️ <b>Минимальный состав снова не набран</b>\n" +
-      "<b>#v12 · 03.08.2026 · Field</b>\n" +
+      "<b>#v12 · Понедельник, 3 августа · Field</b>\n" +
       "👥 Игроков: <b>0 из 3</b>\n\n" +
       "↩️ Голос отменил: <b>@ivan</b>",
     );

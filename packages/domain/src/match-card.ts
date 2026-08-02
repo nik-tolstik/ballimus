@@ -1,9 +1,15 @@
 import { groupExternalParticipants, totalExternalParticipantQuantity } from "./external-participants.js";
 import { escapeHtml, escapedTextWithinLimit, truncatePlainText } from "./html.js";
 import type { ExternalParticipant, Match, Vote, VoteOption } from "./types.js";
-import { calendarDateInTimeZone, formatDateInTimeZone, formatTimeInTimeZone, MINSK_TIMEZONE } from "./time.js";
+import {
+  formatLegacyDatePrefix,
+  formatTimeInTimeZone,
+  formatWeekdayCalendarDate,
+  formatWeekdayDateInTimeZone,
+  MINSK_TIMEZONE,
+} from "./time.js";
 import { isTimePollMode, isVoteEligibleForMatch, matchTimeMode } from "./availability.js";
-import { deriveMatchPlanningStage, matchPlanningStageLabel } from "./planning-stage.js";
+import { deriveMatchPlanningStage } from "./planning-stage.js";
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
 export const DEFAULT_MATCH_CARD_TIMEZONE = MINSK_TIMEZONE;
@@ -29,26 +35,25 @@ export interface MatchCardView {
 
 function fieldPriceLabel(match: Match): string {
   const price = match.fieldPriceRubles;
-  return price === null ? "не указана" : `${price} рублей`;
-}
-
-function playerCountLabel(requiredPlayers: number): string {
-  return `${requiredPlayers} человек`;
+  return price === null ? "Стоимость уточняется" : `${price} рублей`;
 }
 
 function locationLabel(match: Match): string {
   const location = match.location?.trim();
-  return location === undefined || location === "" ? "не указано" : location;
+  return location === undefined || location === "" ? "Место уточняется" : location;
 }
 
 function timeLabel(match: Match, timezone: string): string {
   if (!isTimePollMode(matchTimeMode(match))) return "";
   if (match.selectedTime === null || match.selectedTime === undefined) {
-    return matchTimeMode(match) === "availability" ? "выбираем по доступности" : "выбираем из вариантов";
+    return matchTimeMode(match) === "availability"
+      ? "Выбираем время по доступности"
+      : "Выбираем время из вариантов";
   }
-  return match.scheduledAt === null
+  const selectedTime = match.scheduledAt === null
     ? match.selectedTime
     : formatTimeInTimeZone(match.scheduledAt, timezone);
+  return `Выбрано время: ${selectedTime}`;
 }
 
 function titleWithoutLegacyDetails(match: Match, title: string): string {
@@ -63,7 +68,10 @@ function titleWithoutLegacyDetails(match: Match, title: string): string {
     : priceLabel === undefined
       ? ` — ${details[0]}`
       : ` (${details.join(", ")})`;
-  return suffix !== "" && title.endsWith(suffix) ? title.slice(0, -suffix.length).trimEnd() : title;
+  const titleWithoutDetails = suffix !== "" && title.endsWith(suffix)
+    ? title.slice(0, -suffix.length).trimEnd()
+    : title;
+  return formatLegacyDatePrefix(titleWithoutDetails);
 }
 
 /** Formats the date/time title using the configured calendar timezone. */
@@ -79,9 +87,7 @@ export function formatMatchCardTitle(
     && match.scheduleDate !== undefined
   ) {
     try {
-      const date = new Date(`${match.scheduleDate}T12:00:00.000Z`);
-      const formatted = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" }).format(date);
-      return `${formatted} · время выбираем`;
+      return `${formatWeekdayCalendarDate(match.scheduleDate)} · время выбираем`;
     } catch {
       return titleWithoutLegacyDetails(match, storedTitle);
     }
@@ -90,69 +96,80 @@ export function formatMatchCardTitle(
 
   const timezone = options.timezone ?? DEFAULT_MATCH_CARD_TIMEZONE;
   try {
-    const now = options.now ?? new Date();
-    const scheduledDate = calendarDateInTimeZone(match.scheduledAt, timezone);
-    const currentDate = calendarDateInTimeZone(now, timezone);
     const time = formatTimeInTimeZone(match.scheduledAt, timezone);
-    return scheduledDate === currentDate
-      ? `Сегодня ${time}`
-      : `${formatDateInTimeZone(match.scheduledAt, timezone)} ${time}`;
+    return `${formatWeekdayDateInTimeZone(match.scheduledAt, timezone)} · ${time}`;
   } catch {
     return titleWithoutLegacyDetails(match, storedTitle);
   }
 }
 
-function statusLabel(match: Match, goingCount: number): string {
+function statusLine(match: Match, goingCount: number): string {
   const planningStage = deriveMatchPlanningStage(match, goingCount);
-  if (planningStage !== null) return matchPlanningStageLabel(planningStage);
+  switch (planningStage) {
+    case "recruiting_players":
+      return "🟢 <b>Набор открыт</b>";
+    case "finalizing_details":
+      return "🟡 <b>Состав набран — уточняем время и место</b>";
+    case "ready_to_confirm":
+      return "🟢 <b>Готов к подтверждению</b>";
+    case null:
+      break;
+  }
   switch (match.status) {
     case "active":
-      return "Набираем игроков";
+      return "🟢 <b>Набор открыт</b>";
     case "confirmed":
-      return "Матч состоится ✅";
+      return "✅ <b>Матч состоится</b>";
     case "completed":
-      return "Завершён";
+      return "⚪ <b>Матч завершён</b>";
     case "cancelled":
-      return "Отменён";
+      return "🔴 <b>Матч отменён</b>";
     case "draft":
-      return "Черновик";
+      return "⚪ <b>Черновик</b>";
   }
 }
 
-function statusLine(match: Match, goingCount: number): string {
-  const label = statusLabel(match, goingCount);
-  return match.status === "confirmed" ? `Статус: <b>${label}</b>` : `Статус: ${label}`;
+function remainingPlacesLabel(value: number): string {
+  const absolute = value % 100;
+  const last = absolute % 10;
+  if (absolute > 10 && absolute < 20) return "мест";
+  if (last === 1) return "место";
+  if (last > 1 && last < 5) return "места";
+  return "мест";
 }
 
-function optionHeading(option: VoteOption): string {
+function rosterProgressLine(goingCount: number, requiredPlayers: number): string {
+  const remaining = Math.max(0, requiredPlayers - goingCount);
+  return remaining === 0
+    ? `👥 <b>${goingCount} из ${requiredPlayers}</b> · состав собран`
+    : `👥 <b>${goingCount} из ${requiredPlayers}</b> · осталось ${remaining} ${remainingPlacesLabel(remaining)}`;
+}
+
+function optionHeading(option: VoteOption): { readonly icon: string; readonly label: string } {
   switch (option) {
     case "going":
-      return "Участвуют";
+      return { icon: "🟢", label: "Участвуют" };
     case "maybe":
-      return "Под вопросом";
+      return { icon: "🟡", label: "Под вопросом" };
     case "not_going":
-      return "Не смогут";
+      return { icon: "🔴", label: "Не смогут" };
   }
 }
 
 function venueLabel(venueType: Match["venueType"]): string {
   switch (venueType) {
     case "outdoor":
-      return "на улице";
+      return "На улице";
     case "indoor":
-      return "в здании";
+      return "В здании";
     default:
-      return "не указан";
+      return "Формат уточняется";
   }
 }
 
 function participantHtml(vote: Vote): string {
   const plainName = truncatePlainText(vote.displayNameSnapshot.trim() || "Игрок", 512);
   const name = escapeHtml(plainName);
-  const username = vote.usernameSnapshot?.trim().replace(/^@+/u, "");
-  if (username !== undefined && username !== "") {
-    return `${name} (@${escapeHtml(truncatePlainText(username, 320))})`;
-  }
   return `<a href="tg://user?id=${escapePlainTextId(vote.telegramUserId)}">${name}</a>`;
 }
 
@@ -170,7 +187,7 @@ function namedExternalParticipantLines(
       const sourceLabel = /^от(?:\s|$)/iu.test(truncatedLabel)
         ? truncatedLabel.replace(/^от/iu, "От")
         : `От ${truncatedLabel}`;
-      return `${escapeHtml(sourceLabel)}: ${quantity}`;
+      return `• ${escapeHtml(sourceLabel)}: ${quantity}`;
     });
 }
 
@@ -215,28 +232,42 @@ function addParticipantSection(
   isLast: boolean,
 ): void {
   const participants = votes.filter((vote) => vote.option === option);
-  addVoteListSection(lines, participants, optionHeading(option), option === "going", maxLength, isLast);
+  if (participants.length === 0) return;
+  const heading = optionHeading(option);
+  addVoteListSection(lines, participants, heading.label, heading.icon, maxLength, isLast);
+}
+
+function addParticipantLines(
+  lines: string[],
+  participants: readonly Vote[],
+  maxLength: number,
+): void {
+  let shown = 0;
+  for (const participant of participants) {
+    const line = `• ${participantHtml(participant)}`;
+    const remainingAfterLine = participants.length - shown - 1;
+    const separatorLength = lines.length === 0 ? 0 : 1;
+    const overflowLine = `<i>… ещё ${participants.length - shown}</i>`;
+    const reservedOverflowLength = remainingAfterLine === 0 ? 0 : overflowLine.length + 1;
+    if (currentLength(lines) + separatorLength + line.length + reservedOverflowLength > maxLength) break;
+    lines.push(line);
+    shown += 1;
+  }
+  if (shown < participants.length) {
+    appendLine(lines, `<i>… ещё ${participants.length - shown}</i>`, maxLength, { allowTruncate: false });
+  }
 }
 
 function addVoteListSection(
   lines: string[],
   participants: readonly Vote[],
   label: string,
-  boldHeading: boolean,
+  icon: string,
   maxLength: number,
   isLast: boolean,
 ): void {
-  const heading = `${label} (${participants.length})`;
-  appendLine(lines, boldHeading ? `<b>${heading}</b>` : heading, maxLength);
-
-  let shown = 0;
-  for (const participant of participants) {
-    const line = `${shown + 1}. ${participantHtml(participant)}`;
-    if (!appendLine(lines, line, maxLength, { allowTruncate: false })) break;
-    shown += 1;
-  }
-
-  if (shown < participants.length) appendLine(lines, `<i>… ещё ${participants.length - shown}</i>`, maxLength);
+  appendLine(lines, `${icon} <b>${label} · ${participants.length}</b>`, maxLength);
+  addParticipantLines(lines, participants, maxLength);
   if (!isLast && participants.length > 0) appendLine(lines, "", maxLength);
 }
 
@@ -254,18 +285,18 @@ function addTimeOptionParticipantSections(
         : vote.availableAfter === time
     ));
     const selected = match.selectedTime === time;
+    const hasParticipants = participants.length > 0;
+    const label = matchTimeMode(match) === "availability"
+      ? `Могут после ${escapeHtml(time)}`
+      : escapeHtml(time);
+    const countLabel = hasParticipants ? String(participants.length) : "пока никого";
     appendLine(
       lines,
-      `${selected ? "✅ " : ""}<b>${matchTimeMode(match) === "availability" ? "После " : ""}${escapeHtml(time)} (${participants.length})</b>`,
+      `${selected ? "✅" : hasParticipants ? "🟢" : "⚪"} <b>${label} · ${countLabel}</b>`,
       maxLength,
     );
-    let shown = 0;
-    for (const participant of participants) {
-      if (!appendLine(lines, `${shown + 1}. ${participantHtml(participant)}`, maxLength, { allowTruncate: false })) break;
-      shown += 1;
-    }
-    if (shown < participants.length) appendLine(lines, `<i>… ещё ${participants.length - shown}</i>`, maxLength);
-    if (participants.length > 0 && index < options.length - 1) appendLine(lines, "", maxLength);
+    addParticipantLines(lines, participants, maxLength);
+    if (index < options.length - 1) appendLine(lines, "", maxLength);
   }
 }
 
@@ -300,23 +331,22 @@ export function renderMatchCard(
   const title = escapeHtml(truncatePlainText(formatMatchCardTitle(match, displayOptions), 512));
   const lines: string[] = [];
   const baseLines = [
-    `#v${String(match.id)}`,
+    `<b>⚽ Матч #v${String(match.id)}</b>`,
     title,
     "",
     statusLine(match, goingCount),
+    rosterProgressLine(goingCount, match.requiredPlayers),
     ...(cancellationReason === undefined || cancellationReason === ""
       ? []
       : [`Причина отмены: ${escapeHtml(truncatePlainText(cancellationReason, 512))}`]),
     "",
-    `📍 Место: ${escapeHtml(truncatePlainText(locationLabel(match), 512))}`,
-    `🏠 Формат: ${venueLabel(match.venueType)}, ${playerCountLabel(match.requiredPlayers)}`,
-    `🫰 Сумма: ${fieldPriceLabel(match)}`,
-    ...(isTimePollMode(timeMode) && !(timeMode === "exact_options" && timeSelectionPending)
-      ? [`🕒 Время: ${timeLabel(match, displayOptions.timezone ?? DEFAULT_MATCH_CARD_TIMEZONE)}`]
+    `📍 ${escapeHtml(truncatePlainText(locationLabel(match), 512))}`,
+    `🏠 ${venueLabel(match.venueType)}`,
+    `💰 ${fieldPriceLabel(match)}`,
+    ...(isTimePollMode(timeMode)
+      ? [`🕒 ${timeLabel(match, displayOptions.timezone ?? DEFAULT_MATCH_CARD_TIMEZONE)}`]
       : []),
-    "",
-    `<b>👯 Состав ${goingCount}/${match.requiredPlayers}</b>`,
-    ...(externalCount > 0 ? [`Внешние игроки: ${externalCount}`] : []),
+    ...(externalCount > 0 ? ["", `➕ <b>Доп. участники · ${externalCount}</b>`] : []),
   ];
   for (const line of baseLines) appendLine(lines, line, maxLength);
   if (externalCount > 0) {
@@ -336,13 +366,15 @@ export function renderMatchCard(
   } else if (isTimePollMode(timeMode)) {
     const eligibleGoing = votes.filter((vote) => isVoteEligibleForMatch(match, vote));
     const unavailableGoing = votes.filter((vote) => vote.option === "going" && !isVoteEligibleForMatch(match, vote));
-    addVoteListSection(lines, eligibleGoing, "Участвуют", true, maxLength, false);
+    if (eligibleGoing.length > 0) {
+      addVoteListSection(lines, eligibleGoing, "Участвуют", "🟢", maxLength, false);
+    }
     if (unavailableGoing.length > 0) {
       addVoteListSection(
         lines,
         unavailableGoing,
         timeMode === "availability" ? "Не смогут к выбранному времени" : "Выбрали другое время",
-        false,
+        "🔴",
         maxLength,
         false,
       );

@@ -4,7 +4,9 @@ import {
   deriveMatchPlanningStage,
   evaluateMatchTransition,
   formatMatchCardTitle,
+  formatWeekdayCalendarDate,
   getZonedDateParts,
+  isWeatherForecastEligible,
   parseLocalDateTime,
   renderMatchCard,
   selectedTimeForFinalTime,
@@ -40,6 +42,7 @@ import {
 
 import { API_CONFIG, type ApiConfig } from "../config/api-config.module.js";
 import { OutboxBestEffortService } from "../telegram/outbox-best-effort.service.js";
+import { WeatherRunner } from "../jobs/weather.runner.js";
 import {
   claimLifecycleNotificationEvent,
   claimThresholdNotificationEvent,
@@ -70,6 +73,7 @@ import { serializeRestObject, type RestJsonValue } from "./rest.serialization.js
 
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
 const PUBLIC_CARD_TOPIC_ID_FOR_GENERAL = 1n;
+const MANUAL_WEATHER_FORECAST_LEAD_TIME_MS = 16 * 24 * 60 * 60 * 1000;
 
 type RestRepositories = Pick<
   TransactionRepositories,
@@ -213,7 +217,7 @@ function formatDerivedTitle(input: {
   readonly timeLabel?: string;
   readonly timeMode?: MatchTimeMode;
 }): string {
-  const date = input.dateLabel ?? input.date.split("-").reverse().join(".");
+  const date = formatWeekdayCalendarDate(input.date);
   const time = input.timeLabel ?? input.time ?? ((input.timeMode ?? "exact") !== "exact" ? "время выбираем" : "время уточняется");
   const priceLabel = input.fieldPriceRubles === undefined || input.fieldPriceRubles === null
     ? undefined
@@ -226,7 +230,7 @@ function formatDerivedTitle(input: {
     : priceLabel === undefined
       ? ` — ${details[0]}`
       : ` (${details.join(", ")})`;
-  return `${date} ${time}${suffix}`;
+  return `${date} · ${time}${suffix}`;
 }
 
 export function parseIfMatch(value: string | undefined, required: boolean): number | undefined {
@@ -311,11 +315,17 @@ function publicCardTopicId(config: ApiConfig): bigint | null {
 
 @Injectable()
 export class OwnerRestService {
+  private readonly weatherMatches: Pick<MatchesRepository, "getById">;
+
   public constructor(
     @Inject(APP_DATABASE) private readonly db: AppDatabase,
     @Inject(API_CONFIG) private readonly config: ApiConfig,
     @Optional() @Inject(OutboxBestEffortService) private readonly outboxBestEffort?: OutboxBestEffortService,
-  ) {}
+    @Optional() @Inject(WeatherRunner) private readonly weatherRunner?: WeatherRunner,
+    @Optional() weatherMatches?: MatchesRepository,
+  ) {
+    this.weatherMatches = weatherMatches ?? new MatchesRepository(db);
+  }
 
   public async getBootstrap(ownerTelegramUserId: bigint): Promise<Record<string, unknown>> {
     return this.read(ownerTelegramUserId, async () => {
@@ -748,6 +758,66 @@ export class OwnerRestService {
       return {
         match: this.toDetails(await this.loadAggregate(repositories, matchId)),
         action: { type: "refresh_requested", outboxState: "pending", eventType },
+      };
+    });
+  }
+
+  public async sendWeatherForecast(
+    ownerTelegramUserId: bigint,
+    matchId: bigint,
+  ): Promise<Record<string, unknown>> {
+    return this.read(ownerTelegramUserId, async () => {
+      if (this.weatherRunner === undefined) {
+        throw new Error("Weather delivery is unavailable");
+      }
+
+      const match = await this.weatherMatches.getById(matchId);
+      this.assertConfiguredMatch(match);
+      const now = new Date();
+      const weatherMatch = {
+        id: match.id,
+        chatId: match.telegramChatId,
+        status: match.status,
+        venueType: match.venueType,
+        scheduledAt: match.scheduledAt,
+      };
+
+      if (match.status !== "active" && match.status !== "confirmed") {
+        throw restRequestError(409, "WEATHER_MATCH_NOT_ACTIVE", "Weather can only be sent for an active or confirmed match.");
+      }
+      if (match.venueType !== "outdoor") {
+        throw restRequestError(409, "WEATHER_OUTDOOR_MATCH_REQUIRED", "Weather is only sent for outdoor matches.");
+      }
+      if (match.scheduledAt === null) {
+        throw restRequestError(409, "WEATHER_MATCH_TIME_REQUIRED", "Set the exact match time before sending weather.");
+      }
+      if (!isWeatherForecastEligible({
+        match: weatherMatch,
+        now,
+        leadTimeMs: MANUAL_WEATHER_FORECAST_LEAD_TIME_MS,
+      })) {
+        throw restRequestError(409, "WEATHER_FORECAST_NOT_AVAILABLE", "Weather can only be sent for a future match within the 16-day forecast window.");
+      }
+
+      const result = await this.weatherRunner.sendForecast(weatherMatch, now, "manual");
+      if (result.status === "duplicate") {
+        const source = result.notification.payload["source"];
+        if (source === "manual") {
+          throw restRequestError(409, "WEATHER_ALREADY_SENT_MANUALLY", "The owner already sent weather for this day.");
+        }
+        throw restRequestError(409, "WEATHER_ALREADY_SENT", "Weather has already been sent for this day.");
+      }
+      if (result.status === "failed") {
+        throw restRequestError(502, "WEATHER_FORECAST_UNAVAILABLE", "The weather provider could not return a forecast.");
+      }
+      if (result.status === "uncertain") {
+        throw restRequestError(502, "WEATHER_DELIVERY_UNCERTAIN", "Telegram delivery could not be confirmed; retrying could duplicate the forecast.");
+      }
+
+      return {
+        matchId: match.id,
+        weatherDay: result.weatherDay,
+        status: "sent",
       };
     });
   }

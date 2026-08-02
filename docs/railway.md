@@ -108,7 +108,7 @@ The GitHub `main` workflow runs the same checks against PostgreSQL 18. Railway A
 - [ ] GitHub CI passes for the deployed commit.
 - [ ] Vercel serves the production Mini App with only `VITE_API_BASE_URL` exposed.
 - [ ] Railway API health and exact-origin CORS pass.
-- [ ] All six migrations are present in the active database ledger.
+- [ ] All seven migrations are present in the active database ledger.
 - [ ] Jobs completes, exits, and respects the database lease.
 - [ ] The Telegram webhook uses the Railway API URL and secret-token validation.
 - [ ] The full publish/vote/idempotency/cancel flow passes in `Футбол тест`.
