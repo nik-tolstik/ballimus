@@ -527,7 +527,7 @@ export function MatchRoster({ match, onCorrectVote, onRemoveVote, onAddExternal,
 
   return <>
     <Card size="sm">
-      <CardHeader><CardTitle>Состав</CardTitle><CardDescription>{match.timeMode === 'exact_options' ? 'Игрок может выбрать несколько точных времён в Telegram.' : 'Перетащите игрока за маркер в нужную группу — изменение сохранится автоматически.'}</CardDescription></CardHeader>
+      <CardHeader><CardTitle>Состав</CardTitle>{match.timeMode === 'exact_options' ? <CardDescription>Игрок может выбрать несколько точных времён в Telegram.</CardDescription> : null}</CardHeader>
       <CardContent className="flex flex-col gap-5">
         <DndContext sensors={sensors} collisionDetection={closestCenter} accessibility={{ announcements: ROSTER_DND_ANNOUNCEMENTS, screenReaderInstructions: ROSTER_DND_INSTRUCTIONS }} onDragStart={({ active }: DragStartEvent) => setActivePlayerId(String(active.data.current?.['playerId'] ?? active.id))} onDragCancel={() => setActivePlayerId(undefined)} onDragEnd={finishDrag}>
           <div className="flex flex-col gap-1">
