@@ -50,6 +50,7 @@ function match(overrides: Partial<Match> = {}): Match {
     timeMode: "exact",
     timeOptions: [],
     selectedTime: null,
+    venueId: null,
     location: "Outdoor field",
     venueType: "outdoor",
     fieldPriceRubles: null,

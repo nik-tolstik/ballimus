@@ -24,6 +24,7 @@ import {
   runOwnerVoteRemovalTransaction,
   runVoteChangeTransaction,
   TelegramUpdatesRepository,
+  VenuesRepository,
   VotesRepository,
   type Match,
   type TelegramIdentityInput,
@@ -114,13 +115,14 @@ describe("PostgreSQL baseline migration and repositories", () => {
       "player_usernames",
       "players",
       "telegram_updates",
+      "venues",
       "votes",
     ]);
 
     const migrationRows = await database.sql.unsafe<{ hash: string; created_at: string }[]>(
       `select hash, created_at from ${quoteIdentifier(database.migrationSchemaName)}."__drizzle_migrations"`,
     );
-    expect(migrationRows).toHaveLength(8);
+    expect(migrationRows).toHaveLength(9);
     expect(migrationRows[0]?.hash).toMatch(/^[a-f0-9]{64}$/u);
 
     const constraintRows = await database.sql<{ conname: string }[]>`
@@ -143,6 +145,7 @@ describe("PostgreSQL baseline migration and repositories", () => {
       "votes_match_player_pk",
       "job_claims_lease_after_claim",
       "outbox_deduplication_key_unique",
+      "matches_venue_id_venues_id_fk",
     ]) {
       expect(constraints, `missing constraint ${name}`).toContain(name);
     }
@@ -165,6 +168,9 @@ describe("PostgreSQL baseline migration and repositories", () => {
       "notifications_match_type_transition_unique",
       "notifications_weather_day_unique",
       "outbox_delivery_queue_idx",
+      "venues_archived_at_idx",
+      "venues_name_ci_unique",
+      "matches_venue_id_idx",
     ]) {
       expect(indexes, `missing index ${name}`).toContain(name);
     }
@@ -177,6 +183,67 @@ describe("PostgreSQL baseline migration and repositories", () => {
     const triggers = new Set(triggerRows.map((row) => row.tgname));
     expect(triggers).toContain("player_usernames_no_silent_rebinding");
     expect(triggers).toContain("matches_set_updated_at");
+  }, TEST_TIMEOUT_MS);
+
+  it("archives and restores venues while keeping linked match details synchronized", async () => {
+    const venueRepository = new VenuesRepository(database.db);
+    const matchRepository = new MatchesRepository(database.db);
+    const venue = await venueRepository.create({
+      name: "BOX365 Октябрьская",
+      mapUrl: "https://maps.example.test/box365-oct",
+      venueType: "indoor",
+      bookingPhones: ["+375 29 123-45-67"],
+      websiteUrl: "https://box365.example.test",
+      createdAt: timestamp(4),
+    });
+
+    await expect(venueRepository.create({
+      name: "box365 октябрьская",
+      mapUrl: "https://maps.example.test/duplicate",
+      venueType: "indoor",
+    })).rejects.toThrow();
+
+    const match = await matchRepository.create({
+      telegramChatId: CHAT_ID,
+      scheduledAt: MATCH_TIME,
+      location: venue.name,
+      venueType: venue.venueType,
+      venueId: venue.id,
+      title: "Local integration match",
+      requiredPlayers: 10,
+      creatorTelegramUserId: OWNER_ID,
+      status: "active",
+      createdAt: timestamp(5),
+    });
+    expect((await matchRepository.list({ venueId: venue.id })).map((record) => record.id)).toEqual([match.id]);
+
+    const updatedVenue = await venueRepository.update(venue.id, {
+      name: "BOX365 Пушкинская",
+      expectedVersion: venue.version,
+      now: timestamp(6),
+    });
+    const syncedMatch = await matchRepository.syncVenueDetails(match.id, {
+      venueId: venue.id,
+      location: updatedVenue.name,
+      venueType: updatedVenue.venueType,
+      title: "Local integration match — BOX365 Пушкинская",
+      now: timestamp(7),
+    });
+    expect(syncedMatch).toMatchObject({
+      venueId: venue.id,
+      location: "BOX365 Пушкинская",
+      venueType: "indoor",
+      version: 2,
+    });
+
+    const archived = await venueRepository.setArchived(venue.id, true, updatedVenue.version);
+    expect(archived.archivedAt).not.toBeNull();
+    expect(await venueRepository.list()).toEqual([]);
+    expect((await venueRepository.list({ includeArchived: true })).map((record) => record.id)).toEqual([venue.id]);
+
+    const restored = await venueRepository.setArchived(venue.id, false, archived.version);
+    expect(restored.archivedAt).toBeNull();
+    expect((await venueRepository.list()).map((record) => record.id)).toEqual([venue.id]);
   }, TEST_TIMEOUT_MS);
 
   it("stores a bounded player avatar cache and records a checked missing photo", async () => {

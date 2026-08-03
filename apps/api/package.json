@@ -23,8 +23,8 @@
     "typecheck": "pnpm exec tsc --project tsconfig.json --noEmit",
     "build": "pnpm exec tsc --project tsconfig.json",
     "start": "node dist/main.js",
-    "openapi:write": "pnpm exec tsx src/openapi.ts --write",
-    "jobs:run": "pnpm exec tsx src/jobs/cli.ts",
+    "openapi:write": "node ../../scripts/run-tsx.mjs src/openapi.ts --write",
+    "jobs:run": "node ../../scripts/run-tsx.mjs src/jobs/cli.ts",
     "jobs:start": "node dist/jobs/cli.js"
   },
   "dependencies": {

@@ -52,11 +52,10 @@ The command reads the local bot token from the environment or `.env.local`, prin
 Start the local PostgreSQL container in Docker Desktop. After it is healthy, run the migration explicitly before the first launch and whenever the schema changes. API startup does not run migrations:
 
 ```bash
-set -a
-source .env.local
-set +a
 pnpm db:migrate
 ```
+
+When `DATABASE_URL` is not already present in the shell, the migration runner reads the repository-root `.env.local`. An explicitly provided environment value takes precedence.
 
 ## Run locally in Telegram
 
@@ -96,8 +95,11 @@ pnpm --filter @football/db db:migrate
 pnpm --filter @football/domain test
 pnpm --filter @football/api-client generate
 pnpm --filter @football/web test
+pnpm test:e2e
 pnpm --filter @football/web build
 ```
+
+Playwright runs the owner Mini App against a local Vite server with mocked API responses and a Telegram WebApp fixture. Install Chromium once with `pnpm --filter @football/web exec playwright install chromium` before the first E2E run.
 
 Regenerate the API contract and client together:
 

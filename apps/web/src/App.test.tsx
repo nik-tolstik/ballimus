@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const queryState = vi.hoisted(() => ({
   bootstrap: { data: undefined as unknown, error: null as unknown, isPending: false },
   matches: { data: undefined as unknown, error: null as unknown, isPending: false },
+  venues: { data: undefined as unknown, error: null as unknown, isPending: false },
   players: { data: undefined as unknown, error: null as unknown, isPending: false },
   match: { data: undefined as unknown, error: null as unknown, isPending: false },
   mutation: { isPending: false, error: null as unknown, mutate: vi.fn(), mutateAsync: vi.fn() },
@@ -18,12 +19,18 @@ vi.mock('@football/api-client', () => ({
   getGetOwnerMatchQueryKey: (id: unknown) => ['/v1/matches', id],
   getListOwnerMatchesQueryKey: () => ['/v1/matches'],
   getListOwnerPlayersQueryKey: () => ['/v1/players'],
+  getListOwnerVenuesQueryKey: () => ['/v1/venues'],
   useGetOwnerBootstrap: () => queryState.bootstrap,
   useGetOwnerMatch: () => queryState.match,
   useListOwnerMatches: () => queryState.matches,
   useListOwnerPlayers: () => queryState.players,
+  useListOwnerVenues: () => queryState.venues,
   usePatchOwnerMatch: () => queryState.mutation,
   useCreateOwnerMatch: () => queryState.mutation,
+  useCreateOwnerVenue: () => queryState.mutation,
+  useUpdateOwnerVenue: () => queryState.mutation,
+  useArchiveOwnerVenue: () => queryState.mutation,
+  useRestoreOwnerVenue: () => queryState.mutation,
   usePublishOwnerMatch: () => queryState.mutation,
   useRefreshOwnerMatchCard: () => queryState.mutation,
   useFinalizeOwnerMatch: () => queryState.mutation,
@@ -97,6 +104,7 @@ function renderApp(session: TelegramSession = readySession): string {
 beforeEach(() => {
   queryState.bootstrap = { data: undefined, error: null, isPending: false }
   queryState.matches = { data: undefined, error: null, isPending: false }
+  queryState.venues = { data: undefined, error: null, isPending: false }
   queryState.players = { data: undefined, error: null, isPending: false }
   queryState.match = { data: undefined, error: null, isPending: false }
   queryState.mutation = { isPending: false, error: null, mutate: vi.fn(), mutateAsync: vi.fn() }
@@ -212,6 +220,7 @@ describe('API-backed surface states', () => {
   it('exposes all primary tabs and marks the active tab accessibly', () => {
     const markup = renderToStaticMarkup(<TabBar value="players" onChange={vi.fn()} />)
     expect(markup).toContain('Матчи')
+    expect(markup).toContain('Места')
     expect(markup).toContain('Игроки')
     expect(markup).toContain('История')
     expect(markup).toContain('aria-current="page"')
@@ -291,12 +300,12 @@ describe('API-backed surface states', () => {
   })
 
   it('validates the booked details before final confirmation', () => {
-    expect(validateFinalMatchDetails(normalizedMatch, { time: '', location: '', venueType: '', fieldPriceRubles: '' })).toEqual({
+    expect(validateFinalMatchDetails(normalizedMatch, { time: '', venueId: undefined, fieldPriceRubles: '' })).toEqual({
       time: 'Укажите точное время матча.',
-      location: 'Укажите место игры.',
+      location: 'Выберите место игры.',
       fieldPriceRubles: 'Укажите стоимость поля целым числом.',
     })
-    expect(validateFinalMatchDetails(normalizedMatch, { time: '20:30', location: 'BOX365', venueType: 'outdoor', fieldPriceRubles: '120' })).toEqual({})
+    expect(validateFinalMatchDetails(normalizedMatch, { time: '20:30', venueId: 'venue-1', fieldPriceRubles: '120' })).toEqual({})
   })
 
   it('validates cancellation reasons and builds colored roster avatar initials', () => {
@@ -469,7 +478,7 @@ describe('API-backed surface states', () => {
   })
 
   it('validates structured match values before a mutation is sent', () => {
-    expect(validateEditorValues({ date: '2026-08-03', time: '20:00', timeMode: 'exact', timeOptions: [], location: 'A', venueType: 'outdoor', requiredPlayers: 10, fieldPriceByn: '' })).toContain('два символа')
+    expect(validateEditorValues({ date: '2026-08-03', time: '20:00', timeMode: 'exact', timeOptions: [], location: 'A', venueType: 'outdoor', requiredPlayers: 10, fieldPriceByn: '' })).toBeUndefined()
     expect(validateEditorValues({ date: '2026-08-03', time: '20:00', timeMode: 'exact', timeOptions: [], location: 'Поле', venueType: 'outdoor', requiredPlayers: 10, fieldPriceByn: '12.5' })).toContain('целым')
     expect(validateEditorValues({ date: '2026-08-03', time: '20:00', timeMode: 'exact', timeOptions: [], location: 'Поле', venueType: 'outdoor', requiredPlayers: 10, fieldPriceByn: '12' })).toBeUndefined()
     expect(validateEditorValues({ date: '2026-08-03', time: '', timeMode: 'availability', timeOptions: ['19:00'], location: 'Поле', venueType: 'outdoor', requiredPlayers: 10, fieldPriceByn: '' })).toBeUndefined()
@@ -509,14 +518,14 @@ describe('API-backed surface states', () => {
     expect(exactMarkup).not.toContain('aria-label="Удалить время')
   })
 
-  it('only displays the venue type as radio buttons when a location is set', () => {
-    const withLocation = renderToStaticMarkup(<MatchEditor match={normalizedMatch} onSave={vi.fn()} conflict="" onClearConflict={vi.fn()} saving={false} />)
-    const withoutLocation = renderToStaticMarkup(<MatchEditor match={{ ...normalizedMatch, location: 'Место уточняется' }} onSave={vi.fn()} conflict="" onClearConflict={vi.fn()} saving={false} />)
+  it('uses a name-only venue autocomplete instead of manual place fields', async () => {
+    const markup = renderToStaticMarkup(<MatchEditor match={normalizedMatch} onSave={vi.fn()} conflict="" onClearConflict={vi.fn()} saving={false} />)
+    const autocompleteSource = await readFile(new URL('./components/football/venue-autocomplete.tsx', import.meta.url), 'utf8')
 
-    expect(withLocation).toContain('Тип площадки')
-    expect(withLocation).toContain('role="radiogroup"')
-    expect(withLocation).toContain('На улице')
-    expect(withLocation).toContain('В помещении')
-    expect(withoutLocation).not.toContain('Тип площадки')
+    expect(markup).toContain('role="combobox"')
+    expect(markup).toContain('Выберите место')
+    expect(markup).not.toContain('Тип площадки')
+    expect(autocompleteSource).toContain('venue.name.toLocaleLowerCase().includes(needle)')
+    expect(autocompleteSource).toContain('Добавить новое место')
   })
 })

@@ -4,6 +4,7 @@ import type {
   MatchListResponseDto,
   MatchResponseDto,
   PlayerListResponseDto,
+  VenueResponseDto,
 } from '@football/api-client'
 
 import { formatMatchDate } from './lib/date-format'
@@ -48,6 +49,7 @@ export interface NormalizedMatch {
   readonly selectedTime: string | undefined
   readonly location: string
   readonly venueType: 'outdoor' | 'indoor' | undefined
+  readonly venue?: NormalizedVenue
   readonly status: NormalizedMatchStatus
   readonly planningStage: NormalizedPlanningStage | undefined
   readonly statusLabel: string
@@ -61,6 +63,17 @@ export interface NormalizedMatch {
   readonly reconciliationRequired: boolean
   readonly telegramMessageId: string | undefined
   readonly roster: NormalizedRoster
+}
+
+export interface NormalizedVenue {
+  readonly id: string
+  readonly name: string
+  readonly mapUrl: string
+  readonly venueType: 'outdoor' | 'indoor'
+  readonly bookingPhones: readonly string[]
+  readonly websiteUrl: string | undefined
+  readonly archivedAt: string | undefined
+  readonly version: number
 }
 
 export interface NormalizedPlayerAlias {
@@ -126,6 +139,7 @@ export function normalizeMatch(match: MatchResponseDto): NormalizedMatch {
     selectedTime: match.selectedTime ?? undefined,
     location: match.location ?? 'Место уточняется',
     venueType: match.venueType ?? undefined,
+    ...(match.venue === null ? {} : { venue: normalizeVenue(match.venue) }),
     status: match.status,
     planningStage,
     statusLabel: statusLabel(match.status, planningStage),
@@ -156,6 +170,19 @@ export function normalizeMatch(match: MatchResponseDto): NormalizedMatch {
         quantity: participant.quantity,
       })),
     },
+  }
+}
+
+export function normalizeVenue(venue: VenueResponseDto): NormalizedVenue {
+  return {
+    id: venue.id,
+    name: venue.name,
+    mapUrl: venue.mapUrl,
+    venueType: venue.venueType,
+    bookingPhones: venue.bookingPhones,
+    websiteUrl: venue.websiteUrl ?? undefined,
+    archivedAt: venue.archivedAt ?? undefined,
+    version: venue.version,
   }
 }
 

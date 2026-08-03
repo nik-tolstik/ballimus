@@ -26,11 +26,11 @@ The bot must be a member of the configured group and must be able to send and ed
 
 1. The owner opens the Mini App from Telegram.
 2. The Mini App loads matches, players, history, roster state, and public-card delivery state from the API.
-3. The owner creates a match with a date, a time format, an optional location, a venue type, a player threshold, and an optional field price.
+3. The owner creates a match with a date, a time format, an optional venue from the venue catalog, a player threshold, and an optional field price.
 4. The API creates an `active` match and queues publication of its public Telegram card.
 5. Members vote on the card. Each Telegram update is claimed once, the current vote is stored in PostgreSQL, and the card is refreshed.
 6. When enough players are available, the bot sends a threshold notification. The threshold is not a capacity: more players may continue to join.
-7. The owner can correct votes, add external players, choose the final time and place, and confirm the match.
+7. The owner can correct votes, add external players, choose the final time and a catalog venue, and confirm the match.
 8. After the match, the owner marks it completed or cancelled. The public card is removed, while the match remains in History.
 
 ## Time modes and voting
@@ -61,6 +61,12 @@ Opening the public Web URL in a normal browser does not authenticate the owner. 
 
 - `active` — published and accepting votes and roster changes;
 - `confirmed` — the exact time and venue have been confirmed; roster updates remain possible;
+
+## Venue catalog
+
+Owners manage shared venues on the **Places** tab. A venue has a unique name, an HTTP(S) map link, an indoor or outdoor format, up to five booking phone numbers, an optional website, and an archive state. Archived venues remain attached to existing matches but are unavailable for new selections. Editing a venue synchronizes its name and format to every linked match and refreshes published public cards for active or confirmed matches.
+
+Match creation may omit a venue. Finalization requires selecting a non-archived catalog venue; the selector searches only by venue name and can create a new venue without leaving the match form. Legacy matches without a venue link keep their saved text while other fields are edited, but choosing a catalog venue replaces that legacy value.
 - `completed` — finished and retained in history;
 - `cancelled` — cancelled with a retained reason;
 - `draft` — supported only for legacy records; the current creation flow creates an active match directly.

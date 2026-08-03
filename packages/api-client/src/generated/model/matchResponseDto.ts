@@ -8,6 +8,7 @@
 import type { MatchResponseDtoTimeMode } from './matchResponseDtoTimeMode.js';
 import type { MatchScheduleResponseDto } from './matchScheduleResponseDto.js';
 import type { MatchResponseDtoVenueType } from './matchResponseDtoVenueType.js';
+import type { MatchResponseDtoVenue } from './matchResponseDtoVenue.js';
 import type { MatchResponseDtoStatus } from './matchResponseDtoStatus.js';
 import type { MatchResponseDtoPlanningStage } from './matchResponseDtoPlanningStage.js';
 import type { MatchRosterResponseDto } from './matchRosterResponseDto.js';
@@ -27,6 +28,8 @@ export interface MatchResponseDto {
   location: string | null;
   /** @nullable */
   venueType: MatchResponseDtoVenueType;
+  /** @nullable */
+  venue: MatchResponseDtoVenue;
   /**
    * @minimum 0
    * @nullable

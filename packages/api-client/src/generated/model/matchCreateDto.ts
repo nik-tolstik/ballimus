@@ -22,8 +22,13 @@ export interface MatchCreateDto {
    * @maxItems 6
    */
   timeOptions?: string[];
+  /**
+   * @nullable
+   * @pattern ^[1-9]\d*$
+   */
+  venueId?: string | null;
   /** @nullable */
-  location: string | null;
+  location?: string | null;
   /** @nullable */
   venueType?: MatchCreateDtoVenueType;
   /**

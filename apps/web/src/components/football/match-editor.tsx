@@ -2,12 +2,16 @@ import { useState } from 'react'
 import { Plus, Save, Send, Trash2, TriangleAlert } from 'lucide-react'
 
 import type { NormalizedMatch, NormalizedTimeMode } from '@/normalize'
+import type { NormalizedVenue } from '@/normalize'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { DatePicker, TimePicker } from './date-time-picker'
+import { VenueAutocomplete } from './venue-autocomplete'
+import { VenueForm, type VenueFormValues } from './venue-form'
 
 export type VenueType = 'outdoor' | 'indoor'
 type TimeFormat = 'exact' | 'availability'
@@ -17,8 +21,9 @@ export interface EditorValues {
   readonly time: string
   readonly timeMode: NormalizedTimeMode
   readonly timeOptions: readonly string[]
-  readonly location: string
-  readonly venueType: VenueType | ''
+  readonly venueId?: string | null
+  readonly location?: string
+  readonly venueType?: VenueType | ''
   readonly requiredPlayers: number
   readonly fieldPriceByn: string
 }
@@ -29,6 +34,8 @@ interface MatchEditorProps {
   readonly conflict: string
   readonly onClearConflict: () => void
   readonly saving: boolean
+  readonly venues?: readonly NormalizedVenue[]
+  readonly onCreateVenue?: ((values: VenueFormValues) => Promise<NormalizedVenue>) | undefined
 }
 
 export function validateEditorValues(values: EditorValues): string | undefined {
@@ -41,9 +48,6 @@ export function validateEditorValues(values: EditorValues): string | undefined {
     if (values.timeOptions.length < 1 || values.timeOptions.length > 6 || uniqueOptions.size !== values.timeOptions.length || values.timeOptions.some((value) => !/^(?:[01]\d|2[0-3]):[0-5]\d$/u.test(value))) {
       return 'Добавьте от одного до шести разных вариантов времени.'
     }
-  }
-  if (values.location.trim() !== '' && values.location.trim().length < 2) {
-    return 'Название места должно содержать хотя бы два символа.'
   }
   if (!Number.isSafeInteger(values.requiredPlayers) || values.requiredPlayers < 1 || values.requiredPlayers > 100) {
     return 'Количество игроков должно быть целым числом от 1 до 100.'
@@ -92,12 +96,12 @@ export function editorTimeConfiguration(matchTimes: readonly string[], timeForma
   }
 }
 
-export function MatchEditor({ match, onSave, conflict, onClearConflict, saving }: MatchEditorProps) {
+export function MatchEditor({ match, onSave, conflict, onClearConflict, saving, venues = [], onCreateVenue }: MatchEditorProps) {
   const [date, setDate] = useState(match?.date ?? '')
   const [timeFormat, setTimeFormat] = useState<TimeFormat>(match?.timeMode === 'availability' ? 'availability' : 'exact')
   const [matchTimes, setMatchTimes] = useState<string[]>(() => initialMatchTimes(match))
-  const [location, setLocation] = useState(match?.location === 'Место уточняется' ? '' : match?.location ?? '')
-  const [venueType, setVenueType] = useState<VenueType | ''>(match?.venueType ?? 'outdoor')
+  const [venueId, setVenueId] = useState<string | null | undefined>(match?.venue?.id ?? (match === undefined ? null : undefined))
+  const [venueCreateOpen, setVenueCreateOpen] = useState(false)
   const [requiredPlayers, setRequiredPlayers] = useState(String(match?.requiredPlayers ?? 10))
   const [fieldPriceByn, setFieldPriceByn] = useState(match?.fieldPriceByn === undefined ? '' : String(match.fieldPriceByn))
   const [validation, setValidation] = useState('')
@@ -108,8 +112,7 @@ export function MatchEditor({ match, onSave, conflict, onClearConflict, saving }
     const values: EditorValues = {
       date,
       ...timeConfiguration,
-      location,
-      venueType: location.trim() === '' ? '' : venueType,
+      ...(match !== undefined && venueId === match.venue?.id ? {} : venueId === undefined ? {} : { venueId }),
       requiredPlayers: threshold,
       fieldPriceByn,
     }
@@ -119,7 +122,7 @@ export function MatchEditor({ match, onSave, conflict, onClearConflict, saving }
     onSave(values)
   }
 
-  return (
+  return <>
     <form
       aria-label={match === undefined ? 'Форма создания матча' : 'Форма редактирования матча'}
       className="flex min-h-0 flex-1 flex-col"
@@ -182,27 +185,10 @@ export function MatchEditor({ match, onSave, conflict, onClearConflict, saving }
           </Field>
 
           <Field>
-            <FieldLabel htmlFor="match-location">Место</FieldLabel>
-            <Input id="match-location" aria-label="Место проведения" value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Поле или спортивный зал" />
+            <FieldLabel>Место</FieldLabel>
+            <VenueAutocomplete venues={venues} value={venueId} onValueChange={(value) => { setVenueId(value); setValidation('') }} onCreate={() => setVenueCreateOpen(true)} />
+            {match !== undefined && match.venue === undefined && match.location !== 'Место уточняется' ? <FieldDescription>Сохранённое место: {match.location}. Выберите площадку из каталога, чтобы заменить его.</FieldDescription> : <FieldDescription>Место можно указать позже.</FieldDescription>}
           </Field>
-
-          {location.trim() !== '' ? <FieldSet>
-            <FieldLegend variant="label">Тип площадки</FieldLegend>
-            <RadioGroup
-              value={venueType}
-              onValueChange={(value) => setVenueType(value as VenueType)}
-              className="grid grid-cols-2 gap-2"
-            >
-              <Field orientation="horizontal" className="rounded-lg border border-border p-3">
-                <RadioGroupItem id="venue-outdoor" value="outdoor" />
-                <FieldLabel htmlFor="venue-outdoor" className="font-normal">На улице</FieldLabel>
-              </Field>
-              <Field orientation="horizontal" className="rounded-lg border border-border p-3">
-                <RadioGroupItem id="venue-indoor" value="indoor" />
-                <FieldLabel htmlFor="venue-indoor" className="font-normal">В помещении</FieldLabel>
-              </Field>
-            </RadioGroup>
-          </FieldSet> : null}
 
           <FieldGroup className="grid grid-cols-2 gap-3">
             <Field data-invalid={validation !== '' && Number(requiredPlayers) < 1}>
@@ -226,5 +212,6 @@ export function MatchEditor({ match, onSave, conflict, onClearConflict, saving }
         </Button>
       </div>
     </form>
-  )
+    <Sheet open={venueCreateOpen} onOpenChange={setVenueCreateOpen}><SheetContent side="bottom" className="mx-auto max-h-[92svh] w-full max-w-[480px] gap-0 rounded-t-2xl p-0"><div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/35" /><SheetHeader className="px-4 pt-3 pb-4"><SheetTitle className="text-lg">Новое место</SheetTitle><SheetDescription>После сохранения оно сразу выберется для матча.</SheetDescription></SheetHeader><VenueForm saving={saving} onSave={async (values) => { if (onCreateVenue === undefined) return; const venue = await onCreateVenue(values); setVenueId(venue.id); setVenueCreateOpen(false) }} /></SheetContent></Sheet>
+  </>
 }

@@ -13,4 +13,5 @@ export * from "./repositories/matches.js";
 export * from "./repositories/notifications.js";
 export * from "./repositories/players.js";
 export * from "./repositories/telegram-updates.js";
+export * from "./repositories/venues.js";
 export * from "./repositories/votes.js";

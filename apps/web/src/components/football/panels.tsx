@@ -27,6 +27,7 @@ import {
   Link2,
   MapPin,
   Pencil,
+  Phone,
   Plus,
   Search,
   Send,
@@ -40,6 +41,7 @@ import type {
   NormalizedExternalParticipant,
   NormalizedMatch,
   NormalizedPlayer,
+  NormalizedVenue,
   NormalizedVote,
   NormalizedVoteOption,
   NormalizedRosterTarget,
@@ -59,6 +61,8 @@ import { Separator } from '@/components/ui/separator'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { MatchEditor, type EditorValues } from './match-editor'
+import { VenueAutocomplete } from './venue-autocomplete'
+import { VenueForm, type VenueFormValues } from './venue-form'
 
 interface ExternalParticipantCreateValues {
   readonly displayName?: string
@@ -73,8 +77,7 @@ interface ExternalParticipantUpdateValues {
 
 export interface FinalMatchDetailsValues {
   readonly time: string
-  readonly location: string
-  readonly venueType: '' | 'outdoor' | 'indoor'
+  readonly venueId?: string | undefined
   readonly fieldPriceRubles: string
 }
 
@@ -94,10 +97,12 @@ export type CancellationReasonOption = (typeof CANCELLATION_REASON_OPTIONS)[numb
 
 interface MatchesPanelProps {
   readonly matches: readonly NormalizedMatch[]
+  readonly venues?: readonly NormalizedVenue[]
   readonly selected: NormalizedMatch | undefined
   readonly onSelect: (id: string | undefined) => void
   readonly onCreate: (values: EditorValues) => Promise<void>
   readonly onPatch: (match: NormalizedMatch, values: EditorValues) => void
+  readonly onCreateVenue?: (values: VenueFormValues) => Promise<NormalizedVenue>
   readonly onPublish: (match: NormalizedMatch) => void
   readonly onFinalize: (match: NormalizedMatch, values: FinalMatchDetailsValues) => Promise<void>
   readonly onConfirm: (match: NormalizedMatch) => void
@@ -207,8 +212,7 @@ export function validateFinalMatchDetails(
       validation.time = `К этому времени смогут только ${available} из ${match.requiredPlayers} игроков.`
     }
   }
-  const location = values.location.trim()
-  if (location.length < 2 || location.length > 200) validation.location = 'Укажите место игры.'
+  if (values.venueId === undefined) validation.location = 'Выберите место игры.'
   const price = Number(values.fieldPriceRubles)
   if (values.fieldPriceRubles.trim() === '' || !Number.isSafeInteger(price) || price < 0) {
     validation.fieldPriceRubles = 'Укажите стоимость поля целым числом.'
@@ -668,12 +672,14 @@ export function MatchSettings({ match, openEdit, onReconcile, disabled }: {
 
 export function MatchesPanel(props: MatchesPanelProps) {
   const { matches, selected, onSelect, onCreate, onPatch, conflict, onClearConflict, saving } = props
+  const venues = props.venues ?? []
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingMatchId, setEditingMatchId] = useState<string | null>(null)
   const [detailTab, setDetailTab] = useState<MatchDetailTab>('overview')
   const [cancelSheetOpen, setCancelSheetOpen] = useState(false)
   const [finalizationSheetOpen, setFinalizationSheetOpen] = useState(false)
-  const [finalizationValues, setFinalizationValues] = useState<FinalMatchDetailsValues>({ time: '', location: '', venueType: '', fieldPriceRubles: '' })
+  const [finalVenueCreateOpen, setFinalVenueCreateOpen] = useState(false)
+  const [finalizationValues, setFinalizationValues] = useState<FinalMatchDetailsValues>({ time: '', venueId: undefined, fieldPriceRubles: '' })
   const [finalizationValidation, setFinalizationValidation] = useState<FinalMatchDetailsValidation>({})
   const [cancellationReasonOption, setCancellationReasonOption] = useState<CancellationReasonOption>()
   const [cancellationOtherReason, setCancellationOtherReason] = useState('')
@@ -692,8 +698,7 @@ export function MatchesPanel(props: MatchesPanelProps) {
     const firstSuitable = selected.timeOptions.find((time) => availabilityCountAt(selected, time) >= selected.requiredPlayers)
     setFinalizationValues({
       time: selected.time || firstSuitable || selected.timeOptions.at(-1) || '',
-      location: selected.location === 'Место уточняется' ? '' : selected.location,
-      venueType: selected.venueType ?? '',
+      venueId: selected.venue?.id,
       fieldPriceRubles: selected.fieldPriceByn?.toString() ?? '',
     })
     setFinalizationValidation({})
@@ -716,7 +721,6 @@ export function MatchesPanel(props: MatchesPanelProps) {
     if (Object.keys(validation).length > 0) { setFinalizationValidation(validation); return }
     void props.onFinalize(selected, {
       ...finalizationValues,
-      location: finalizationValues.location.trim(),
       fieldPriceRubles: String(Number(finalizationValues.fieldPriceRubles)),
     }).then(() => setFinalizationSheetOpen(false)).catch(() => undefined)
   }
@@ -728,7 +732,7 @@ export function MatchesPanel(props: MatchesPanelProps) {
         {matches.length === 0 ? <EmptyState icon={CalendarDays} title="Матчей пока нет" /> : <div className="flex flex-col gap-2" aria-label="Предстоящие матчи">{matches.map((match, index) => <motion.div key={match.id} layout initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: reduceMotion ? 0 : index * 0.025, duration: 0.18 }}><Card size="sm" className="py-0"><button type="button" className="w-full p-3 text-left" onClick={() => openMatch(match.id)}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="mb-2 flex items-center gap-2">{statusBadge(match)}<span className="truncate text-xs text-muted-foreground">#{match.id}</span></div><h2 className="truncate text-[15px] font-medium text-foreground">{match.title}</h2><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span className="inline-flex items-center gap-1.5"><Clock3 className="size-3.5" />{match.dateLabel}</span><span className="inline-flex items-center gap-1.5"><MapPin className="size-3.5" />{match.location}</span></div></div><div className="flex shrink-0 items-center gap-2 text-xs font-medium"><Users className="size-4 text-muted-foreground" />{match.goingCount}/{match.requiredPlayers}<ChevronRight className="size-4 text-muted-foreground" /></div></div></button></Card></motion.div>)}</div>}
       </> : <motion.div key={selected.id} initial={reduceMotion ? false : { opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.18 }}>
         <div className="relative flex min-h-12 items-center justify-center"><Button variant="ghost" size="icon" className="absolute left-0" onClick={closeMatch} aria-label="Вернуться к списку матчей"><ArrowLeft /></Button><div className="text-center"><h1 className="text-xl font-semibold">Матч #{selected.id}</h1><p className={cn('mt-0.5 text-xs', selected.status === 'cancelled' ? 'text-destructive' : selected.status === 'confirmed' || selected.status === 'completed' || selected.planningStage === 'ready_to_confirm' ? 'text-success' : 'text-muted-foreground')}>{selected.statusLabel}</p></div></div>
-        <div className="mt-5 flex flex-col gap-3 text-sm"><p className={cn('flex items-center gap-3', selected.reconciliationRequired ? 'text-destructive' : selected.publicCardState === 'published' ? 'text-success' : 'text-muted-foreground')}><Send className="size-5" />{publicCardStateLabel(selected)}</p><p className="flex items-center gap-3"><CalendarDays className="size-5 text-muted-foreground" />{selected.dateLabel}</p><p className="flex items-center gap-3"><MapPin className="size-5 text-muted-foreground" />{selected.location} · {venueLabel(selected)}</p><div><p className="mb-2 flex items-center gap-3"><Users className="size-5 text-muted-foreground" /><span>{selected.goingCount} из {selected.requiredPlayers} игроков</span></p><Progress value={Math.min(100, (selected.goingCount / selected.requiredPlayers) * 100)} className={cn('ml-8 h-1.5 w-[calc(100%-2rem)]', selected.goingCount >= selected.requiredPlayers && '[&_[data-slot=progress-indicator]]:bg-success')} /></div></div>
+        <div className="mt-5 flex flex-col gap-3 text-sm"><p className={cn('flex items-center gap-3', selected.reconciliationRequired ? 'text-destructive' : selected.publicCardState === 'published' ? 'text-success' : 'text-muted-foreground')}><Send className="size-5" />{publicCardStateLabel(selected)}</p><p className="flex items-center gap-3"><CalendarDays className="size-5 text-muted-foreground" />{selected.dateLabel}</p><p className="flex items-center gap-3"><MapPin className="size-5 text-muted-foreground" />{selected.location} · {venueLabel(selected)}</p>{selected.venue !== undefined ? <Card size="sm" className="gap-3"><CardHeader><div><CardTitle className="text-base">{selected.venue.name}</CardTitle><CardDescription>{selected.venue.venueType === 'indoor' ? 'В помещении' : 'На улице'}</CardDescription></div></CardHeader><CardContent className="flex flex-wrap gap-2"><a href={selected.venue.mapUrl} target="_blank" rel="noreferrer"><Button size="sm" variant="outline"><MapPin data-icon="inline-start" />Карта</Button></a>{selected.venue.websiteUrl !== undefined ? <a href={selected.venue.websiteUrl} target="_blank" rel="noreferrer"><Button size="sm" variant="outline"><Link2 data-icon="inline-start" />Сайт</Button></a> : null}{selected.venue.bookingPhones.map((phone) => <a key={phone} href={`tel:${phone.replace(/[^+\d]/gu, '')}`}><Button size="sm" variant="outline"><Phone data-icon="inline-start" />{phone}</Button></a>)}</CardContent></Card> : null}<div><p className="mb-2 flex items-center gap-3"><Users className="size-5 text-muted-foreground" /><span>{selected.goingCount} из {selected.requiredPlayers} игроков</span></p><Progress value={Math.min(100, (selected.goingCount / selected.requiredPlayers) * 100)} className={cn('ml-8 h-1.5 w-[calc(100%-2rem)]', selected.goingCount >= selected.requiredPlayers && '[&_[data-slot=progress-indicator]]:bg-success')} /></div></div>
         <ToggleGroup type="single" value={detailTab} onValueChange={(value) => { if (value !== '') setDetailTab(value as MatchDetailTab) }} variant="segment" spacing={1} className="mt-5 w-full rounded-xl border bg-muted p-1" aria-label="Разделы матча">{MATCH_DETAIL_TABS.map((item) => <ToggleGroupItem key={item.value} value={item.value} className="h-10 flex-1 rounded-lg">{item.label}</ToggleGroupItem>)}</ToggleGroup>
         <motion.div key={detailTab} className="mt-6" initial={reduceMotion ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }}>{detailTab === 'overview' ? <MatchOverview match={selected} onNavigate={setDetailTab} onPublish={props.onPublish} onFinalizeRequest={openFinalization} onConfirm={props.onConfirm} onComplete={props.onComplete} onSendWeather={props.onSendWeather} onCancelRequest={openCancellation} disabled={props.actionPending} /> : detailTab === 'roster' ? (selected.status === 'active' || selected.status === 'confirmed' ? <MatchRoster match={selected} onCorrectVote={props.onCorrectVote} onRemoveVote={props.onRemoveVote} onAddExternal={props.onAddExternal} onUpdateExternal={props.onUpdateExternal} onRemoveExternal={props.onRemoveExternal} disabled={props.actionPending} /> : <EmptyState icon={Users} title="Состав пока недоступен" copy="Опубликуйте матч, чтобы участники могли проголосовать." />) : <MatchSettings match={selected} openEdit={openEdit} onReconcile={props.onReconcile} disabled={props.actionPending} />}</motion.div>
       </motion.div>}
@@ -748,7 +752,7 @@ export function MatchesPanel(props: MatchesPanelProps) {
             <SheetTitle className="text-lg">{editingMatch ? 'Редактировать матч' : 'Новый матч'}</SheetTitle>
             <SheetDescription>{editingMatch ? 'Обновите данные матча.' : 'Заполните детали — матч сразу появится в Telegram.'}</SheetDescription>
           </SheetHeader>
-          <MatchEditor key={editingMatch?.id ?? 'new'} match={editingMatch} onSave={(values) => {
+          <MatchEditor key={editingMatch?.id ?? 'new'} match={editingMatch} venues={venues} onCreateVenue={props.onCreateVenue} onSave={(values) => {
             if (editingMatch) { onPatch(editingMatch, values); setEditorOpen(false); return }
             void onCreate(values).then(() => setEditorOpen(false)).catch(() => undefined)
           }} conflict={conflict} onClearConflict={onClearConflict} saving={saving} />
@@ -783,31 +787,10 @@ export function MatchesPanel(props: MatchesPanelProps) {
                 <FieldError>{finalizationValidation.time}</FieldError>
               </Field>
               <Field data-invalid={finalizationValidation.location !== undefined || undefined}>
-                <FieldLabel htmlFor="final-match-location">Место</FieldLabel>
-                <Input
-                  id="final-match-location"
-                  value={finalizationValues.location}
-                  onChange={(event) => {
-                    setFinalizationValues((values) => ({ ...values, location: event.target.value }))
-                    setFinalizationValidation({})
-                  }}
-                  placeholder="Например, BOX365"
-                  aria-invalid={finalizationValidation.location !== undefined || undefined}
-                  required
-                />
+                <FieldLabel>Место</FieldLabel>
+                <VenueAutocomplete venues={venues} value={finalizationValues.venueId} onValueChange={(venueId) => { setFinalizationValues((values) => ({ ...values, venueId: venueId ?? undefined })); setFinalizationValidation({}) }} onCreate={() => setFinalVenueCreateOpen(true)} />
+                {selected !== undefined && selected.venue === undefined && selected.location !== 'Место уточняется' ? <FieldDescription>Сохранённое текстовое место: {selected.location}. Выберите запись из каталога.</FieldDescription> : null}
                 <FieldError>{finalizationValidation.location}</FieldError>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="final-match-venue">Формат поля</FieldLabel>
-                <Select value={finalizationValues.venueType} onValueChange={(value) => setFinalizationValues((values) => ({ ...values, venueType: value as FinalMatchDetailsValues['venueType'] }))}>
-                  <SelectTrigger id="final-match-venue" className="w-full"><SelectValue placeholder="Выберите формат" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="outdoor">На улице</SelectItem>
-                      <SelectItem value="indoor">В помещении</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
               </Field>
               <Field data-invalid={finalizationValidation.fieldPriceRubles !== undefined || undefined}>
                 <FieldLabel htmlFor="final-match-price">Стоимость поля, руб.</FieldLabel>
@@ -836,6 +819,7 @@ export function MatchesPanel(props: MatchesPanelProps) {
           </form>
         </SheetContent>
       </Sheet>
+      <Sheet open={finalVenueCreateOpen} onOpenChange={setFinalVenueCreateOpen}><SheetContent side="bottom" className="mx-auto max-h-[92svh] w-full max-w-[480px] gap-0 rounded-t-2xl p-0"><div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/35" /><SheetHeader className="px-4 pt-3 pb-4"><SheetTitle className="text-lg">Новое место</SheetTitle><SheetDescription>После сохранения оно сразу выберется для матча.</SheetDescription></SheetHeader><VenueForm saving={props.saving} onSave={async (values) => { if (props.onCreateVenue === undefined) return; const venue = await props.onCreateVenue(values); setFinalizationValues((current) => ({ ...current, venueId: venue.id })); setFinalVenueCreateOpen(false) }} /></SheetContent></Sheet>
     </section>
   )
 }
