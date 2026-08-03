@@ -21,9 +21,9 @@
 
 ## Browser verification
 
-- For every rendered frontend task, attempt Browser-based verification before using another browser automation tool.
-- Browser verification currently has a known Codex runtime blocker: `sandboxCwd is not a local file URI`. If it occurs, report the exact blocker and do not claim visual QA passed.
-- Do not fall back to another browser automation tool after this failure unless the user explicitly permits it.
+- For every rendered frontend task, use Playwright-based verification before completion.
+- Browser-based verification is disabled for this repository because Codex has a known runtime blocker: `sandboxCwd is not a local file URI`. Do not attempt it unless the user explicitly requests it.
+- Report any Playwright limitation and do not claim visual QA passed when the relevant check could not run.
 
 ## Documentation
 
