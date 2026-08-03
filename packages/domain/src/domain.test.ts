@@ -311,7 +311,7 @@ describe("roster and threshold rules", () => {
 });
 
 describe("HTML-safe card formatting", () => {
-  it("escapes fields, lists external participants without quantities, and strips legacy title details", () => {
+  it("escapes fields, numbers external participants, and strips legacy title details", () => {
     expect(escapeHtml(`<&>"`)).toBe("&lt;&amp;&gt;&quot;");
     const card = renderMatchCard({
       match: baseMatch,
@@ -329,10 +329,11 @@ describe("HTML-safe card formatting", () => {
     expect(card.text).toContain("Пётр &amp; Саша");
     expect(card.text).toContain("➕ <b>Доп. участники · 3</b>");
     expect(card.text).toContain("🟢 <b>Готов к подтверждению</b>");
-    expect(card.text).toContain("• От Никиты");
+    expect(card.text).toContain("• От Никиты #1");
+    expect(card.text).toContain("• От Никиты #2");
     expect(card.text).not.toContain("• От Никиты:");
     expect(card.text).not.toContain("От От Никиты");
-    expect(card.text).toContain("• От Ваня");
+    expect(card.text).toContain("• От Ваня #1");
     expect(card.text).not.toContain("• От Ваня:");
     expect(card.text).toContain("🟢 <b>Участвуют · 1</b>");
     expect(card.text).toContain("🟡 <b>Под вопросом · 1</b>");
@@ -407,12 +408,13 @@ describe("HTML-safe card formatting", () => {
 
     expect(card.text).toContain("👥 <b>4 из 4</b> · состав собран");
     expect(card.text).toContain("🟢 <b>Могут после 19:00 · 3</b>");
-    expect(card.text).toContain("• От Ромы");
-    expect(card.text).not.toContain("• От Ромы:");
+    expect(card.text).toContain('<a href="tg://user?id=1">Рома</a>, <a href="tg://user?id=2">Никита</a>, От Ромы #1');
+    expect(card.text).not.toContain("• От Ромы #1");
+    expect(card.text).not.toContain("От Ромы #1:");
     expect(card.text).toContain("⚪ <b>Доп. участники · 1 · время не указано</b>");
-    expect(card.text).toContain("• От Алексея");
+    expect(card.text).toContain("• От Алексея #1");
     expect(card.text).not.toContain("• От Алексея:");
-    expect(card.text.indexOf("🟢 <b>Могут после 19:00 · 3</b>")).toBeLessThan(card.text.indexOf("• От Ромы"));
+    expect(card.text.indexOf("🟢 <b>Могут после 19:00 · 3</b>")).toBeLessThan(card.text.indexOf("От Ромы #1"));
   });
 
   it("renders several exact time options without after-time labels", () => {
