@@ -359,17 +359,25 @@ describe("HTML-safe card formatting", () => {
         timeOptions: ["19:00", "20:00"],
         selectedTime: null,
       },
-      votes: [{ ...vote(1, "going", "Никита"), availableAfter: "19:00" }],
+      votes: [
+        { ...vote(1, "going", "Никита"), availableAfter: "19:00" },
+        { ...vote(2, "going", "Рома"), availableAfter: "19:00" },
+        { ...vote(3, "maybe", "СанСаныч") },
+        { ...vote(4, "maybe", "Иваныч") },
+      ],
     });
 
     expect(card.text).toContain("🏠 На улице");
-    expect(card.text).toContain("👥 <b>1 из 10</b> · осталось 9 мест");
+    expect(card.text).toContain("👥 <b>2 из 10</b> · осталось 8 мест");
     expect(card.text).toContain("Суббота, 1 августа · время выбираем");
     expect(card.text).not.toContain("Доступны к времени:");
     expect(card.text).not.toContain("К 19:00 —");
     expect(card.text).not.toContain("К 20:00 —");
-    expect(card.text).toContain("🟢 <b>Могут после 19:00 · 1</b>");
+    expect(card.text).toContain("🟢 <b>Могут после 19:00 · 2</b>");
     expect(card.text).toContain("⚪ <b>Могут после 20:00 · пока никого</b>");
+    expect(card.text).toContain('<a href="tg://user?id=1">Никита</a>, <a href="tg://user?id=2">Рома</a>');
+    expect(card.text).toContain('<a href="tg://user?id=3">СанСаныч</a>, <a href="tg://user?id=4">Иваныч</a>');
+    expect(card.text).not.toContain("• <a href=\"tg://user?id=1\">");
   });
 
   it("renders several exact time options without after-time labels", () => {

@@ -237,22 +237,25 @@ function addParticipantSection(
   addVoteListSection(lines, participants, heading.label, heading.icon, maxLength, isLast);
 }
 
-function addParticipantLines(
+function addParticipantListLine(
   lines: string[],
   participants: readonly Vote[],
   maxLength: number,
 ): void {
   let shown = 0;
-  for (const participant of participants) {
-    const line = `• ${participantHtml(participant)}`;
-    const remainingAfterLine = participants.length - shown - 1;
+  let participantList = "";
+  for (const [index, participant] of participants.entries()) {
+    const item = participantHtml(participant);
+    const nextParticipantList = participantList === "" ? item : `${participantList}, ${item}`;
+    const remainingAfterLine = participants.length - index - 1;
     const separatorLength = lines.length === 0 ? 0 : 1;
     const overflowLine = `<i>… ещё ${participants.length - shown}</i>`;
     const reservedOverflowLength = remainingAfterLine === 0 ? 0 : overflowLine.length + 1;
-    if (currentLength(lines) + separatorLength + line.length + reservedOverflowLength > maxLength) break;
-    lines.push(line);
+    if (currentLength(lines) + separatorLength + nextParticipantList.length + reservedOverflowLength > maxLength) break;
+    participantList = nextParticipantList;
     shown += 1;
   }
+  if (participantList !== "") lines.push(participantList);
   if (shown < participants.length) {
     appendLine(lines, `<i>… ещё ${participants.length - shown}</i>`, maxLength, { allowTruncate: false });
   }
@@ -267,7 +270,7 @@ function addVoteListSection(
   isLast: boolean,
 ): void {
   appendLine(lines, `${icon} <b>${label} · ${participants.length}</b>`, maxLength);
-  addParticipantLines(lines, participants, maxLength);
+  addParticipantListLine(lines, participants, maxLength);
   if (!isLast && participants.length > 0) appendLine(lines, "", maxLength);
 }
 
@@ -295,7 +298,7 @@ function addTimeOptionParticipantSections(
       `${selected ? "✅" : hasParticipants ? "🟢" : "⚪"} <b>${label} · ${countLabel}</b>`,
       maxLength,
     );
-    addParticipantLines(lines, participants, maxLength);
+    addParticipantListLine(lines, participants, maxLength);
     if (index < options.length - 1) appendLine(lines, "", maxLength);
   }
 }
