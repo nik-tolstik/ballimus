@@ -115,14 +115,23 @@ TELEGRAM_OWNER_USER_ID=<owner-telegram-user-id>
 TELEGRAM_CHAT_ID=<test-group-chat-id>
 TELEGRAM_GENERAL_TOPIC_ID=<public-card-topic-id>
 TELEGRAM_CHAT_TOPIC_ID=<notification-topic-id>
-TELEGRAM_MINI_APP_URL=http://localhost:5173
+TELEGRAM_MINI_APP_URL=http://localhost:6173
 TELEGRAM_MINI_APP_INIT_DATA_MAX_AGE_SECONDS=86400
-WEB_ORIGIN=http://localhost:5173
+WEB_ORIGIN=http://localhost:6173
 GROUP_TIMEZONE=Europe/Minsk
 LOG_LEVEL=debug
 ```
 
 `.env.local` is ignored by Git. Never put production credentials in it.
+
+Start the local PostgreSQL container in Docker Desktop. Before the first application launch, and whenever the schema changes, apply migrations explicitly:
+
+```bash
+set -a
+source .env.local
+set +a
+pnpm db:migrate
+```
 
 ## Recommended launch: Telegram and ngrok
 
@@ -136,16 +145,16 @@ ngrok config add-authtoken <ngrok-authtoken>
 
 Check `ngrok.local.yml`. The Web tunnel may use a reserved stable domain; the API webhook tunnel may remain dynamic.
 
-Start PostgreSQL, apply migrations, open both tunnels, start the API and Vite, and register the webhook:
+Open both tunnels, start the API and Vite, and register the webhook:
 
 ```bash
-pnpm dev:ngrok -- --register-webhook
+pnpm dev
 ```
 
 For the first setup, the same command can also set the owner's Telegram menu button:
 
 ```bash
-pnpm dev:ngrok -- --register-webhook --set-menu-button
+pnpm dev -- --set-menu-button
 ```
 
 The command prints output similar to:
@@ -158,60 +167,18 @@ Local Telegram development is ready.
   ngrok UI: http://127.0.0.1:4040
 ```
 
-Keep this process running. Open the Mini App from the test bot as the configured owner. The Web domain can remain stable, while the API tunnel normally changes on restart; therefore `--register-webhook` should be used for every new ngrok session.
+Keep this process running. Open the Mini App from the test bot as the configured owner. The Web domain can remain stable, while the API tunnel normally changes on restart; `pnpm dev` registers the webhook for every new ngrok session.
 
-`dev:ngrok` does not start a permanent jobs loop. Run `jobs:run` from another terminal whenever pending outbox work or a weather check must be processed.
+`pnpm dev` does not start a permanent jobs loop. Run `jobs:run` from another terminal whenever pending outbox work or a weather check must be processed.
 
-Stop the API, Web server, and both ngrok tunnels with `Ctrl+C`. The PostgreSQL container and its named data volume remain available.
-
-## Launch without ngrok
-
-This path is useful for API, database, and frontend development that does not require a real Telegram webhook.
-
-Start PostgreSQL and apply migrations:
-
-```bash
-node scripts/postgres-local.mjs up
-set -a
-source .env.local
-set +a
-pnpm --filter @football/db db:migrate
-```
-
-Start the API in one terminal:
-
-```bash
-set -a
-source .env.local
-set +a
-pnpm --filter @football/api exec tsx src/main.ts
-```
-
-Start Vite in another terminal:
-
-```bash
-VITE_API_BASE_URL=http://127.0.0.1:3000 pnpm --filter @football/web dev --host 127.0.0.1
-```
-
-The local addresses are:
-
-- API health: `http://127.0.0.1:3000/health`;
-- Mini App frontend: `http://127.0.0.1:5173`.
-
-The frontend will show its Telegram-only state when opened directly in a browser. For direct authenticated API checks, generate a signed local fixture and send it as `X-Telegram-Init-Data`:
-
-```bash
-pnpm auth:fixture -- --user-id <local-owner-telegram-id>
-```
-
-The root `pnpm dev` shortcut starts the API watcher and Vite together, but it reads `.env`, does not start PostgreSQL, does not apply migrations, and does not run jobs. Prefer the explicit commands above or the ngrok workflow unless `.env` is already configured intentionally.
+Stop the API, Web server, and both ngrok tunnels with `Ctrl+C`. The PostgreSQL container remains managed separately in Docker Desktop.
 
 ## Verify a running environment
 
 Check the local API:
 
 ```bash
-curl --fail --silent --show-error http://127.0.0.1:3000/health
+curl --fail --silent --show-error http://127.0.0.1:6000/health
 ```
 
 Expected response:
@@ -234,7 +201,7 @@ node scripts/postgres-local.mjs stop
 
 ## Daily development workflow
 
-1. Start with `pnpm dev:ngrok -- --register-webhook` for Telegram testing.
+1. Start with `pnpm dev` for Telegram testing.
 2. Open the Mini App from the test bot, not from a normal browser tab.
 3. Create or edit a match in the Mini App.
 4. Vote from group accounts on the public card.
@@ -273,7 +240,7 @@ Stop the other ngrok process or session using the reserved domain, then start th
 
 ### The API fails during startup
 
-Check every required variable in `.env.local`, the local PostgreSQL health status, and whether port `3000` is already in use. `WEB_ORIGIN` must contain only an HTTP(S) origin without a path.
+Check every required variable in `.env.local`, the local PostgreSQL health status, and whether port `6000` is already in use. `WEB_ORIGIN` must contain only an HTTP(S) origin without a path.
 
 ## Production boundary
 

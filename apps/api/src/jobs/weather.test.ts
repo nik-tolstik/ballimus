@@ -45,7 +45,7 @@ function config(): ApiConfig {
     webOrigin: "https://example.test",
     groupTimezone: MINSK_TIMEZONE,
     logLevel: "info",
-    port: 3000,
+    port: 6000,
     miniAppInitDataMaxAgeSeconds: 86_400,
   };
 }

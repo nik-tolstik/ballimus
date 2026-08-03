@@ -5,9 +5,8 @@
 
 ## Development startup
 
-- This repository is a Telegram Mini App. The default local launch path is `pnpm dev:ngrok -- --register-webhook` from the repository root.
-- Use the printed public Mini App URL from the configured non-production Telegram bot. The ngrok workflow starts local PostgreSQL, applies migrations, opens the API and Web HTTPS tunnels, starts the API and Vite, and registers the local webhook.
-- Do not use the root `pnpm dev` command for Telegram Mini App testing. It is only a localhost API/Vite watcher and does not start PostgreSQL, apply migrations, or configure Telegram URLs and webhooks.
+- This repository is a Telegram Mini App. The default local launch path is `pnpm dev` from the repository root.
+- Start the local PostgreSQL container separately in Docker Desktop and apply migrations explicitly with `pnpm db:migrate`. The ngrok workflow opens the API and Web HTTPS tunnels, starts the API and Vite, and registers the local webhook.
 - Keep `.env.local`, the ngrok configuration, the bot, group, database, and webhook strictly local/non-production.
 
 ## Documentation

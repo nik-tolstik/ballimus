@@ -32,7 +32,7 @@ describe("API configuration", () => {
     const config = parseApiConfig(validEnvironment);
 
     expect(config.groupTimezone).toBe(DEFAULT_GROUP_TIMEZONE);
-    expect(config.port).toBe(3000);
+    expect(config.port).toBe(6000);
     expect(config.miniAppInitDataMaxAgeSeconds).toBe(DEFAULT_MINI_APP_INIT_DATA_MAX_AGE_SECONDS);
     expect("openrouter" in config).toBe(false);
     expect("confirmMatchCreation" in config).toBe(false);

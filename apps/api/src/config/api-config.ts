@@ -4,7 +4,7 @@ export const API_CONFIG_NAMESPACE = "api" as const;
 export const API_CONFIG = Symbol("API_CONFIG");
 export const DEFAULT_GROUP_TIMEZONE = "Europe/Minsk" as const;
 export const DEFAULT_LOG_LEVEL = "info" as const;
-export const DEFAULT_PORT = 3000;
+export const DEFAULT_PORT = 6000;
 export const DEFAULT_MINI_APP_INIT_DATA_MAX_AGE_SECONDS = 24 * 60 * 60;
 
 export const API_LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
