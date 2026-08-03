@@ -13,10 +13,15 @@ const catalogVenue = {
   updatedAt: '2026-08-01T12:00:00.000Z',
 }
 
-async function mockOwnerApp(page: Page): Promise<void> {
+async function mockOwnerApp(page: Page): Promise<string[]> {
   const availableVenues = [catalogVenue]
+  const consoleErrors: string[] = []
 
-  await page.route('https://telegram.org/js/telegram-web-app.js', (route) => route.abort())
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text())
+  })
+
+  await page.route('https://telegram.org/js/telegram-web-app.js', (route) => route.fulfill({ contentType: 'application/javascript', body: '' }))
 
   await page.addInitScript(() => {
     Object.defineProperty(window, '__FOOTBALL_API_BASE_URL__', {
@@ -64,12 +69,17 @@ async function mockOwnerApp(page: Page): Promise<void> {
     }
     return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ code: 'NOT_FOUND' }) })
   })
+
+  return consoleErrors
 }
 
 test('shows the owner venue catalog', async ({ page }, testInfo) => {
-  await mockOwnerApp(page)
+  const consoleErrors = await mockOwnerApp(page)
   await page.goto('/')
 
+  await expect(page).toHaveTitle(/Ballimus/u)
+  await expect(page).toHaveURL(/127\.0\.0\.1:6174/u)
+  await expect(page.locator('vite-error-overlay')).toHaveCount(0)
   await expect(page.getByText('Матчей пока нет')).toBeVisible()
   await page.getByRole('button', { name: 'Места', exact: true }).click()
 
@@ -92,11 +102,12 @@ test('shows the owner venue catalog', async ({ page }, testInfo) => {
   expect(archiveToggleBox!.height).toBe(searchBox!.height)
   expect(archiveBox!.x).toBeGreaterThan(editBox!.x)
   expect(archiveBox!.y).toBe(editBox!.y)
+  expect(consoleErrors).toEqual([])
   await page.screenshot({ path: testInfo.outputPath('venue-catalog.png'), fullPage: false })
 })
 
 test('searches by venue name and selects a venue created from the match form', async ({ page }, testInfo) => {
-  await mockOwnerApp(page)
+  const consoleErrors = await mockOwnerApp(page)
   await page.goto('/')
 
   await page.getByRole('button', { name: 'Новый матч', exact: true }).click()
@@ -114,5 +125,6 @@ test('searches by venue name and selects a venue created from the match form', a
   await page.getByRole('button', { name: 'Добавить место', exact: true }).click()
 
   await expect(venueSelect).toContainText('BOX365 Октябрьская')
+  expect(consoleErrors).toEqual([])
   await page.screenshot({ path: testInfo.outputPath('venue-autocomplete.png'), fullPage: false })
 })
