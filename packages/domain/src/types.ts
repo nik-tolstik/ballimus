@@ -81,6 +81,8 @@ export interface ExternalParticipant {
   readonly sourceUpdateId?: DomainId;
   readonly sourceLabel: string | null;
   readonly displayNameSnapshot: string | null;
+  /** Earliest local time the participant can attend in an availability poll. Null means unknown. */
+  readonly availableAfter?: string | null;
   /** Ledger entries may be negative when the owner removes quantities. */
   readonly quantity: number;
   readonly createdAt?: Date;

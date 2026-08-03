@@ -149,6 +149,7 @@ function toDomainExternalParticipant(
     ...(participant.sourceUpdateId === null ? {} : { sourceUpdateId: participant.sourceUpdateId }),
     sourceLabel: participant.displayName,
     displayNameSnapshot: participant.displayName,
+    availableAfter: participant.availableAfter,
     quantity: participant.quantity,
     createdAt: participant.createdAt,
   };

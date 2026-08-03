@@ -320,7 +320,7 @@ describe("REST mutation transaction adapter", () => {
         clearGoingTimeSelections: vi.fn().mockResolvedValue([movedVote]),
         rosterCounts: vi.fn().mockResolvedValue(counts),
       },
-      externalParticipants: { listByMatchId: vi.fn().mockResolvedValue([]) },
+      externalParticipants: { listByMatchId: vi.fn().mockResolvedValue([]), clearTimeSelections: vi.fn().mockResolvedValue([]) },
       players: { getById: vi.fn().mockResolvedValue(player) },
       outbox: { insertInTransaction: vi.fn() },
     } as unknown as TransactionRepositories;
@@ -343,6 +343,7 @@ describe("REST mutation transaction adapter", () => {
       expectedVersion: 1,
     }));
     expect(repositories.votes.clearGoingTimeSelections).toHaveBeenCalledWith(1n);
+    expect(repositories.externalParticipants.clearTimeSelections).toHaveBeenCalledWith(1n);
     expect(response).toMatchObject({
       match: {
         timeMode: "exact",

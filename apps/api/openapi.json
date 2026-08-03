@@ -1484,6 +1484,11 @@
             "nullable": true,
             "example": "Команда Никиты"
           },
+          "availableAfter": {
+            "type": "string",
+            "nullable": true,
+            "example": "19:00"
+          },
           "quantity": {
             "type": "number",
             "minimum": 1
@@ -1510,6 +1515,7 @@
         "required": [
           "id",
           "displayName",
+          "availableAfter",
           "quantity",
           "createdByTelegramUserId",
           "sourceUpdateId",
@@ -2185,6 +2191,12 @@
             "example": "Команда Никиты",
             "maxLength": 200
           },
+          "availableAfter": {
+            "type": "string",
+            "nullable": true,
+            "example": "19:00",
+            "description": "Earliest time the player can attend in an availability poll."
+          },
           "quantity": {
             "type": "number",
             "example": 3,
@@ -2204,6 +2216,12 @@
             "nullable": true,
             "example": "Команда Никиты",
             "maxLength": 200
+          },
+          "availableAfter": {
+            "type": "string",
+            "nullable": true,
+            "example": "19:00",
+            "description": "Earliest time the player can attend in an availability poll."
           }
         }
       },

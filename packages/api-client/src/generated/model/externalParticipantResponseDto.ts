@@ -10,6 +10,8 @@ export interface ExternalParticipantResponseDto {
   id: string;
   /** @nullable */
   displayName: string | null;
+  /** @nullable */
+  availableAfter: string | null;
   /** @minimum 1 */
   quantity: number;
   createdByTelegramUserId: string;

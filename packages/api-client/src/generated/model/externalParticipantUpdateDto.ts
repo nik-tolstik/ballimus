@@ -12,4 +12,9 @@ export interface ExternalParticipantUpdateDto {
    * @nullable
    */
   displayName?: string | null;
+  /**
+   * Earliest time the player can attend in an availability poll.
+   * @nullable
+   */
+  availableAfter?: string | null;
 }

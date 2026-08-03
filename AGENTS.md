@@ -12,6 +12,12 @@
 - After a worktree branch is merged into `main`, remove that worktree and its local branch unless the user explicitly asks to keep them.
 - Start every non-trivial implementation task with an issue in the `FBOT` team and Football Bot project. Before implementation, verify the issue has no active executor, move it to `In Progress`, and assign it to the agent when possible. Use a dedicated worktree and an issue-based branch name; move the issue to `Done` only after the pull request is merged, CI is green, and the change is in `main`. See `docs/linear.md` for the complete workflow and exceptions.
 
+## Browser verification
+
+- For every rendered frontend task, attempt Browser-based verification before using another browser automation tool.
+- Browser verification currently has a known Codex runtime blocker: `sandboxCwd is not a local file URI`. If it occurs, report the exact blocker and do not claim visual QA passed.
+- Do not fall back to another browser automation tool after this failure unless the user explicitly permits it.
+
 ## Documentation
 
 - [Documentation index](docs/README.md)

@@ -302,6 +302,7 @@ function toDomainExternalParticipant(
     ...(participant.sourceUpdateId === null ? {} : { sourceUpdateId: participant.sourceUpdateId }),
     sourceLabel: participant.displayName,
     displayNameSnapshot: participant.displayName,
+    availableAfter: participant.availableAfter,
     quantity: participant.quantity,
     createdAt: participant.createdAt,
   };
@@ -453,7 +454,11 @@ export class OwnerRestService {
       const movesPollVotesToFixedTime = current.timeMode !== "exact" && patch.timeMode === "exact";
       if (patch.timeMode !== undefined || patch.timeOptions !== undefined) {
         const currentVotes = await repositories.votes.listByMatchId(matchId);
+        const currentExternalParticipants = await repositories.externalParticipants.listByMatchId(matchId);
         const goingVotes = currentVotes.filter((vote) => vote.option === "going");
+        const externalAvailabilityParticipants = currentExternalParticipants.filter(
+          (participant): participant is typeof participant & { readonly availableAfter: string } => participant.availableAfter !== null,
+        );
         const nextMode = patch.timeMode ?? current.timeMode;
         const nextOptions = patch.timeOptions ?? current.timeOptions;
         const optionsChanged = nextOptions.length !== current.timeOptions.length
@@ -465,7 +470,11 @@ export class OwnerRestService {
             "The time mode and availability options cannot be changed after confirmation.",
           );
         }
-        if (nextMode !== current.timeMode && goingVotes.length > 0 && !movesPollVotesToFixedTime) {
+        if (
+          nextMode !== current.timeMode
+          && (goingVotes.length > 0 || externalAvailabilityParticipants.length > 0)
+          && !movesPollVotesToFixedTime
+        ) {
           throw restRequestError(
             409,
             "MATCH_TIME_MODE_HAS_VOTES",
@@ -478,7 +487,10 @@ export class OwnerRestService {
             (vote) => (vote.availableAfter !== null && !nextOptionSet.has(vote.availableAfter))
               || vote.exactTimes.some((time) => !nextOptionSet.has(time)),
           );
-          if (removedOptionHasVotes) {
+          const removedOptionHasExternalParticipants = externalAvailabilityParticipants.some(
+            (participant) => !nextOptionSet.has(participant.availableAfter),
+          );
+          if (removedOptionHasVotes || removedOptionHasExternalParticipants) {
             throw restRequestError(
               409,
               "MATCH_TIME_OPTION_HAS_VOTES",
@@ -494,6 +506,7 @@ export class OwnerRestService {
       });
       if (movesPollVotesToFixedTime) {
         await repositories.votes.clearGoingTimeSelections(matchId);
+        await repositories.externalParticipants.clearTimeSelections(matchId);
       }
       if (updated.status === "active" || updated.status === "confirmed") {
         await this.enqueueRefreshForMatch(repositories, updated, requestHash);
@@ -948,6 +961,7 @@ export class OwnerRestService {
         ownerTelegramUserId,
         quantity: input.quantity,
         ...(input.displayName === undefined ? {} : { displayName: input.displayName }),
+        ...(input.availableAfter === undefined ? {} : { availableAfter: input.availableAfter }),
       });
       await this.enqueueRefreshForMatch(repositories, result.match, requestHash);
       await this.enqueueThresholdNotification(repositories, result, operationKey);
@@ -965,8 +979,8 @@ export class OwnerRestService {
     participantId: bigint,
     input: ExternalParticipantUpdateDto,
   ): Promise<Record<string, unknown>> {
-    if (!hasOwn(input, "displayName")) {
-      throw restRequestError(400, "EXTERNAL_PARTICIPANT_UPDATE_EMPTY", "The participant name must be changed.");
+    if (!hasOwn(input, "displayName") && !hasOwn(input, "availableAfter")) {
+      throw restRequestError(400, "EXTERNAL_PARTICIPANT_UPDATE_EMPTY", "The participant name or availability must be changed.");
     }
     return this.mutate(ownerTelegramUserId, idempotencyKey, {
       method: "PATCH",
@@ -980,6 +994,7 @@ export class OwnerRestService {
         id: participantId,
         ownerTelegramUserId,
         ...(hasOwn(input, "displayName") ? { displayName: input.displayName ?? null } : {}),
+        ...(hasOwn(input, "availableAfter") ? { availableAfter: input.availableAfter ?? null } : {}),
       });
       await this.enqueueRefreshForMatch(repositories, result.match, requestHash);
       await this.enqueueThresholdNotification(repositories, result, operationKey);
@@ -1393,6 +1408,7 @@ export class OwnerRestService {
         externalParticipants: aggregate.externalParticipants.map((participant) => ({
           id: participant.id,
           displayName: participant.displayName,
+          availableAfter: participant.availableAfter,
           quantity: participant.quantity,
           createdByTelegramUserId: participant.createdByTelegramUserId,
           sourceUpdateId: participant.sourceUpdateId,

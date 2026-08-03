@@ -120,7 +120,7 @@ describe("PostgreSQL baseline migration and repositories", () => {
     const migrationRows = await database.sql.unsafe<{ hash: string; created_at: string }[]>(
       `select hash, created_at from ${quoteIdentifier(database.migrationSchemaName)}."__drizzle_migrations"`,
     );
-    expect(migrationRows).toHaveLength(7);
+    expect(migrationRows).toHaveLength(8);
     expect(migrationRows[0]?.hash).toMatch(/^[a-f0-9]{64}$/u);
 
     const constraintRows = await database.sql<{ conname: string }[]>`
@@ -136,6 +136,7 @@ describe("PostgreSQL baseline migration and repositories", () => {
       "matches_cancellation_state_consistent",
       "players_avatar_cache_consistent",
       "external_participants_quantity_is_one",
+      "external_participants_available_after_valid",
       "match_messages_match_chat_fk",
       "votes_source_update_consistent",
       "votes_available_after_option_consistent",
@@ -374,7 +375,33 @@ describe("PostgreSQL baseline migration and repositories", () => {
       availableAfter: "20:00",
     });
     const votes = new VotesRepository(database.db);
-    expect(await votes.rosterCounts(match.id)).toMatchObject({ goingVotes: 2, thresholdReached: true });
+    const externalParticipants = new ExternalParticipantsRepository(database.db);
+    await externalParticipants.addQuantity({
+      matchId: match.id,
+      ownerTelegramUserId: OWNER_ID,
+      displayName: "Ромы",
+      availableAfter: "19:00",
+      quantity: 1,
+    });
+    await externalParticipants.addQuantity({
+      matchId: match.id,
+      ownerTelegramUserId: OWNER_ID,
+      displayName: "Поздний гость",
+      availableAfter: "20:00",
+      quantity: 1,
+    });
+    await externalParticipants.addQuantity({
+      matchId: match.id,
+      ownerTelegramUserId: OWNER_ID,
+      displayName: "Время неизвестно",
+      quantity: 1,
+    });
+    expect(await externalParticipants.listByMatchId(match.id)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ displayName: "Ромы", availableAfter: "19:00" }),
+      expect.objectContaining({ displayName: "Поздний гость", availableAfter: "20:00" }),
+      expect.objectContaining({ displayName: "Время неизвестно", availableAfter: null }),
+    ]));
+    expect(await votes.rosterCounts(match.id)).toMatchObject({ goingVotes: 2, externalParticipants: 3, goingCount: 5, thresholdReached: true });
 
     await new MatchesRepository(database.db).transitionStatus(match.id, {
       to: "confirmed",
@@ -383,9 +410,10 @@ describe("PostgreSQL baseline migration and repositories", () => {
     });
     expect(await votes.rosterCounts(match.id)).toMatchObject({
       goingVotes: 1,
-      goingCount: 1,
-      thresholdReached: false,
-      remainingToThreshold: 1,
+      externalParticipants: 1,
+      goingCount: 2,
+      thresholdReached: true,
+      remainingToThreshold: 0,
     });
     await expect(runVoteChangeTransaction(database.db, {
       updateId: 10_103n,

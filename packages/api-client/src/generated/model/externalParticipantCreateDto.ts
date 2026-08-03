@@ -13,6 +13,11 @@ export interface ExternalParticipantCreateDto {
    */
   displayName?: string | null;
   /**
+   * Earliest time the player can attend in an availability poll.
+   * @nullable
+   */
+  availableAfter?: string | null;
+  /**
    * @minimum 1
    * @maximum 50
    */

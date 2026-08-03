@@ -31,6 +31,8 @@ export interface AddExternalParticipantInput {
   readonly quantity: number;
   /** A readable group/source label. Null means an unnamed owner-managed entry. */
   readonly displayName?: string | null;
+  /** Earliest local time the participant can attend in an availability poll. Null means unknown. */
+  readonly availableAfter?: string | null;
   readonly sourceUpdateId?: DatabaseIdentifier | null;
   readonly createdAt?: Date;
 }
@@ -50,6 +52,7 @@ export interface UpdateExternalParticipantInput {
   readonly id: DatabaseIdentifier;
   readonly ownerTelegramUserId: DatabaseIdentifier;
   readonly displayName?: string | null;
+  readonly availableAfter?: string | null;
   readonly quantity?: number;
   readonly now?: Date;
 }
@@ -96,6 +99,7 @@ function validateQuantity(value: number): void {
 }
 
 export const MAX_EXTERNAL_PARTICIPANTS_PER_OPERATION = 50;
+const LOCAL_TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/u;
 
 function validateAddQuantity(value: number): void {
   validateQuantity(value);
@@ -109,6 +113,21 @@ function validateAddQuantity(value: number): void {
 function normalizedDisplayName(value: string | null | undefined): string | null {
   if (value === undefined || value === null) return null;
   return nonEmpty(value, "displayName", 200);
+}
+
+function normalizedAvailableAfter(match: Pick<Match, "timeMode" | "timeOptions">, value: string | null | undefined): string | null {
+  if (value === undefined || value === null) return null;
+  const normalized = value.trim();
+  if (!LOCAL_TIME_PATTERN.test(normalized)) {
+    throw new ValidationRepositoryError("availableAfter must be a local HH:mm time");
+  }
+  if (match.timeMode !== "availability") {
+    throw new ValidationRepositoryError("availableAfter is only valid for availability matches");
+  }
+  if (!match.timeOptions.includes(normalized)) {
+    throw new ValidationRepositoryError("availableAfter must be one of the match time options");
+  }
+  return normalized;
 }
 
 function individualDisplayName(source: string | null, position: number, total: number): string | null {
@@ -235,6 +254,7 @@ export class ExternalParticipantsRepository {
     const countsBefore = await new VotesRepository(this.db).rosterCounts(match.id);
     const now = effectiveNow(input.createdAt);
     const displayName = normalizedDisplayName(input.displayName);
+    const availableAfter = normalizedAvailableAfter(match, input.availableAfter);
     const sourceUpdateId = input.sourceUpdateId === undefined || input.sourceUpdateId === null
       ? null
       : nonNegativeBigInt(input.sourceUpdateId, "sourceUpdateId");
@@ -245,6 +265,7 @@ export class ExternalParticipantsRepository {
         createdByTelegramUserId: creatorId,
         sourceUpdateId: index === 0 ? sourceUpdateId : null,
         displayName: individualDisplayName(displayName, index + 1, input.quantity),
+        availableAfter,
         quantity: 1,
         createdAt: now,
         updatedAt: now,
@@ -336,7 +357,7 @@ export class ExternalParticipantsRepository {
   }
 
   public async updateInTransaction(input: UpdateExternalParticipantInput): Promise<ExternalParticipantMutationResult> {
-    if (input.displayName === undefined && input.quantity === undefined) {
+    if (input.displayName === undefined && input.availableAfter === undefined && input.quantity === undefined) {
       throw new ValidationRepositoryError("At least one external participant field must be updated");
     }
     if (input.quantity !== undefined) {
@@ -353,10 +374,14 @@ export class ExternalParticipantsRepository {
     }
     if (!editable(match)) throw new RepositoryConflictError(`Match ${match.id.toString(10)} is not editable`, { details: { status: match.status } });
     const countsBefore = await new VotesRepository(this.db).rosterCounts(match.id);
+    const availableAfter = input.availableAfter === undefined
+      ? undefined
+      : normalizedAvailableAfter(match, input.availableAfter);
     const rows = await this.db
       .update(externalParticipants)
       .set({
         ...(input.displayName === undefined ? {} : { displayName: normalizedDisplayName(input.displayName) }),
+        ...(availableAfter === undefined ? {} : { availableAfter }),
         ...(input.quantity === undefined ? {} : { quantity: input.quantity }),
         updatedAt: effectiveNow(input.now),
       })
@@ -366,6 +391,18 @@ export class ExternalParticipantsRepository {
     if (entry === undefined) throw new RepositoryConflictError("External participant entry was updated concurrently");
     const countsAfter = await new VotesRepository(this.db).rosterCounts(match.id);
     return mutationResult("updated", match, entry, countsBefore, countsAfter);
+  }
+
+  /** Removes availability choices when a time poll becomes a fixed-time match. */
+  public async clearTimeSelections(
+    matchId: DatabaseIdentifier,
+    now?: Date,
+  ): Promise<ExternalParticipant[]> {
+    return this.db
+      .update(externalParticipants)
+      .set({ availableAfter: null, updatedAt: effectiveNow(now) })
+      .where(eq(externalParticipants.matchId, matchIdValue(matchId)))
+      .returning();
   }
 
   public async removeInTransaction(input: RemoveExternalParticipantInput): Promise<ExternalParticipantMutationResult> {

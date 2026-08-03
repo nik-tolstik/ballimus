@@ -429,6 +429,7 @@ export const externalParticipants = pgTable(
       { onDelete: "restrict", onUpdate: "cascade" },
     ),
     displayName: text("display_name"),
+    availableAfter: text("available_after"),
     quantity: integer("quantity").notNull().default(1),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -446,6 +447,10 @@ export const externalParticipants = pgTable(
     check(
       "external_participants_display_name_not_empty",
       sql`${table.displayName} is null or length(trim(${table.displayName})) > 0`,
+    ),
+    check(
+      "external_participants_available_after_valid",
+      sql`${table.availableAfter} is null or ${table.availableAfter} ~ '^(?:[01][0-9]|2[0-3]):[0-5][0-9]$'`,
     ),
     uniqueIndex("external_participants_source_update_unique")
       .on(table.sourceUpdateId)
