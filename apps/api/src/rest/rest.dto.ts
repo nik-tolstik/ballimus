@@ -252,6 +252,13 @@ export class ExternalParticipantCreateDto {
   @MaxLength(200)
   displayName?: string | null;
 
+  @ApiPropertyOptional({ type: String, nullable: true, example: "19:00", description: "Earliest time the player can attend in an availability poll." })
+  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== null && value !== undefined)
+  @IsString()
+  @Matches(LOCAL_TIME_PATTERN)
+  availableAfter?: string | null;
+
   @ApiProperty({
     type: Number,
     example: 3,
@@ -271,6 +278,13 @@ export class ExternalParticipantUpdateDto {
   @IsString()
   @MaxLength(200)
   displayName?: string | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, example: "19:00", description: "Earliest time the player can attend in an availability poll." })
+  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== null && value !== undefined)
+  @IsString()
+  @Matches(LOCAL_TIME_PATTERN)
+  availableAfter?: string | null;
 }
 
 function parseBoolean(value: unknown): unknown {

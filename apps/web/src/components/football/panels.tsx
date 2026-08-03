@@ -63,6 +63,12 @@ import { MatchEditor, type EditorValues } from './match-editor'
 interface ExternalParticipantCreateValues {
   readonly displayName?: string
   readonly quantity: number
+  readonly availableAfter?: string | null
+}
+
+interface ExternalParticipantUpdateValues {
+  readonly displayName: string
+  readonly availableAfter?: string | null
 }
 
 export interface FinalMatchDetailsValues {
@@ -101,7 +107,7 @@ interface MatchesPanelProps {
   readonly onCorrectVote: (match: NormalizedMatch, vote: NormalizedVote, target: NormalizedRosterTarget) => Promise<void>
   readonly onRemoveVote: (match: NormalizedMatch, vote: NormalizedVote, target: NormalizedRosterTarget) => void
   readonly onAddExternal: (match: NormalizedMatch, values: ExternalParticipantCreateValues) => void
-  readonly onUpdateExternal: (match: NormalizedMatch, participant: NormalizedExternalParticipant, displayName: string) => void
+  readonly onUpdateExternal: (match: NormalizedMatch, participant: NormalizedExternalParticipant, values: ExternalParticipantUpdateValues) => void
   readonly onRemoveExternal: (match: NormalizedMatch, participant: NormalizedExternalParticipant) => void
   readonly onReconcile: (match: NormalizedMatch, action: 'attach' | 'retry', telegramMessageId?: string) => void
   readonly conflict: string
@@ -411,6 +417,20 @@ export function rosterGroupCount(target: NormalizedRosterTarget, votes: readonly
   return votes.length + (rosterTargetOption(target) === 'going' ? externalParticipants.reduce((total, participant) => total + participant.quantity, 0) : 0)
 }
 
+function externalParticipantsForRosterTarget(
+  match: NormalizedMatch,
+  target: NormalizedRosterTarget,
+): readonly NormalizedExternalParticipant[] {
+  if (match.timeMode === 'availability' && match.selectedTime === undefined) {
+    if (!target.startsWith('after:')) return EMPTY_EXTERNAL_PARTICIPANTS
+    return match.roster.externalParticipants.filter((participant) => participant.availableAfter === target.slice('after:'.length))
+  }
+  if (match.timeMode === 'exact_options' && match.selectedTime === undefined) {
+    return target === `at:${match.timeOptions[0] ?? ''}` ? match.roster.externalParticipants : EMPTY_EXTERNAL_PARTICIPANTS
+  }
+  return rosterTargetOption(target) === 'going' ? match.roster.externalParticipants : EMPTY_EXTERNAL_PARTICIPANTS
+}
+
 function VoteGroup({ match, votes, externalParticipants, target, onAddExternal, onEditExternal, onRemoveVote, onRemoveExternal, disabled }: {
   readonly match: NormalizedMatch
   readonly votes: readonly NormalizedVote[]
@@ -451,6 +471,7 @@ export function MatchRoster({ match, onCorrectVote, onRemoveVote, onAddExternal,
   const editing = match.roster.externalParticipants.find((participant) => participant.id === editingId)
   const [displayName, setDisplayName] = useState('')
   const [quantity, setQuantity] = useState('1')
+  const [availableAfter, setAvailableAfter] = useState<string | undefined>()
   const [validation, setValidation] = useState('')
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -468,20 +489,24 @@ export function MatchRoster({ match, onCorrectVote, onRemoveVote, onAddExternal,
     ? [...match.timeOptions.map((time) => `${match.timeMode === 'availability' ? 'after' : 'at'}:${time}` as const), 'maybe', 'not_going']
     : VOTE_OPTIONS
   const activeVote = votes.find((vote) => vote.playerId === activePlayerId)
-  const clearExternalForm = () => { setEditingId(undefined); setDisplayName(''); setQuantity('1'); setValidation('') }
+  const unassignedExternalParticipants = match.timeMode === 'availability' && match.selectedTime === undefined
+    ? match.roster.externalParticipants.filter((participant) => participant.availableAfter === undefined)
+    : EMPTY_EXTERNAL_PARTICIPANTS
+  const clearExternalForm = () => { setEditingId(undefined); setDisplayName(''); setQuantity('1'); setAvailableAfter(undefined); setValidation('') }
   const setExternalOpen = (open: boolean) => { setExternalSheetOpen(open); if (!open) clearExternalForm() }
   const beginCreate = () => { clearExternalForm(); setExternalSheetOpen(true) }
-  const beginEdit = (participant: NormalizedExternalParticipant) => { setEditingId(participant.id); setDisplayName(participant.displayName === 'Дополнительные игроки' ? '' : participant.displayName); setQuantity('1'); setValidation(''); setExternalSheetOpen(true) }
+  const beginEdit = (participant: NormalizedExternalParticipant) => { setEditingId(participant.id); setDisplayName(participant.displayName === 'Дополнительные игроки' ? '' : participant.displayName); setQuantity('1'); setAvailableAfter(participant.availableAfter); setValidation(''); setExternalSheetOpen(true) }
   const submit = () => {
     const normalizedName = displayName.trim()
     const formValidation = editing === undefined
       ? validateExternalParticipantValues(normalizedName, quantity)
       : validateExternalParticipantName(normalizedName)
     if (formValidation !== undefined) { setValidation(formValidation); return }
+    const availability = match.timeMode === 'availability' ? availableAfter ?? null : undefined
     if (editing === undefined) {
-      onAddExternal(match, { quantity: Number(quantity), displayName: normalizedName })
+      onAddExternal(match, { quantity: Number(quantity), displayName: normalizedName, ...(availability === undefined ? {} : { availableAfter: availability }) })
     } else {
-      onUpdateExternal(match, editing, normalizedName)
+      onUpdateExternal(match, editing, { displayName: normalizedName, ...(availability === undefined ? {} : { availableAfter: availability }) })
     }
     setExternalOpen(false)
   }
@@ -505,12 +530,15 @@ export function MatchRoster({ match, onCorrectVote, onRemoveVote, onAddExternal,
       <CardHeader><CardTitle>Состав</CardTitle><CardDescription>{match.timeMode === 'exact_options' ? 'Игрок может выбрать несколько точных времён в Telegram.' : 'Перетащите игрока за маркер в нужную группу — изменение сохранится автоматически.'}</CardDescription></CardHeader>
       <CardContent className="flex flex-col gap-5">
         <DndContext sensors={sensors} collisionDetection={closestCenter} accessibility={{ announcements: ROSTER_DND_ANNOUNCEMENTS, screenReaderInstructions: ROSTER_DND_INSTRUCTIONS }} onDragStart={({ active }: DragStartEvent) => setActivePlayerId(String(active.data.current?.['playerId'] ?? active.id))} onDragCancel={() => setActivePlayerId(undefined)} onDragEnd={finishDrag}>
-          <div className="flex flex-col gap-1">{rosterTargets.map((target, index) => <VoteGroup key={target} match={match} votes={votes.filter((vote) => voteMatchesRosterTarget(match, vote, target))} externalParticipants={rosterTargetOption(target) === 'going' && (match.timeMode === 'exact' || match.selectedTime !== undefined || index === 0) ? match.roster.externalParticipants : EMPTY_EXTERNAL_PARTICIPANTS} target={target} onAddExternal={beginCreate} onEditExternal={beginEdit} onRemoveVote={onRemoveVote} onRemoveExternal={onRemoveExternal} disabled={disabled} />)}</div>
+          <div className="flex flex-col gap-1">
+            {rosterTargets.map((target) => <VoteGroup key={target} match={match} votes={votes.filter((vote) => voteMatchesRosterTarget(match, vote, target))} externalParticipants={externalParticipantsForRosterTarget(match, target)} target={target} onAddExternal={beginCreate} onEditExternal={beginEdit} onRemoveVote={onRemoveVote} onRemoveExternal={onRemoveExternal} disabled={disabled} />)}
+            {unassignedExternalParticipants.length === 0 ? null : <section className="-mx-2 rounded-xl border border-dashed p-2" aria-label="Дополнительные игроки без указанного времени"><div className="mb-2 flex items-center justify-between"><p className="text-xs font-medium text-muted-foreground">Доп. игроки без указанного времени</p><Badge variant="secondary">{unassignedExternalParticipants.reduce((total, participant) => total + participant.quantity, 0)}</Badge></div><div className="flex flex-col gap-2">{unassignedExternalParticipants.map((participant) => <ExternalParticipantCard key={participant.id} match={match} participant={participant} onEdit={beginEdit} onRemove={onRemoveExternal} disabled={disabled} />)}</div></section>}
+          </div>
           <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' }}>{activeVote === undefined ? null : <DraggedVotePreview vote={activeVote} />}</DragOverlay>
         </DndContext>
       </CardContent>
     </Card>
-    <Sheet open={externalSheetOpen} onOpenChange={setExternalOpen}><SheetContent side="bottom" className="mx-auto w-full max-w-[480px] gap-0 rounded-t-2xl p-0"><div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/35" /><SheetHeader className="px-4 pt-3 pb-4"><SheetTitle className="text-lg">{editing === undefined ? 'Добавить игроков' : 'Изменить игрока'}</SheetTitle><SheetDescription>{editing === undefined ? 'Укажите источник и количество дополнительных игроков.' : 'Задайте понятное имя для этого игрока.'}</SheetDescription></SheetHeader><form aria-label={editing === undefined ? 'Форма дополнительных игроков' : 'Форма редактирования дополнительного игрока'} onSubmit={(event) => { event.preventDefault(); submit() }}><FieldGroup className="gap-4 px-4 pb-5">{editing === undefined ? <FieldGroup className="grid grid-cols-[1fr_5.5rem] gap-3"><Field><FieldLabel htmlFor={`external-source-${match.id}`}>Источник</FieldLabel><Input id={`external-source-${match.id}`} value={displayName} onChange={(event) => { setDisplayName(event.target.value); setValidation('') }} placeholder="Например, От Никиты" autoFocus /></Field><Field><FieldLabel htmlFor={`external-quantity-${match.id}`}>Кол-во</FieldLabel><Input id={`external-quantity-${match.id}`} type="number" min="1" max="50" step="1" inputMode="numeric" value={quantity} onChange={(event) => { setQuantity(event.target.value); setValidation('') }} /></Field></FieldGroup> : <Field><FieldLabel htmlFor={`external-name-${match.id}`}>Имя игрока</FieldLabel><Input id={`external-name-${match.id}`} value={displayName} onChange={(event) => { setDisplayName(event.target.value); setValidation('') }} placeholder="Например, Саша" autoFocus /></Field>}<FieldError>{validation}</FieldError><Button type="submit" className="h-11" disabled={disabled}>{editing === undefined ? 'Добавить игроков' : 'Сохранить имя'}</Button></FieldGroup></form></SheetContent></Sheet>
+    <Sheet open={externalSheetOpen} onOpenChange={setExternalOpen}><SheetContent side="bottom" className="mx-auto w-full max-w-[480px] gap-0 rounded-t-2xl p-0"><div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/35" /><SheetHeader className="px-4 pt-3 pb-4"><SheetTitle className="text-lg">{editing === undefined ? 'Добавить игроков' : 'Изменить игрока'}</SheetTitle><SheetDescription>{editing === undefined ? 'Укажите источник, количество и доступность дополнительных игроков.' : 'Задайте понятное имя и доступность для этого игрока.'}</SheetDescription></SheetHeader><form aria-label={editing === undefined ? 'Форма дополнительных игроков' : 'Форма редактирования дополнительного игрока'} onSubmit={(event) => { event.preventDefault(); submit() }}><FieldGroup className="gap-4 px-4 pb-5">{editing === undefined ? <FieldGroup className="grid grid-cols-[1fr_5.5rem] gap-3"><Field><FieldLabel htmlFor={`external-source-${match.id}`}>Источник</FieldLabel><Input id={`external-source-${match.id}`} value={displayName} onChange={(event) => { setDisplayName(event.target.value); setValidation('') }} placeholder="Например, От Никиты" autoFocus /></Field><Field><FieldLabel htmlFor={`external-quantity-${match.id}`}>Кол-во</FieldLabel><Input id={`external-quantity-${match.id}`} type="number" min="1" max="50" step="1" inputMode="numeric" value={quantity} onChange={(event) => { setQuantity(event.target.value); setValidation('') }} /></Field></FieldGroup> : <Field><FieldLabel htmlFor={`external-name-${match.id}`}>Имя игрока</FieldLabel><Input id={`external-name-${match.id}`} value={displayName} onChange={(event) => { setDisplayName(event.target.value); setValidation('') }} placeholder="Например, Саша" autoFocus /></Field>}{match.timeMode === 'availability' ? <Field><FieldLabel htmlFor={`external-availability-${match.id}`}>Доступность</FieldLabel><Select value={availableAfter ?? 'unknown'} onValueChange={(value) => { setAvailableAfter(value === 'unknown' ? undefined : value); setValidation('') }}><SelectTrigger id={`external-availability-${match.id}`} className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectGroup><SelectItem value="unknown">Время не указано</SelectItem>{match.timeOptions.map((time) => <SelectItem key={time} value={time}>После {time}</SelectItem>)}</SelectGroup></SelectContent></Select></Field> : null}<FieldError>{validation}</FieldError><Button type="submit" className="h-11" disabled={disabled}>{editing === undefined ? 'Добавить игроков' : 'Сохранить изменения'}</Button></FieldGroup></form></SheetContent></Sheet>
   </>
 }
 
@@ -573,7 +601,9 @@ export function availabilityCountAt(match: NormalizedMatch, time: string): numbe
       ? vote.exactTimes.includes(time) || (vote.exactTimes.length === 0 && vote.availableAfter === time)
       : vote.availableAfter === undefined || vote.availableAfter <= time
   )).length
-  const external = match.roster.externalParticipants.reduce((total, participant) => total + participant.quantity, 0)
+  const external = match.roster.externalParticipants
+    .filter((participant) => match.timeMode !== 'availability' || (participant.availableAfter !== undefined && participant.availableAfter <= time))
+    .reduce((total, participant) => total + participant.quantity, 0)
   return votes + external
 }
 

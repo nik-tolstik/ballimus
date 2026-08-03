@@ -74,6 +74,7 @@ function external(
   quantity: number,
   sourceLabel: string | null,
   displayNameSnapshot: string | null = null,
+  availableAfter: string | null = null,
 ): ExternalParticipant {
   return {
     id,
@@ -82,6 +83,7 @@ function external(
     sourceUpdateId: id,
     sourceLabel,
     displayNameSnapshot,
+    availableAfter,
     quantity,
   };
 }
@@ -309,7 +311,7 @@ describe("roster and threshold rules", () => {
 });
 
 describe("HTML-safe card formatting", () => {
-  it("escapes fields, groups external quantities, and strips legacy title details", () => {
+  it("escapes fields, lists external participants without quantities, and strips legacy title details", () => {
     expect(escapeHtml(`<&>"`)).toBe("&lt;&amp;&gt;&quot;");
     const card = renderMatchCard({
       match: baseMatch,
@@ -327,9 +329,11 @@ describe("HTML-safe card formatting", () => {
     expect(card.text).toContain("Пётр &amp; Саша");
     expect(card.text).toContain("➕ <b>Доп. участники · 3</b>");
     expect(card.text).toContain("🟢 <b>Готов к подтверждению</b>");
-    expect(card.text).toContain("• От Никиты: 2");
+    expect(card.text).toContain("• От Никиты");
+    expect(card.text).not.toContain("• От Никиты:");
     expect(card.text).not.toContain("От От Никиты");
-    expect(card.text).toContain("• От Ваня: 1");
+    expect(card.text).toContain("• От Ваня");
+    expect(card.text).not.toContain("• От Ваня:");
     expect(card.text).toContain("🟢 <b>Участвуют · 1</b>");
     expect(card.text).toContain("🟡 <b>Под вопросом · 1</b>");
     expect(card.text).toContain("🔴 <b>Не смогут · 1</b>");
@@ -378,6 +382,37 @@ describe("HTML-safe card formatting", () => {
     expect(card.text).toContain('<a href="tg://user?id=1">Никита</a>, <a href="tg://user?id=2">Рома</a>');
     expect(card.text).toContain('<a href="tg://user?id=3">СанСаныч</a>, <a href="tg://user?id=4">Иваныч</a>');
     expect(card.text).not.toContain("• <a href=\"tg://user?id=1\">");
+  });
+
+  it("places additional players in their availability group and keeps unknown availability explicit", () => {
+    const card = renderMatchCard({
+      match: {
+        ...baseMatch,
+        requiredPlayers: 4,
+        scheduledAt: null,
+        scheduleDate: "2026-08-01",
+        timeMode: "availability",
+        timeOptions: ["19:00", "20:00"],
+        selectedTime: null,
+      },
+      votes: [
+        { ...vote(1, "going", "Рома"), availableAfter: "19:00" },
+        { ...vote(2, "going", "Никита"), availableAfter: "19:00" },
+      ],
+      externalParticipants: [
+        external(1, 1, "Ромы", null, "19:00"),
+        external(2, 1, "Алексея"),
+      ],
+    });
+
+    expect(card.text).toContain("👥 <b>4 из 4</b> · состав собран");
+    expect(card.text).toContain("🟢 <b>Могут после 19:00 · 3</b>");
+    expect(card.text).toContain("• От Ромы");
+    expect(card.text).not.toContain("• От Ромы:");
+    expect(card.text).toContain("⚪ <b>Доп. участники · 1 · время не указано</b>");
+    expect(card.text).toContain("• От Алексея");
+    expect(card.text).not.toContain("• От Алексея:");
+    expect(card.text.indexOf("🟢 <b>Могут после 19:00 · 3</b>")).toBeLessThan(card.text.indexOf("• От Ромы"));
   });
 
   it("renders several exact time options without after-time labels", () => {

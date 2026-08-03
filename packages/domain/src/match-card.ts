@@ -182,13 +182,33 @@ function namedExternalParticipantLines(
   matchId: Match["id"],
 ): string[] {
   return groupExternalParticipants(participants, matchId)
-    .map(({ label, quantity }) => {
+    .map(({ label }) => {
       const truncatedLabel = truncatePlainText(label, 512);
       const sourceLabel = /^от(?:\s|$)/iu.test(truncatedLabel)
         ? truncatedLabel.replace(/^от/iu, "От")
         : `От ${truncatedLabel}`;
-      return `• ${escapeHtml(sourceLabel)}: ${quantity}`;
+      return `• ${escapeHtml(sourceLabel)}`;
     });
+}
+
+function isExternalParticipantEligibleForMatch(
+  match: Match,
+  participant: ExternalParticipant,
+): boolean {
+  const timeMode = matchTimeMode(match);
+  if (timeMode !== "availability" || match.selectedTime === null || match.selectedTime === undefined) {
+    return true;
+  }
+  return participant.availableAfter !== null
+    && participant.availableAfter !== undefined
+    && participant.availableAfter <= match.selectedTime;
+}
+
+function externalParticipantsAtAvailabilityTime(
+  participants: readonly ExternalParticipant[],
+  time: string,
+): ExternalParticipant[] {
+  return participants.filter((participant) => participant.availableAfter === time);
 }
 
 function stripMarkup(value: string): string {
@@ -261,6 +281,28 @@ function addParticipantListLine(
   }
 }
 
+function addExternalParticipantLines(
+  lines: string[],
+  participants: readonly ExternalParticipant[],
+  matchId: Match["id"],
+  maxLength: number,
+): void {
+  const externalLines = namedExternalParticipantLines(participants, matchId);
+  let shown = 0;
+  for (const line of externalLines) {
+    const remainingAfterLine = externalLines.length - shown - 1;
+    const separatorLength = lines.length === 0 ? 0 : 1;
+    const overflowLine = "<i>… ещё внешние группы</i>";
+    const reservedOverflowLength = remainingAfterLine === 0 ? 0 : overflowLine.length + 1;
+    if (currentLength(lines) + separatorLength + line.length + reservedOverflowLength > maxLength) break;
+    lines.push(line);
+    shown += 1;
+  }
+  if (shown < externalLines.length) {
+    appendLine(lines, "<i>… ещё внешние группы</i>", maxLength, { allowTruncate: false });
+  }
+}
+
 function addVoteListSection(
   lines: string[],
   participants: readonly Vote[],
@@ -278,6 +320,7 @@ function addTimeOptionParticipantSections(
   lines: string[],
   match: Match,
   votes: readonly Vote[],
+  externalParticipants: readonly ExternalParticipant[],
   maxLength: number,
 ): void {
   const options = match.timeOptions ?? [];
@@ -287,18 +330,24 @@ function addTimeOptionParticipantSections(
         ? vote.exactTimes?.includes(time) === true || vote.availableAfter === time
         : vote.availableAfter === time
     ));
+    const externalAtTime = matchTimeMode(match) === "availability"
+      ? externalParticipantsAtAvailabilityTime(externalParticipants, time)
+      : [];
     const selected = match.selectedTime === time;
-    const hasParticipants = participants.length > 0;
+    const externalCount = totalExternalParticipantQuantity(externalAtTime, match.id);
+    const participantCount = participants.length + externalCount;
+    const hasParticipants = participantCount > 0;
     const label = matchTimeMode(match) === "availability"
       ? `Могут после ${escapeHtml(time)}`
       : escapeHtml(time);
-    const countLabel = hasParticipants ? String(participants.length) : "пока никого";
+    const countLabel = hasParticipants ? String(participantCount) : "пока никого";
     appendLine(
       lines,
       `${selected ? "✅" : hasParticipants ? "🟢" : "⚪"} <b>${label} · ${countLabel}</b>`,
       maxLength,
     );
     addParticipantListLine(lines, participants, maxLength);
+    addExternalParticipantLines(lines, externalAtTime, match.id, maxLength);
     if (index < options.length - 1) appendLine(lines, "", maxLength);
   }
 }
@@ -321,6 +370,7 @@ export function renderMatchCard(
   const timeMode = matchTimeMode(match);
   const timeSelectionPending = isTimePollMode(timeMode)
     && (match.selectedTime === null || match.selectedTime === undefined);
+  const isAvailabilityPoll = timeMode === "availability";
   const eligibleVoteCount = timeMode === "exact_options"
     && (match.selectedTime === null || match.selectedTime === undefined)
     ? Math.max(0, ...(match.timeOptions ?? []).map(
@@ -329,7 +379,17 @@ export function renderMatchCard(
       )).length,
     ))
     : votes.filter((vote) => isVoteEligibleForMatch(match, vote)).length;
-  const goingCount = eligibleVoteCount + externalCount;
+  const eligibleExternalParticipants = isAvailabilityPoll && !timeSelectionPending
+    ? externalParticipants.filter((participant) => isExternalParticipantEligibleForMatch(match, participant))
+    : externalParticipants;
+  const eligibleExternalCount = totalExternalParticipantQuantity(eligibleExternalParticipants, match.id);
+  const unavailableExternalParticipants = isAvailabilityPoll && !timeSelectionPending
+    ? externalParticipants.filter((participant) => !isExternalParticipantEligibleForMatch(match, participant))
+    : [];
+  const unassignedExternalParticipants = isAvailabilityPoll && timeSelectionPending
+    ? externalParticipants.filter((participant) => participant.availableAfter === null || participant.availableAfter === undefined)
+    : [];
+  const goingCount = eligibleVoteCount + eligibleExternalCount;
   const cancellationReason = match.cancellationReason?.trim();
   const title = escapeHtml(truncatePlainText(formatMatchCardTitle(match, displayOptions), 512));
   const lines: string[] = [];
@@ -349,22 +409,18 @@ export function renderMatchCard(
     ...(isTimePollMode(timeMode)
       ? [`🕒 ${timeLabel(match, displayOptions.timezone ?? DEFAULT_MATCH_CARD_TIMEZONE)}`]
       : []),
-    ...(externalCount > 0 ? ["", `➕ <b>Доп. участники · ${externalCount}</b>`] : []),
+    ...(!timeSelectionPending && eligibleExternalCount > 0
+      ? ["", `➕ <b>Доп. участники · ${eligibleExternalCount}</b>`]
+      : []),
   ];
   for (const line of baseLines) appendLine(lines, line, maxLength);
-  if (externalCount > 0) {
-    const externalLines = namedExternalParticipantLines(externalParticipants, match.id);
-    let shownExternal = 0;
-    for (const line of externalLines) {
-      if (!appendLine(lines, line, maxLength)) break;
-      shownExternal += 1;
-    }
-    if (shownExternal < externalLines.length) appendLine(lines, `<i>… ещё внешние группы</i>`, maxLength);
+  if (!timeSelectionPending && eligibleExternalCount > 0) {
+    addExternalParticipantLines(lines, eligibleExternalParticipants, match.id, maxLength);
   }
   appendLine(lines, "", maxLength);
 
   if (timeSelectionPending) {
-    addTimeOptionParticipantSections(lines, match, votes, maxLength);
+    addTimeOptionParticipantSections(lines, match, votes, externalParticipants, maxLength);
     appendLine(lines, "", maxLength);
   } else if (isTimePollMode(timeMode)) {
     const eligibleGoing = votes.filter((vote) => isVoteEligibleForMatch(match, vote));
@@ -388,6 +444,18 @@ export function renderMatchCard(
   addParticipantSection(lines, votes, "maybe", maxLength, false);
   if (votes.some((vote) => vote.option === "not_going")) {
     addParticipantSection(lines, votes, "not_going", maxLength, true);
+  }
+  const unavailableExternalCount = totalExternalParticipantQuantity(unavailableExternalParticipants, match.id);
+  const unassignedExternalCount = totalExternalParticipantQuantity(unassignedExternalParticipants, match.id);
+  if (unassignedExternalCount > 0) {
+    appendLine(lines, "", maxLength);
+    appendLine(lines, `⚪ <b>Доп. участники · ${unassignedExternalCount} · время не указано</b>`, maxLength);
+    addExternalParticipantLines(lines, unassignedExternalParticipants, match.id, maxLength);
+  }
+  if (unavailableExternalCount > 0) {
+    appendLine(lines, "", maxLength);
+    appendLine(lines, `🔴 <b>Доп. участники вне выбранного времени · ${unavailableExternalCount}</b>`, maxLength);
+    addExternalParticipantLines(lines, unavailableExternalParticipants, match.id, maxLength);
   }
 
   return {

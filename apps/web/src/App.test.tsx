@@ -383,7 +383,10 @@ describe('API-backed surface states', () => {
           { playerId: 'player-1', telegramUserId: '1', username: 'early', readableName: 'Ранний', avatarUrl: undefined, option: 'going', availableAfter: '19:00', exactTimes: [] },
           { playerId: 'player-2', telegramUserId: '2', username: 'late', readableName: 'Поздний', avatarUrl: undefined, option: 'going', availableAfter: '20:00', exactTimes: [] },
         ],
-        externalParticipants: [{ id: 'external-1', displayName: 'От Никиты #1', quantity: 1 }],
+        externalParticipants: [
+          { id: 'external-1', displayName: 'От Никиты #1', availableAfter: '19:00', quantity: 1 },
+          { id: 'external-2', displayName: 'От Алексея #1', quantity: 1 },
+        ],
       },
     }
     const markup = renderToStaticMarkup(<MatchRoster match={match} onCorrectVote={vi.fn(async () => undefined)} onRemoveVote={vi.fn()} onAddExternal={vi.fn()} onUpdateExternal={vi.fn()} onRemoveExternal={vi.fn()} disabled={false} />)
@@ -391,6 +394,8 @@ describe('API-backed surface states', () => {
     expect(markup).toContain('После 20:00')
     expect(markup).toContain(playerAvatarColor('player-1'))
     expect(markup).toContain(playerAvatarColor('player-2'))
+    expect(markup).toContain('Доп. игроки без указанного времени')
+    expect(markup).toContain('От Алексея #1')
     expect(markup.match(/aria-label="Добавить дополнительных игроков"/gu)).toHaveLength(2)
     expect(voteOptionFromDropTarget('after:20:00')).toBe('after:20:00')
     expect(voteDropZoneStyle('after:19:00')).toMatchObject({ zone: expect.stringContaining('success') })

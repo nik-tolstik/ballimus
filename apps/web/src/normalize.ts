@@ -28,6 +28,7 @@ export interface NormalizedVote {
 export interface NormalizedExternalParticipant {
   readonly id: string
   readonly displayName: string
+  readonly availableAfter?: string
   readonly quantity: number
 }
 
@@ -151,6 +152,7 @@ export function normalizeMatch(match: MatchResponseDto): NormalizedMatch {
       externalParticipants: match.roster.externalParticipants.map((participant) => ({
         id: participant.id,
         displayName: participant.displayName ?? 'Дополнительные игроки',
+        ...(participant.availableAfter === null ? {} : { availableAfter: participant.availableAfter }),
         quantity: participant.quantity,
       })),
     },

@@ -304,7 +304,12 @@ export class VotesRepository {
     const externalRows = await this.db
       .select({ quantity: externalParticipants.quantity })
       .from(externalParticipants)
-      .where(eq(externalParticipants.matchId, parsedId));
+      .where(and(
+        eq(externalParticipants.matchId, parsedId),
+        ...(match.timeMode === "availability" && match.selectedTime !== null
+          ? [sql`${externalParticipants.availableAfter} is not null and ${externalParticipants.availableAfter} <= ${match.selectedTime}`]
+          : []),
+      ));
     const externalCount = externalRows.reduce((total, row) => total + row.quantity, 0);
     const goingCount = voteCount + externalCount;
     return {

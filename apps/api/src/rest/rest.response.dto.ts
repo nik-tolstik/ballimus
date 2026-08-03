@@ -95,6 +95,9 @@ export class ExternalParticipantResponseDto {
   @ApiProperty({ type: String, nullable: true, example: "Команда Никиты" })
   displayName!: string | null;
 
+  @ApiProperty({ type: String, nullable: true, example: "19:00" })
+  availableAfter!: string | null;
+
   @ApiProperty({ type: Number, minimum: 1 })
   quantity!: number;
 
