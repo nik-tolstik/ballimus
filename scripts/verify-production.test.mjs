@@ -1,0 +1,106 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  evaluateCors,
+  evaluateGitHubCi,
+  evaluateMigrationStatus,
+  evaluateRailwayServices,
+  evaluateVercelStatus,
+  evaluateWebhookStatus,
+  parsePublicProductionConfig,
+} from "./verify-production.mjs";
+
+const publicConfig = `
+TELEGRAM_BOT_TOKEN=must-not-be-read
+PRODUCTION_WEB_URL=https://ballimus.example.test
+PRODUCTION_API_URL=https://api.ballimus.example.test
+RAILWAY_PROJECT_ID=project_123
+RAILWAY_ENVIRONMENT=production
+RAILWAY_API_SERVICE=api
+RAILWAY_JOBS_SERVICE=jobs
+DATABASE_URL=postgresql://must-not-be-read
+`;
+
+test("reads only public production verifier configuration", () => {
+  const config = parsePublicProductionConfig(publicConfig);
+
+  assert.deepEqual(config, {
+    webUrl: "https://ballimus.example.test",
+    apiUrl: "https://api.ballimus.example.test",
+    railwayProjectId: "project_123",
+    railwayEnvironment: "production",
+    railwayApiService: "api",
+    railwayJobsService: "jobs",
+  });
+  assert.equal(JSON.stringify(config).includes("must-not-be-read"), false);
+});
+
+test("detects a GitHub CI run for another commit and a failed Vercel status", () => {
+  assert.equal(evaluateGitHubCi([
+    { workflowName: "CI", status: "completed", conclusion: "success", headSha: "old" },
+  ], "current").ok, false);
+  assert.equal(evaluateVercelStatus({
+    statuses: [{ context: "Vercel", state: "failure" }],
+  }).ok, false);
+});
+
+test("accepts healthy Railway, CORS, migration, and webhook checks", () => {
+  assert.equal(evaluateGitHubCi([
+    { workflowName: "CI", status: "completed", conclusion: "success", headSha: "current" },
+  ], "current").ok, true);
+  assert.equal(evaluateVercelStatus({
+    statuses: [{ context: "Vercel", state: "success" }],
+  }).ok, true);
+  assert.equal(evaluateRailwayServices([
+    { name: "api", status: "SUCCESS", stopped: false },
+    { name: "jobs", status: "SUCCESS", stopped: true },
+  ], "api", "jobs").ok, true);
+  assert.equal(evaluateCors(new Response(null, {
+    status: 204,
+    headers: {
+      "access-control-allow-origin": "https://ballimus.example.test",
+      "access-control-allow-methods": "GET,POST",
+    },
+  }), "https://ballimus.example.test").ok, true);
+  assert.equal(evaluateMigrationStatus({
+    migrationLedgerPresent: true,
+    schemaPresent: true,
+    appliedMigrationCount: 9,
+  }, 9).ok, true);
+  assert.equal(evaluateWebhookStatus({
+    telegramApiAccepted: true,
+    webhookMatchesExpectedUrl: true,
+    callbackQueryAllowed: true,
+    onlyCallbackQueriesAllowed: true,
+    pendingUpdateCount: 0,
+    hasLastError: false,
+  }).ok, true);
+});
+
+test("rejects a wrong CORS origin, stale migration ledger, and unhealthy webhook", () => {
+  assert.equal(evaluateRailwayServices([
+    { name: "api", status: "FAILED", stopped: true },
+    { name: "jobs", status: "SUCCESS", stopped: true },
+  ], "api", "jobs").ok, false);
+  assert.equal(evaluateCors(new Response(null, {
+    status: 204,
+    headers: {
+      "access-control-allow-origin": "https://other.example.test",
+      "access-control-allow-methods": "GET",
+    },
+  }), "https://ballimus.example.test").ok, false);
+  assert.equal(evaluateMigrationStatus({
+    migrationLedgerPresent: true,
+    schemaPresent: true,
+    appliedMigrationCount: 8,
+  }, 9).ok, false);
+  assert.equal(evaluateWebhookStatus({
+    telegramApiAccepted: true,
+    webhookMatchesExpectedUrl: false,
+    callbackQueryAllowed: true,
+    onlyCallbackQueriesAllowed: true,
+    pendingUpdateCount: 0,
+    hasLastError: false,
+  }).ok, false);
+});

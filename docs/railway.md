@@ -6,7 +6,7 @@ This document describes the intended production deployment and the validation-to
 
 The repository owner must explicitly authorize production infrastructure changes, PostgreSQL migrations, Telegram webhook changes, and BotFather Mini App changes. Production secrets must stay in provider variables or ignored local files and must never be committed.
 
-The initial validation uses a separate production bot in the existing `Футбол тест` forum group. The local dev bot, local PostgreSQL, ngrok webhook, and `.env.local` remain unchanged. Copy `.env.production.local.example` to `.env.production.local` for the production Telegram inputs; the populated file is ignored by Git.
+The initial validation uses a separate production bot in the existing `Футбол тест` forum group. The local dev bot, local PostgreSQL, ngrok webhook, and `.env.local` remain unchanged. Copy `.env.production.local.example` to `.env.production.local` for public verifier settings; the populated file is ignored by Git. Telegram and PostgreSQL secrets belong only in provider variables.
 
 ## Topology
 
@@ -59,6 +59,27 @@ VITE_API_BASE_URL=https://<railway-api-domain>
 
 `WEB_ORIGIN` and `TELEGRAM_MINI_APP_URL` must both equal the exact Vercel production origin without a path. Never expose Telegram or PostgreSQL secrets to the Vercel build.
 
+## Read-only release verification
+
+After the provider deployments finish, run the minimum production check from the repository root:
+
+```bash
+pnpm release:verify-production
+```
+
+The command reads only these public values from `.env.production.local`:
+
+```text
+PRODUCTION_WEB_URL
+PRODUCTION_API_URL
+RAILWAY_PROJECT_ID
+RAILWAY_ENVIRONMENT=production
+RAILWAY_API_SERVICE=api
+RAILWAY_JOBS_SERVICE=jobs
+```
+
+It verifies the latest `main` CI, its successful Vercel GitHub status, the Vercel URL, Railway API and Jobs deployment status, API health, exact-origin CORS, the committed migration count and expected schema, and the read-only Telegram webhook status. It uses the authenticated `gh` and `railway` CLIs, prints no secret values, and never deploys, runs migrations, changes webhook settings, or sends Telegram messages.
+
 ## Release preparation
 
 Run the local quality gate from the repository root:
@@ -87,6 +108,8 @@ The GitHub `main` workflow runs the same checks against PostgreSQL 18. Railway A
 
 ## Test-group smoke test
 
+This is an extended, state-changing validation. Perform it only after separate explicit owner authorization, and only in `Футбол тест`; do not include it in the read-only verifier.
+
 1. Verify API health, exact-origin CORS, the Vercel production build, owner Mini App authentication, bot administrator rights, and `getWebhookInfo`.
 2. Create `[TEST] Deployment smoke` in the Mini App and wait for Jobs to publish the card in the test General topic.
 3. Cast one Telegram vote, repeat the callback once, and verify that the vote and card remain idempotent.
@@ -108,7 +131,7 @@ The GitHub `main` workflow runs the same checks against PostgreSQL 18. Railway A
 - [ ] GitHub CI passes for the deployed commit.
 - [ ] Vercel serves the production Mini App with only `VITE_API_BASE_URL` exposed.
 - [ ] Railway API health and exact-origin CORS pass.
-- [ ] All seven migrations are present in the active database ledger.
+- [ ] The active database migration ledger matches the committed migration set and the expected schema is present.
 - [ ] Jobs completes, exits, and respects the database lease.
 - [ ] The Telegram webhook uses the Railway API URL and secret-token validation.
 - [ ] The full publish/vote/idempotency/cancel flow passes in `Футбол тест`.

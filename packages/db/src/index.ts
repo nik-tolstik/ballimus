@@ -1,4 +1,5 @@
 export * from "./client.js";
+export * from "./migration-status.js";
 export * from "./schema.js";
 export * from "./serialization.js";
 export * from "./locks.js";
