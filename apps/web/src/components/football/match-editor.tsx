@@ -68,8 +68,12 @@ function nextAvailabilityTime(values: readonly string[]): string | undefined {
   return undefined
 }
 
+export function currentHourTime(now = new Date()): string {
+  return `${String(now.getHours()).padStart(2, '0')}:00`
+}
+
 function initialMatchTimes(match: NormalizedMatch | undefined): string[] {
-  if (match === undefined) return ['']
+  if (match === undefined) return [currentHourTime()]
   if (match.timeMode !== 'exact' && match.timeOptions.length > 0) return [...match.timeOptions]
   return [match.time]
 }
@@ -164,7 +168,8 @@ export function MatchEditor({ match, onSave, conflict, onClearConflict, saving }
                 <FieldLabel htmlFor="time-mode-availability" className="font-normal">{matchTimes[0] ? `После ${matchTimes[0]}` : 'После времени'}</FieldLabel>
               </Field>
             </RadioGroup>
-            <FieldDescription>{timeFormat === 'exact' ? (matchTimes.length === 1 ? 'Матч начнётся в указанное время.' : 'Игроки выберут один из точных вариантов времени.') : 'Игроки выберут самое раннее время, после которого смогут приехать.'}</FieldDescription>
+            {timeFormat === 'availability' ? <FieldDescription>Игроки выберут самое раннее время, после которого смогут приехать.</FieldDescription> : null}
+            {timeFormat === 'exact' && matchTimes.length > 1 ? <FieldDescription>Игроки выберут один из точных вариантов времени.</FieldDescription> : null}
             <FieldGroup className="gap-2">
               {matchTimes.map((option, index) => <Field key={index} orientation={matchTimes.length > 1 ? 'horizontal' : 'vertical'} className={matchTimes.length > 1 ? 'grid min-w-0 grid-cols-[minmax(0,1fr)_2.5rem] gap-2' : 'min-w-0'}>
                 <div className="min-w-0">

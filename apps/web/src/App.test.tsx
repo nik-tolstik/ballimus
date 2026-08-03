@@ -43,7 +43,7 @@ vi.mock('@football/api-client', () => ({
 import App, { MatchEditor, TabBar, weatherWarningMessage } from './App'
 import { brandForEnvironment } from './brand'
 import { DatePicker } from './components/football/date-time-picker'
-import { editorTimeConfiguration, validateEditorValues } from './components/football/match-editor'
+import { currentHourTime, editorTimeConfiguration, validateEditorValues } from './components/football/match-editor'
 import { availabilityCountAt, cancellationReasonText, CancellationReasonFields, initialsForName, MatchesPanel, MatchRoster, MatchSettings, playerAvatarColor, PlayersPanel, rosterGroupCount, validateCancellationReason, validateExternalParticipantName, validateExternalParticipantValues, validateFinalMatchDetails, validatePlayerPseudonym, voteDropZoneStyle, voteOptionFromDropTarget, voteRemovalAction } from './components/football/panels'
 import type { NormalizedMatch, NormalizedPlayer } from './normalize'
 import type { TelegramSession } from './telegram'
@@ -185,6 +185,7 @@ describe('API-backed surface states', () => {
 
     expect(markup).toContain('Опубликовать матч')
     expect(markup).not.toContain('черновик')
+    expect(markup).not.toContain('Матч начнётся в указанное время.')
   })
 
   it('uses native submit semantics for every save form', async () => {
@@ -345,7 +346,7 @@ describe('API-backed surface states', () => {
     }
     const markup = renderToStaticMarkup(<MatchRoster match={match} onCorrectVote={vi.fn(async () => undefined)} onRemoveVote={vi.fn()} onAddExternal={vi.fn()} onUpdateExternal={vi.fn()} onRemoveExternal={vi.fn()} disabled={false} />)
 
-    expect(markup).toContain('Перетащите игрока за маркер')
+    expect(markup).not.toContain('Перетащите игрока за маркер')
     expect(markup).toContain('Перетащить Иван Петров')
     expect(markup).toContain('transition-[border-color,box-shadow]')
     expect(markup).not.toContain('transition-[border-color,box-shadow,opacity]')
@@ -480,6 +481,11 @@ describe('API-backed surface states', () => {
     expect(editorTimeConfiguration(['19:00'], 'availability')).toEqual({ time: '', timeMode: 'availability', timeOptions: ['19:00'] })
     expect(editorTimeConfiguration(['20:00', '19:00'], 'exact')).toEqual({ time: '', timeMode: 'exact_options', timeOptions: ['19:00', '20:00'] })
     expect(editorTimeConfiguration(['20:00', '19:00'], 'availability')).toEqual({ time: '', timeMode: 'availability', timeOptions: ['19:00', '20:00'] })
+  })
+
+  it('defaults a new match time to the current local hour', () => {
+    expect(currentHourTime(new Date(2026, 7, 3, 13, 23))).toBe('13:00')
+    expect(currentHourTime(new Date(2026, 7, 3, 0, 59))).toBe('00:00')
   })
 
   it('lets the owner choose exact time or after-time availability explicitly', () => {
