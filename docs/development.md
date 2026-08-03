@@ -74,6 +74,16 @@ pnpm dev
 
 The command prints the public Mini App URL, API URL, webhook URL, and the local ngrok inspector at `http://127.0.0.1:4040`. The Web tunnel uses the reserved domain configured in `ngrok.local.yml`, while the API tunnel remains dynamic unless a second reserved domain is added. Each launch registers the local bot webhook for the current API tunnel.
 
+### Separate tmux windows in WSL
+
+For separate `ngrok`, API, and Web terminals while working in WSL, run:
+
+```bash
+pnpm dev -- --tmux
+```
+
+The command creates and attaches to the `football-bot-dev` tmux session. Switch between its windows with `Ctrl+b 0`, `Ctrl+b 1`, and `Ctrl+b 2`. To stop all three processes, detach with `Ctrl+b d` and run `tmux kill-session -t football-bot-dev`.
+
 To also set the configured owner's local menu button to the temporary Mini App URL:
 
 ```bash
