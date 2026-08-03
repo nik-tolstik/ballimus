@@ -1,8 +1,8 @@
 # Development Guide
 
-For a single product-and-operations walkthrough, including member voting, owner workflows, time modes, and both launch paths, start with the [Application guide](application-guide.md). This document is the detailed development command reference.
+For a single product-and-operations walkthrough, including member voting, owner workflows, and time modes, start with the [Application guide](application-guide.md). This document is the detailed development command reference.
 
-> **Default Telegram launch:** This repository runs an owner-only Telegram Mini App. For normal local development and any test that must work inside Telegram, start the project with `pnpm dev:ngrok -- --register-webhook`. Do not use the root `pnpm dev` shortcut for Telegram testing: it serves only localhost, does not start PostgreSQL or apply migrations, and does not configure the Telegram-facing URLs and webhook. The local-only commands below are for API, database, and Vite work that does not require Telegram.
+> **Default Telegram launch:** This repository runs an owner-only Telegram Mini App. Start it with `pnpm dev`. Before that, start the local PostgreSQL container in Docker Desktop and apply migrations with `pnpm db:migrate`. The command creates the public API and Web HTTPS tunnels, starts the API and Vite, and registers the local webhook.
 
 ## Prerequisites
 
@@ -20,7 +20,6 @@ Install dependencies and prepare the local database configuration:
 ```bash
 pnpm install --frozen-lockfile
 cp .env.local.example .env.local
-node scripts/postgres-local.mjs
 ```
 
 The local helper starts PostgreSQL on `127.0.0.1:55432` and waits for its health check. Extend `.env.local` with the required local API values:
@@ -33,9 +32,9 @@ TELEGRAM_OWNER_USER_ID=<local-owner-telegram-id>
 TELEGRAM_CHAT_ID=<local-test-chat-id>
 TELEGRAM_GENERAL_TOPIC_ID=<local-general-topic-id>
 TELEGRAM_CHAT_TOPIC_ID=<local-chat-topic-id>
-TELEGRAM_MINI_APP_URL=http://localhost:5173
+TELEGRAM_MINI_APP_URL=http://localhost:6173
 TELEGRAM_MINI_APP_INIT_DATA_MAX_AGE_SECONDS=86400
-WEB_ORIGIN=http://localhost:5173
+WEB_ORIGIN=http://localhost:6173
 GROUP_TIMEZONE=Europe/Minsk
 LOG_LEVEL=debug
 ```
@@ -50,50 +49,18 @@ pnpm auth:fixture -- --user-id <local-owner-telegram-id>
 
 The command reads the local bot token from the environment or `.env.local`, prints only the signed query string, and never prints the token. Use the result as `X-Telegram-Init-Data` for local API clients. Pass `--auth-date <unix-seconds>` to create deterministic expiry fixtures.
 
-Run the migration explicitly after PostgreSQL is healthy. API startup does not run migrations:
+Start the local PostgreSQL container in Docker Desktop. After it is healthy, run the migration explicitly before the first launch and whenever the schema changes. API startup does not run migrations:
 
 ```bash
 set -a
 source .env.local
 set +a
-pnpm --filter @football/db db:migrate
+pnpm db:migrate
 ```
 
-## Run the local services
+## Run locally in Telegram
 
-Keep the exported environment in the shell that starts the API and jobs:
-
-```bash
-set -a
-source .env.local
-set +a
-pnpm --filter @football/api exec tsx src/main.ts
-```
-
-In another shell, create `apps/web/.env.local` with the public API URL and start Vite:
-
-```text
-VITE_API_BASE_URL=http://localhost:3000
-```
-
-```bash
-pnpm --filter @football/web dev
-```
-
-Run one bounded local jobs pass when the API/database environment is exported:
-
-```bash
-set -a
-source .env.local
-set +a
-pnpm --filter @football/api jobs:run
-```
-
-The jobs command exits after one leased outbox/weather pass. Do not replace it with a permanent timer in the API process.
-
-## Telegram development with ngrok
-
-When the Mini App or webhook must be tested from Telegram, use the project ngrok workflow instead of copying public URLs into `.env.local` manually. It starts local PostgreSQL, applies migrations, opens separate API and Web HTTPS tunnels, and injects the resulting URLs into the child processes. Mini App API calls stay on the stable Web origin and are proxied by Vite to the local API; the dynamic API tunnel is used for the webhook:
+The project ngrok workflow opens separate API and Web HTTPS tunnels and injects the resulting URLs into the child processes. Mini App API calls stay on the stable Web origin and are proxied by Vite to the local API; the dynamic API tunnel is used for the webhook:
 
 Authenticate ngrok once on the development machine; keep the credential out of Git and chat:
 
@@ -102,24 +69,18 @@ ngrok config add-authtoken <your-ngrok-authtoken>
 ```
 
 ```bash
-pnpm dev:ngrok -- --register-webhook
+pnpm dev
 ```
 
-The command prints the public Mini App URL, API URL, webhook URL, and the local ngrok inspector at `http://127.0.0.1:4040`. The Web tunnel uses the reserved domain configured in `ngrok.local.yml`, while the API tunnel remains dynamic unless a second reserved domain is added. The `--register-webhook` flag registers the local bot webhook for the current API tunnel.
-
-To register the local bot webhook explicitly:
-
-```bash
-pnpm dev:ngrok -- --register-webhook
-```
+The command prints the public Mini App URL, API URL, webhook URL, and the local ngrok inspector at `http://127.0.0.1:4040`. The Web tunnel uses the reserved domain configured in `ngrok.local.yml`, while the API tunnel remains dynamic unless a second reserved domain is added. Each launch registers the local bot webhook for the current API tunnel.
 
 To also set the configured owner's local menu button to the temporary Mini App URL:
 
 ```bash
-pnpm dev:ngrok -- --register-webhook --set-menu-button
+pnpm dev -- --set-menu-button
 ```
 
-These flags call Telegram's Bot API for the values in `.env.local`. Use only a non-production bot and test group. The Web URL remains stable with the configured reserved domain; the API URL changes between sessions until a second reserved domain is configured, but the Mini App itself continues using the stable Web URL through the local proxy.
+The command calls Telegram's Bot API for the values in `.env.local`. Use only a non-production bot and test group. The Web URL remains stable with the configured reserved domain; the API URL changes between sessions until a second reserved domain is configured, but the Mini App itself continues using the stable Web URL through the local proxy.
 
 ## Exact package commands
 
@@ -168,9 +129,9 @@ pnpm api:contracts:check
 
 ## Local acceptance checklist
 
-For Telegram acceptance, start with `pnpm dev:ngrok -- --register-webhook` and use only the local bot, local group, local database, and the public URL printed by the workflow.
+For Telegram acceptance, start with `pnpm dev` and use only the local bot, local group, local database, and the public URL printed by the workflow.
 
-1. Verify that the ngrok workflow started PostgreSQL, applied migrations, started the API, and that `GET http://localhost:3000/health` returns API status `ok`.
+1. Verify that the PostgreSQL container is healthy, required migrations have been applied, the ngrok workflow started the API, and `GET http://localhost:6000/health` returns API status `ok`.
 2. Open the Mini App from the local Telegram bot as the configured owner. Verify that an ordinary Telegram account is rejected and that opening the URL outside Telegram shows the Telegram-only state.
 3. Create and publish a match from the Mini App, then verify that one transaction created the active match and queued exactly one card for `General`.
 4. Vote from Telegram accounts on the public card. Verify callback source checks, one vote per player/match, card refresh, and duplicate-update safety.
@@ -187,7 +148,7 @@ Check that the shell has all required variables, that `DATABASE_URL` uses `postg
 
 ### Mini App shows an access error
 
-Open it from Telegram, not a normal browser tab. Restart `pnpm dev:ngrok` after configuration changes, close the current Mini App, and open it again so Telegram reloads the client. Check that the Telegram account is the configured local owner. Expired `initData` requires reopening the Mini App.
+Open it from Telegram, not a normal browser tab. Restart `pnpm dev` after configuration changes, close the current Mini App, and open it again so Telegram reloads the client. Check that the Telegram account is the configured local owner. Expired `initData` requires reopening the Mini App.
 
 ### Public card is missing or stale
 

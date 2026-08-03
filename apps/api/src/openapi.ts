@@ -67,7 +67,7 @@ const OPENAPI_FIXTURE_ENVIRONMENT: Readonly<Record<string, string>> = {
   TELEGRAM_MINI_APP_URL: "https://mini-app.invalid/",
   WEB_ORIGIN: "https://mini-app.invalid",
   LOG_LEVEL: "info",
-  PORT: "3000",
+  PORT: "6000",
 };
 
 function ensureOpenApiEnvironment(): void {

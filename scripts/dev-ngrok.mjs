@@ -66,15 +66,14 @@ let stopping = false;
 
 function printUsage() {
   console.info(`Usage:
-  pnpm dev:ngrok
-  pnpm dev:ngrok -- --register-webhook
-  pnpm dev:ngrok -- --register-webhook --set-menu-button
+  pnpm dev
+  pnpm dev -- --set-menu-button
 
-The default command starts local PostgreSQL, applies migrations, opens API and
-Web ngrok tunnels, then starts the API and Vite processes with the public URLs.
+The default command opens API and Web ngrok tunnels, starts the API and Vite
+processes with the public URLs, and registers the local webhook. Start local
+PostgreSQL and apply migrations separately before running this command.
 
 Options:
-  --register-webhook  Register the local bot webhook at the public API URL.
   --set-menu-button   Set the owner's Telegram menu button to the public Web URL.
 `);
 }
@@ -82,22 +81,6 @@ Options:
 function fail(message) {
   console.error(`ngrok development setup failed: ${message}`);
   process.exit(1);
-}
-
-function runBlocking(command, argumentsToRun, environment = childEnvironment) {
-  const result = spawnSync(command, argumentsToRun, {
-    cwd: projectRoot,
-    env: environment,
-    stdio: "inherit",
-  });
-
-  if (result.error !== undefined) {
-    throw result.error;
-  }
-
-  if (result.status !== 0) {
-    throw new Error(`${command} exited with code ${result.status ?? 1}`);
-  }
 }
 
 function findGlobalNgrokConfig() {
@@ -245,9 +228,6 @@ async function telegramApi(method, body) {
 }
 
 async function main() {
-  runBlocking(process.platform === "win32" ? "node.exe" : "node", ["scripts/postgres-local.mjs", "up"]);
-  runBlocking(packageManager, ["--filter", "@football/db", "db:migrate"]);
-
   const ngrokArguments = ["start", "--all"];
   const globalNgrokConfig = findGlobalNgrokConfig();
   if (globalNgrokConfig !== undefined) {
@@ -266,7 +246,7 @@ async function main() {
   const webEnvironment = {
     ...childEnvironment,
     VITE_API_BASE_URL: webUrl,
-    VITE_API_PROXY_TARGET: "http://127.0.0.1:3000",
+    VITE_API_PROXY_TARGET: "http://127.0.0.1:6000",
     VITE_PUBLIC_HOST: new URL(webUrl).hostname,
   };
 
@@ -274,8 +254,8 @@ async function main() {
   startChild(packageManager, ["--filter", "@football/web", "dev", "--host", "127.0.0.1"], webEnvironment);
 
   await Promise.all([
-    waitForHttp("http://127.0.0.1:3000/health", "the local API"),
-    waitForHttp("http://127.0.0.1:5173/", "the local Web app"),
+    waitForHttp("http://127.0.0.1:6000/health", "the local API"),
+    waitForHttp("http://127.0.0.1:6173/", "the local Web app"),
   ]);
 
   const webhookUrl = `${apiUrl}/telegram/webhook`;

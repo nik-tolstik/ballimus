@@ -5,7 +5,7 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 const publicHost = process.env.VITE_PUBLIC_HOST;
-const apiProxyTarget = process.env.VITE_API_PROXY_TARGET ?? "http://127.0.0.1:3000";
+const apiProxyTarget = process.env.VITE_API_PROXY_TARGET ?? "http://127.0.0.1:6000";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -25,6 +25,8 @@ export default defineConfig({
     },
   },
   server: {
+    port: 6173,
+    strictPort: true,
     allowedHosts: publicHost === undefined ? [] : [publicHost],
     proxy: {
       "/v1": {

@@ -42,7 +42,7 @@ const config: ApiConfig = {
   webOrigin: "https://mini-app.test",
   groupTimezone: "Europe/Minsk",
   logLevel: "info",
-  port: 3000,
+  port: 6000,
   miniAppInitDataMaxAgeSeconds: 86_400,
 };
 

@@ -53,10 +53,19 @@ ngrok config add-authtoken <ngrok-authtoken>
 Then start each development session with:
 
 ```bash
-pnpm dev:ngrok -- --register-webhook
+pnpm dev
 ```
 
-The command starts local PostgreSQL, applies migrations, opens the API and Web tunnels, starts NestJS and Vite, and registers the dynamic webhook URL. It prints the Mini App URL to open from the configured test bot. Background work is intentionally one-shot and can be run from another terminal:
+Before the first launch, start the local PostgreSQL container in Docker Desktop and apply migrations separately:
+
+```bash
+set -a
+source .env.local
+set +a
+pnpm db:migrate
+```
+
+Run the migration again whenever the schema changes. `pnpm dev` opens the API and Web tunnels, starts NestJS and Vite, and registers the dynamic webhook URL. It prints the Mini App URL to open from the configured test bot. Background work is intentionally one-shot and can be run from another terminal:
 
 ```bash
 set -a
