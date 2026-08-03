@@ -9,12 +9,9 @@ const localEnvFile = resolve(projectRoot, ".env.local");
 const ngrokConfigFile = resolve(projectRoot, "ngrok.local.yml");
 const packageManager = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const ngrokExecutable = process.platform === "win32" ? "ngrok.exe" : "ngrok";
-const tmuxExecutable = "tmux";
-const tmuxSessionName = "football-bot-dev";
-const shellExecutable = process.env.SHELL?.endsWith("/zsh") === true ? process.env.SHELL : "zsh";
 const childEnvironment = { ...process.env };
 const requestedFlags = new Set(process.argv.slice(2).filter((argument) => argument !== "--"));
-const knownFlags = new Set(["--help", "-h", "--register-webhook", "--set-menu-button", "--tmux"]);
+const knownFlags = new Set(["--help", "-h", "--register-webhook", "--set-menu-button"]);
 
 for (const flag of requestedFlags) {
   if (!knownFlags.has(flag)) {
@@ -70,7 +67,6 @@ let stopping = false;
 function printUsage() {
   console.info(`Usage:
   pnpm dev
-  pnpm dev -- --tmux
   pnpm dev -- --set-menu-button
 
 The default command opens API and Web ngrok tunnels, starts the API and Vite
@@ -78,7 +74,6 @@ processes with the public URLs, and registers the local webhook. Start local
 PostgreSQL and apply migrations separately before running this command.
 
 Options:
-  --tmux              Start ngrok, API, and Vite in separate tmux windows.
   --set-menu-button   Set the owner's Telegram menu button to the public Web URL.
 `);
 }
@@ -165,7 +160,7 @@ async function waitForTunnels(ngrokProcess) {
   let lastError;
 
   while (Date.now() < deadline) {
-    if (ngrokProcess !== undefined && (ngrokProcess.exitCode !== null || ngrokProcess.signalCode !== null)) {
+    if (ngrokProcess.exitCode !== null || ngrokProcess.signalCode !== null) {
       throw new Error(
         "ngrok exited before opening the tunnels. Authenticate it locally with 'ngrok config add-authtoken <token>' and retry.",
       );
@@ -232,134 +227,6 @@ async function telegramApi(method, body) {
   return payload.result;
 }
 
-function shellQuote(value) {
-  return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
-function tmuxShellCommand(command, argumentsToRun, environment = {}) {
-  const environmentAssignments = Object.entries(environment)
-    .map(([name, value]) => `${name}=${shellQuote(value)}`)
-    .join(" ");
-  const commandLine = [command, ...argumentsToRun].map(shellQuote).join(" ");
-  const innerCommand = `exec ${environmentAssignments === "" ? "" : `env ${environmentAssignments} `}${commandLine}`;
-  return `exec ${shellQuote(shellExecutable)} -lc ${shellQuote(innerCommand)}`;
-}
-
-function runTmux(argumentsToRun, options = {}) {
-  const result = spawnSync(tmuxExecutable, argumentsToRun, {
-    cwd: projectRoot,
-    env: options.environment ?? childEnvironment,
-    stdio: options.stdio ?? "inherit",
-  });
-  if (result.error !== undefined) throw result.error;
-  if (result.status !== 0) throw new Error(`tmux ${argumentsToRun[0]} exited with code ${result.status ?? 1}.`);
-  return result;
-}
-
-function tmuxSessionExists() {
-  const result = spawnSync(tmuxExecutable, ["has-session", "-t", tmuxSessionName], {
-    cwd: projectRoot,
-    env: childEnvironment,
-    stdio: "ignore",
-  });
-  return result.status === 0;
-}
-
-function startTmuxWindow(name, command, argumentsToRun, environment) {
-  runTmux([
-    "new-window",
-    "-d",
-    "-t",
-    tmuxSessionName,
-    "-n",
-    name,
-    tmuxShellCommand(command, argumentsToRun, environment),
-  ]);
-}
-
-async function registerWebhook(apiUrl) {
-  if (!requestedFlags.has("--register-webhook")) return;
-  await telegramApi("setWebhook", {
-    url: `${apiUrl}/telegram/webhook`,
-    secret_token: process.env.TELEGRAM_WEBHOOK_SECRET,
-    allowed_updates: ["callback_query"],
-  });
-  console.info("Local webhook registered for the configured bot.");
-}
-
-async function setMenuButton(webUrl) {
-  if (!requestedFlags.has("--set-menu-button")) return;
-  await telegramApi("setChatMenuButton", {
-    chat_id: process.env.TELEGRAM_OWNER_USER_ID,
-    menu_button: {
-      type: "web_app",
-      text: "Football Bot",
-      web_app: { url: webUrl },
-    },
-  });
-  console.info("The owner's local Telegram menu button was configured.");
-}
-
-function printReady(apiUrl, webUrl, tmux = false) {
-  const webhookUrl = `${apiUrl}/telegram/webhook`;
-  console.info(`\nLocal Telegram development is ready.
-  Mini App: ${webUrl}
-  API:      ${apiUrl}
-  Webhook:  ${webhookUrl}
-  ngrok UI: http://127.0.0.1:4040
-${tmux ? `  tmux:     ${tmuxSessionName} (Ctrl+b 0: ngrok, 1: API, 2: Web)\n` : ""}
-Open the Mini App from the local bot using the Mini App URL above.
-`);
-}
-
-async function startTmuxDevelopment(ngrokArguments) {
-  if (process.platform === "win32") {
-    fail("The --tmux option is available in WSL and other Unix-like environments only.");
-  }
-  if (tmuxSessionExists()) {
-    fail(`The tmux session '${tmuxSessionName}' already exists. Attach with 'tmux attach -t ${tmuxSessionName}' or stop it with 'tmux kill-session -t ${tmuxSessionName}'.`);
-  }
-
-  runTmux([
-    "new-session",
-    "-d",
-    "-s",
-    tmuxSessionName,
-    "-n",
-    "ngrok",
-    tmuxShellCommand(ngrokExecutable, ngrokArguments),
-  ], { environment: childEnvironment });
-
-  try {
-    const { apiUrl, webUrl } = await waitForTunnels();
-    const apiEnvironment = {
-      TELEGRAM_MINI_APP_URL: webUrl,
-      WEB_ORIGIN: webUrl,
-    };
-    const webEnvironment = {
-      VITE_API_BASE_URL: webUrl,
-      VITE_API_PROXY_TARGET: "http://127.0.0.1:6000",
-      VITE_PUBLIC_HOST: new URL(webUrl).hostname,
-    };
-
-    startTmuxWindow("api", packageManager, ["--filter", "@football/api", "exec", "tsx", "src/main.ts"], apiEnvironment);
-    startTmuxWindow("web", packageManager, ["--filter", "@football/web", "dev", "--host", "127.0.0.1"], webEnvironment);
-
-    await Promise.all([
-      waitForHttp("http://127.0.0.1:6000/health", "the local API"),
-      waitForHttp("http://127.0.0.1:6173/", "the local Web app"),
-    ]);
-
-    printReady(apiUrl, webUrl, true);
-    await registerWebhook(apiUrl);
-    await setMenuButton(webUrl);
-    runTmux(["attach-session", "-t", tmuxSessionName]);
-  } catch (error) {
-    runTmux(["kill-session", "-t", tmuxSessionName], { stdio: "ignore" });
-    throw error;
-  }
-}
-
 async function main() {
   const ngrokArguments = ["start", "--all"];
   const globalNgrokConfig = findGlobalNgrokConfig();
@@ -367,11 +234,6 @@ async function main() {
     ngrokArguments.push("--config", globalNgrokConfig);
   }
   ngrokArguments.push("--config", ngrokConfigFile);
-
-  if (requestedFlags.has("--tmux")) {
-    await startTmuxDevelopment(ngrokArguments);
-    return;
-  }
 
   const ngrok = startChild(ngrokExecutable, ngrokArguments);
   const { apiUrl, webUrl } = await waitForTunnels(ngrok);
@@ -396,9 +258,36 @@ async function main() {
     waitForHttp("http://127.0.0.1:6173/", "the local Web app"),
   ]);
 
-  printReady(apiUrl, webUrl);
-  await registerWebhook(apiUrl);
-  await setMenuButton(webUrl);
+  const webhookUrl = `${apiUrl}/telegram/webhook`;
+  console.info(`\nLocal Telegram development is ready.
+  Mini App: ${webUrl}
+  API:      ${apiUrl}
+  Webhook:  ${webhookUrl}
+  ngrok UI: http://127.0.0.1:4040
+
+Open the Mini App from the local bot using the Mini App URL above.
+`);
+
+  if (requestedFlags.has("--register-webhook")) {
+    await telegramApi("setWebhook", {
+      url: webhookUrl,
+      secret_token: process.env.TELEGRAM_WEBHOOK_SECRET,
+      allowed_updates: ["callback_query"],
+    });
+    console.info("Local webhook registered for the configured bot.");
+  }
+
+  if (requestedFlags.has("--set-menu-button")) {
+    await telegramApi("setChatMenuButton", {
+      chat_id: process.env.TELEGRAM_OWNER_USER_ID,
+      menu_button: {
+        type: "web_app",
+        text: "Football Bot",
+        web_app: { url: webUrl },
+      },
+    });
+    console.info("The owner's local Telegram menu button was configured.");
+  }
 
   await new Promise(() => {});
   await stopChild(ngrok);
