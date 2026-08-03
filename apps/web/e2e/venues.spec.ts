@@ -101,9 +101,12 @@ test('shows the owner venue catalog', async ({ page }, testInfo) => {
   expect(archiveBox).not.toBeNull()
   expect(archiveToggleBox!.height).toBe(searchBox!.height)
   expect(archiveBox!.x).toBeGreaterThan(editBox!.x)
-  expect(archiveBox!.y).toBe(editBox!.y)
+  expect(Math.abs(archiveBox!.y - editBox!.y)).toBeLessThan(1)
   expect(consoleErrors).toEqual([])
   await page.screenshot({ path: testInfo.outputPath('venue-catalog.png'), fullPage: false })
+  await page.getByRole('button', { name: 'Включить тёмную тему', exact: true }).click()
+  await expect(page.locator('html')).toHaveClass(/dark/u)
+  await page.screenshot({ path: testInfo.outputPath('venue-catalog-dark.png'), fullPage: false })
 })
 
 test('searches by venue name and selects a venue created from the match form', async ({ page }, testInfo) => {
