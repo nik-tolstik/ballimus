@@ -2,6 +2,7 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
+import { get as getHttp } from "node:http";
 import { resolve } from "node:path";
 
 const projectRoot = resolve(import.meta.dirname, "..");
@@ -194,9 +195,15 @@ async function waitForHttp(url, label) {
 
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(url);
-      if (response.ok) return;
-      lastError = new Error(`HTTP ${response.status}`);
+      const statusCode = await new Promise((resolveStatus, rejectStatus) => {
+        const request = getHttp(url, (response) => {
+          response.resume();
+          resolveStatus(response.statusCode ?? 0);
+        });
+        request.once("error", rejectStatus);
+      });
+      if (statusCode >= 200 && statusCode < 300) return;
+      lastError = new Error(`HTTP ${statusCode}`);
     } catch (error) {
       lastError = error;
     }
