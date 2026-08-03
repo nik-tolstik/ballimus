@@ -132,6 +132,39 @@ export function initialsForName(displayName: string): string {
   return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? '').join('') || '?'
 }
 
+const PLAYER_AVATAR_COLORS = [
+  'bg-rose-500/15 text-rose-700 dark:bg-rose-400/20 dark:text-rose-200',
+  'bg-orange-500/15 text-orange-700 dark:bg-orange-400/20 dark:text-orange-200',
+  'bg-amber-500/15 text-amber-700 dark:bg-amber-400/20 dark:text-amber-200',
+  'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-400/20 dark:text-emerald-200',
+  'bg-cyan-500/15 text-cyan-700 dark:bg-cyan-400/20 dark:text-cyan-200',
+  'bg-blue-500/15 text-blue-700 dark:bg-blue-400/20 dark:text-blue-200',
+  'bg-violet-500/15 text-violet-700 dark:bg-violet-400/20 dark:text-violet-200',
+  'bg-pink-500/15 text-pink-700 dark:bg-pink-400/20 dark:text-pink-200',
+] as const
+
+export function playerAvatarColor(playerId: string): (typeof PLAYER_AVATAR_COLORS)[number] {
+  let hash = 0
+  for (let index = 0; index < playerId.length; index += 1) {
+    hash = (hash * 31 + playerId.charCodeAt(index)) >>> 0
+  }
+  return PLAYER_AVATAR_COLORS[hash % PLAYER_AVATAR_COLORS.length]!
+}
+
+function PlayerAvatar({ playerId, displayName, avatarUrl, size = 'default' }: {
+  readonly playerId: string
+  readonly displayName: string
+  readonly avatarUrl: string | undefined
+  readonly size?: 'default' | 'sm' | 'lg'
+}) {
+  return (
+    <Avatar size={size}>
+      {avatarUrl !== undefined && <AvatarImage src={avatarUrl} alt="" />}
+      <AvatarFallback className={cn('font-medium', playerAvatarColor(playerId))}>{initialsForName(displayName)}</AvatarFallback>
+    </Avatar>
+  )
+}
+
 export function cancellationReasonText(option: CancellationReasonOption | undefined, otherReason: string): string {
   if (option === 'bad_weather') return 'Плохая погода'
   if (option === 'not_enough_players') return 'Недостаточно игроков'
@@ -331,7 +364,7 @@ export function voteRemovalAction(
 }
 
 function VoteIdentity({ vote }: { readonly vote: NormalizedVote }) {
-  return <><Avatar>{vote.avatarUrl !== undefined && <AvatarImage src={vote.avatarUrl} alt="" />}<AvatarFallback className="bg-primary/12 font-medium text-primary">{initialsForName(vote.readableName)}</AvatarFallback></Avatar><span className="min-w-0 flex-1 truncate text-sm font-medium">{vote.readableName}</span></>
+  return <><PlayerAvatar playerId={vote.playerId} displayName={vote.readableName} avatarUrl={vote.avatarUrl} /><span className="min-w-0 flex-1 truncate text-sm font-medium">{vote.readableName}</span></>
 }
 
 function DraggableVote({ match, vote, target, onRemove, disabled, draggable }: {
@@ -812,7 +845,7 @@ export function PlayersPanel({ players, onUpdatePlayer, saving }: PlayersPanelPr
     <section className="flex flex-col gap-5">
       <div><h1 className="text-2xl font-semibold tracking-tight">Игроки</h1><p className="mt-1 text-sm text-muted-foreground">Задавайте понятные имена участникам голосований</p></div>
       <div className="relative"><Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} className="h-10 pl-9" placeholder="Найти игрока" aria-label="Поиск игроков" /></div>
-      {filtered.length === 0 ? <EmptyState icon={Users} title={confirmedPlayers.length === 0 ? 'Игроков пока нет' : 'Игроки не найдены'} copy={confirmedPlayers.length === 0 ? 'Игроки появятся здесь после первого голоса.' : 'Попробуйте другое имя или username.'} /> : <Card className="gap-0 py-0">{filtered.map((player, index) => <div key={player.id}><button type="button" className="flex w-full items-center gap-3 p-3.5 text-left" onClick={() => openPseudonym(player)} aria-label={`Добавить псевдоним ${player.displayName}`}><Avatar size="lg">{player.avatarUrl !== undefined && <AvatarImage src={player.avatarUrl} alt="" />}<AvatarFallback className="bg-primary/12 text-primary">{player.initials}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{player.displayName}</p><p className="mt-0.5 truncate text-xs text-muted-foreground">{player.username === undefined ? 'Без username' : `@${player.username.replace(/^@/u, '')}`}</p></div><span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-primary"><Pencil className="size-3.5" />Псевдоним</span></button>{index < filtered.length - 1 && <Separator className="ml-16 w-[calc(100%-4rem)]" />}</div>)}</Card>}
+      {filtered.length === 0 ? <EmptyState icon={Users} title={confirmedPlayers.length === 0 ? 'Игроков пока нет' : 'Игроки не найдены'} copy={confirmedPlayers.length === 0 ? 'Игроки появятся здесь после первого голоса.' : 'Попробуйте другое имя или username.'} /> : <Card className="gap-0 py-0">{filtered.map((player, index) => <div key={player.id}><button type="button" className="flex w-full items-center gap-3 p-3.5 text-left" onClick={() => openPseudonym(player)} aria-label={`Добавить псевдоним ${player.displayName}`}><PlayerAvatar playerId={player.id} displayName={player.displayName} avatarUrl={player.avatarUrl} size="lg" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{player.displayName}</p><p className="mt-0.5 truncate text-xs text-muted-foreground">{player.username === undefined ? 'Без username' : `@${player.username.replace(/^@/u, '')}`}</p></div><span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-primary"><Pencil className="size-3.5" />Псевдоним</span></button>{index < filtered.length - 1 && <Separator className="ml-16 w-[calc(100%-4rem)]" />}</div>)}</Card>}
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}><SheetContent side="bottom" className="mx-auto w-full max-w-[480px] gap-0 rounded-t-2xl p-0"><div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/35" /><SheetHeader className="px-4 pt-3 pb-4"><SheetTitle className="text-lg">Псевдоним игрока</SheetTitle><SheetDescription>{selectedPlayer?.username === undefined ? 'Это имя будет отображаться в голосованиях и карточках.' : `@${selectedPlayer.username.replace(/^@/u, '')} · это имя будет отображаться в голосованиях и карточках.`}</SheetDescription></SheetHeader><form aria-label="Форма псевдонима игрока" onSubmit={(event) => { event.preventDefault(); submitPseudonym() }}><FieldGroup className="gap-3 px-4 pb-5"><Field><FieldLabel htmlFor="player-pseudonym">Понятное имя</FieldLabel><Input id="player-pseudonym" value={displayName} onChange={(event) => { setDisplayName(event.target.value); setValidation('') }} placeholder="Например, Никита" autoFocus /></Field><FieldError>{validation}</FieldError><Button type="submit" className="h-11" disabled={saving || selectedPlayer === undefined || displayName.trim() === selectedPlayer.displayName}>Сохранить псевдоним</Button></FieldGroup></form></SheetContent></Sheet>
     </section>

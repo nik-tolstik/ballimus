@@ -44,7 +44,7 @@ import App, { MatchEditor, TabBar, weatherWarningMessage } from './App'
 import { brandForEnvironment } from './brand'
 import { DatePicker } from './components/football/date-time-picker'
 import { editorTimeConfiguration, validateEditorValues } from './components/football/match-editor'
-import { availabilityCountAt, cancellationReasonText, CancellationReasonFields, initialsForName, MatchesPanel, MatchRoster, MatchSettings, PlayersPanel, rosterGroupCount, validateCancellationReason, validateExternalParticipantName, validateExternalParticipantValues, validateFinalMatchDetails, validatePlayerPseudonym, voteDropZoneStyle, voteOptionFromDropTarget, voteRemovalAction } from './components/football/panels'
+import { availabilityCountAt, cancellationReasonText, CancellationReasonFields, initialsForName, MatchesPanel, MatchRoster, MatchSettings, playerAvatarColor, PlayersPanel, rosterGroupCount, validateCancellationReason, validateExternalParticipantName, validateExternalParticipantValues, validateFinalMatchDetails, validatePlayerPseudonym, voteDropZoneStyle, voteOptionFromDropTarget, voteRemovalAction } from './components/football/panels'
 import type { NormalizedMatch, NormalizedPlayer } from './normalize'
 import type { TelegramSession } from './telegram'
 
@@ -298,7 +298,7 @@ describe('API-backed surface states', () => {
     expect(validateFinalMatchDetails(normalizedMatch, { time: '20:30', location: 'BOX365', venueType: 'outdoor', fieldPriceRubles: '120' })).toEqual({})
   })
 
-  it('validates cancellation reasons and builds roster avatar initials', () => {
+  it('validates cancellation reasons and builds colored roster avatar initials', () => {
     expect(validateCancellationReason(undefined, '')).toBe('Выберите причину отмены.')
     expect(validateCancellationReason('other', '   ')).toBe('Опишите другую причину.')
     expect(validateCancellationReason('bad_weather', '')).toBeUndefined()
@@ -307,6 +307,8 @@ describe('API-backed surface states', () => {
     expect(cancellationReasonText('other', '  Техническая проблема  ')).toBe('Техническая проблема')
     expect(initialsForName('Иван Петров')).toBe('ИП')
     expect(initialsForName('')).toBe('?')
+    expect(playerAvatarColor('player-1')).toBe(playerAvatarColor('player-1'))
+    expect(playerAvatarColor('player-1')).not.toBe(playerAvatarColor('player-2'))
   })
 
   it('shows a custom cancellation field only for the Other option', () => {
@@ -387,6 +389,8 @@ describe('API-backed surface states', () => {
     const markup = renderToStaticMarkup(<MatchRoster match={match} onCorrectVote={vi.fn(async () => undefined)} onRemoveVote={vi.fn()} onAddExternal={vi.fn()} onUpdateExternal={vi.fn()} onRemoveExternal={vi.fn()} disabled={false} />)
     expect(markup).toContain('После 19:00')
     expect(markup).toContain('После 20:00')
+    expect(markup).toContain(playerAvatarColor('player-1'))
+    expect(markup).toContain(playerAvatarColor('player-2'))
     expect(markup.match(/aria-label="Добавить дополнительных игроков"/gu)).toHaveLength(2)
     expect(voteOptionFromDropTarget('after:20:00')).toBe('after:20:00')
     expect(voteDropZoneStyle('after:19:00')).toMatchObject({ zone: expect.stringContaining('success') })
@@ -430,7 +434,7 @@ describe('API-backed surface states', () => {
     const confirmedPlayer: NormalizedPlayer = {
       id: 'player-1',
       displayName: 'Шоколадка228',
-      avatarUrl: 'data:image/jpeg;base64,YXZhdGFy',
+      avatarUrl: undefined,
       username: 'chocolate228',
       aliases: [],
       confirmed: true,
@@ -451,6 +455,7 @@ describe('API-backed surface states', () => {
     expect(markup).toContain('Задавайте понятные имена')
     expect(markup).toContain('Добавить псевдоним Шоколадка228')
     expect(markup).toContain('@chocolate228')
+    expect(markup).toContain(playerAvatarColor(confirmedPlayer.id))
     expect(markup).not.toContain('Заранее созданный')
     expect(markup).not.toContain('Добавить игрока')
     expect(validatePlayerPseudonym('')).toBe('Укажите понятное имя игрока.')
