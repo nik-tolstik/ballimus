@@ -10,6 +10,7 @@
 - Keep `.env.local`, the ngrok configuration, the bot, group, database, and webhook strictly local/non-production.
 - When creating a worktree, copy every existing non-example `.env*` file from the source checkout before starting the project. Keep those files local, do not print their contents, and never commit them.
 - After a worktree branch is merged into `main`, remove that worktree and its local branch unless the user explicitly asks to keep them.
+- Start every non-trivial implementation task with an issue in the `FBOT` team and Football Bot project. Before implementation, verify the issue has no active executor, move it to `In Progress`, and assign it to the agent when possible. Use a dedicated worktree and an issue-based branch name; move the issue to `Done` only after the pull request is merged, CI is green, and the change is in `main`. See `docs/linear.md` for the complete workflow and exceptions.
 
 ## Documentation
 
