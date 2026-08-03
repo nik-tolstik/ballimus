@@ -75,6 +75,23 @@ test('shows the owner venue catalog', async ({ page }, testInfo) => {
 
   await expect(page.getByRole('heading', { name: 'Места', exact: true })).toBeVisible()
   await expect(page.getByText(catalogVenue.name, { exact: true })).toBeVisible()
+  const searchInput = page.getByPlaceholder('Поиск по названию')
+  const archiveToggle = page.getByRole('button', { name: 'Архив', exact: true })
+  const editButton = page.getByRole('button', { name: `Редактировать ${catalogVenue.name}`, exact: true })
+  const archiveButton = page.getByRole('button', { name: `В архив ${catalogVenue.name}`, exact: true })
+  const [searchBox, archiveToggleBox, editBox, archiveBox] = await Promise.all([
+    searchInput.boundingBox(),
+    archiveToggle.boundingBox(),
+    editButton.boundingBox(),
+    archiveButton.boundingBox(),
+  ])
+  expect(searchBox).not.toBeNull()
+  expect(archiveToggleBox).not.toBeNull()
+  expect(editBox).not.toBeNull()
+  expect(archiveBox).not.toBeNull()
+  expect(archiveToggleBox!.height).toBe(searchBox!.height)
+  expect(archiveBox!.x).toBeGreaterThan(editBox!.x)
+  expect(archiveBox!.y).toBe(editBox!.y)
   await page.screenshot({ path: testInfo.outputPath('venue-catalog.png'), fullPage: false })
 })
 
