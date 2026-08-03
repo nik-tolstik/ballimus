@@ -6,14 +6,11 @@
  * OpenAPI spec version: 1.0.0
  */
 
-/**
- * @nullable
- */
-export type FinalizeMatchDtoVenueType = typeof FinalizeMatchDtoVenueType[keyof typeof FinalizeMatchDtoVenueType] | null;
+export type VenueUpdateDtoVenueType = typeof VenueUpdateDtoVenueType[keyof typeof VenueUpdateDtoVenueType];
 
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const FinalizeMatchDtoVenueType = {
+export const VenueUpdateDtoVenueType = {
   outdoor: 'outdoor',
   indoor: 'indoor',
 } as const;

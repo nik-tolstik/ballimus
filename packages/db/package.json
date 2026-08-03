@@ -21,7 +21,7 @@
   "scripts": {
     "db:check": "pnpm exec drizzle-kit check --config=drizzle.config.ts",
     "db:generate": "pnpm exec drizzle-kit generate --config=drizzle.config.ts",
-    "db:migrate": "pnpm exec tsx src/migrate.ts",
+    "db:migrate": "node ../../scripts/run-tsx.mjs src/migrate.ts",
     "lint": "pnpm exec oxlint src drizzle.config.ts",
     "test": "pnpm exec vitest run --passWithNoTests --config vitest.config.ts",
     "typecheck": "pnpm exec tsc --project tsconfig.json --noEmit",

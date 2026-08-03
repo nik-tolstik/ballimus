@@ -19,6 +19,11 @@ export interface PatchMatchDto {
    * @maxItems 6
    */
   timeOptions?: string[];
+  /**
+   * @nullable
+   * @pattern ^[1-9]\d*$
+   */
+  venueId?: string | null;
   /** @nullable */
   location?: string | null;
   /** @nullable */

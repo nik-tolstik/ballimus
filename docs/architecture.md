@@ -70,7 +70,7 @@ Each callback claims its Telegram `update_id` in `telegram_updates`. The vote tr
 
 After an applied vote, the API also refreshes the player's Telegram profile photo when the cache is older than seven days. It downloads the smallest available image with a 256 KiB limit, stores the validated JPEG/PNG/WebP copy in PostgreSQL, and exposes it only inside authenticated REST responses as a `data:` URL. Telegram bot tokens and temporary Bot API file URLs never reach the browser. Missing or unavailable photos remain a normal initials fallback.
 
-An exact-time public card uses `going`, `maybe`, and `not_going` buttons. A time poll can instead contain precise options such as `19:00` and `20:00`, or availability thresholds such as `after 19:00` and `after 20:00`. Each player may toggle any number of precise options independently; pressing a selected option again removes only that choice. Precise-option thresholds are evaluated per option, while after-time thresholds are cumulative and remain single-choice. The bot then asks the owner to book a field and enter the final time, location, venue type, and price in the Mini App. Finalization confirms the match atomically, refreshes the card, switches it to exact-attendance buttons, and queues the confirmation notification. A confirmed count is eligible going votes plus external participants. The required-player value is a threshold, not a hard roster capacity.
+An exact-time public card uses `going`, `maybe`, and `not_going` buttons. A time poll can instead contain precise options such as `19:00` and `20:00`, or availability thresholds such as `after 19:00` and `after 20:00`. Each player may toggle any number of precise options independently; pressing a selected option again removes only that choice. Precise-option thresholds are evaluated per option, while after-time thresholds are cumulative and remain single-choice. The bot then asks the owner to book a field and select a venue from the catalog, then enter the final time and price in the Mini App. Finalization confirms the match atomically, refreshes the card, switches it to exact-attendance buttons, and queues the confirmation notification. A confirmed count is eligible going votes plus external participants. The required-player value is a threshold, not a hard roster capacity.
 
 Before confirmation, the owner may replace a time poll with one fixed exact time. This conversion keeps every `going` vote, clears its poll-specific time selection in the same transaction, and intentionally accepts an exact time earlier than the original availability threshold as an owner decision. Ambiguous conversions into another poll mode remain blocked once votes exist.
 
@@ -82,7 +82,8 @@ The baseline model includes:
 
 - `telegram_updates` — webhook update claims and processing status;
 - `players` and `player_usernames` — late-bound Telegram identities, readable names, aliases, and the bounded profile-photo cache;
-- `matches` — schedule, location, venue, threshold, lifecycle, owner, and optimistic version;
+- `venues` — owner-managed shared venue records, links, contacts, archive state, and optimistic version;
+- `matches` — schedule, denormalized venue details plus an optional venue link, threshold, lifecycle, owner, and optimistic version;
 - `match_messages` — Telegram public-card reference and publication/reconciliation state;
 - `votes` — one current choice per player and match;
 - `external_participants` — individually editable owner-managed players; each row represents one person;

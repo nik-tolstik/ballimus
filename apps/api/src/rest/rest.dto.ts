@@ -2,12 +2,14 @@ import { Transform, Type } from "class-transformer";
 import {
   ArrayMaxSize,
   ArrayMinSize,
+  ArrayUnique,
   IsArray,
   IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
   IsString,
+  IsUrl,
   Matches,
   Max,
   MaxLength,
@@ -24,6 +26,7 @@ const DECIMAL_ID_PATTERN = /^[1-9]\d*$/u;
 const CALENDAR_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 const LOCAL_TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/u;
 const USERNAME_PATTERN = /^@?[A-Za-z][A-Za-z0-9_]{4,31}$/u;
+const PHONE_PATTERN = /^\+?[0-9][0-9\s().-]{4,48}$/u;
 
 export class MatchCreateDto {
   @ApiProperty({ type: String, example: "2026-08-03", pattern: "^\\d{4}-\\d{2}-\\d{2}$" })
@@ -51,12 +54,20 @@ export class MatchCreateDto {
   @Matches(LOCAL_TIME_PATTERN, { each: true })
   timeOptions?: string[];
 
-  @ApiProperty({ type: String, nullable: true, example: "BOX365 <main>" })
-  @ValidateIf((_object, value: unknown) => value !== null)
+  @ApiPropertyOptional({ type: String, nullable: true, example: "15", pattern: "^[1-9]\\d*$" })
+  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== null && value !== undefined)
+  @IsString()
+  @Matches(DECIMAL_ID_PATTERN)
+  venueId?: string | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, example: "BOX365 <main>" })
+  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== null && value !== undefined)
   @IsString()
   @MinLength(2)
   @MaxLength(200)
-  location!: string | null;
+  location?: string | null;
 
   @ApiPropertyOptional({ type: String, enum: venueTypes, nullable: true, example: "outdoor" })
   @IsOptional()
@@ -121,6 +132,13 @@ export class PatchMatchDto {
   @Matches(LOCAL_TIME_PATTERN, { each: true })
   timeOptions?: string[];
 
+  @ApiPropertyOptional({ type: String, nullable: true, example: "15", pattern: "^[1-9]\\d*$" })
+  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== null && value !== undefined)
+  @IsString()
+  @Matches(DECIMAL_ID_PATTERN)
+  venueId?: string | null;
+
   @ApiPropertyOptional({ type: String, nullable: true, example: "BOX365 <main>" })
   @IsOptional()
   @IsString()
@@ -178,6 +196,89 @@ export class MatchListQueryDto {
   offset?: number;
 }
 
+export class VenueListQueryDto {
+  @ApiPropertyOptional({ type: Boolean, default: false })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => value === true || value === "true")
+  @IsBoolean()
+  includeArchived?: boolean;
+}
+
+export class VenueCreateDto {
+  @ApiProperty({ type: String, example: "BOX365 Октябрьская", minLength: 2, maxLength: 200 })
+  @Transform(({ value }: { value: unknown }) => typeof value === "string" ? value.trim() : value)
+  @IsString()
+  @MinLength(2)
+  @MaxLength(200)
+  name!: string;
+
+  @ApiProperty({ type: String, example: "https://maps.example.com/box365", format: "uri" })
+  @Transform(({ value }: { value: unknown }) => typeof value === "string" ? value.trim() : value)
+  @IsUrl({ protocols: ["http", "https"], require_protocol: true })
+  @MaxLength(2_000)
+  mapUrl!: string;
+
+  @ApiProperty({ type: String, enum: venueTypes, example: "indoor" })
+  @IsIn(venueTypes)
+  venueType!: (typeof venueTypes)[number];
+
+  @ApiPropertyOptional({ type: [String], example: ["+375 29 123-45-67"], maxItems: 5 })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @Matches(PHONE_PATTERN, { each: true })
+  bookingPhones?: string[];
+
+  @ApiPropertyOptional({ type: String, nullable: true, example: "https://box365.by", format: "uri" })
+  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== null && value !== undefined)
+  @Transform(({ value }: { value: unknown }) => typeof value === "string" ? value.trim() : value)
+  @IsUrl({ protocols: ["http", "https"], require_protocol: true })
+  @MaxLength(2_000)
+  websiteUrl?: string | null;
+}
+
+export class VenueUpdateDto {
+  @ApiPropertyOptional({ type: String, minLength: 2, maxLength: 200 })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => typeof value === "string" ? value.trim() : value)
+  @IsString()
+  @MinLength(2)
+  @MaxLength(200)
+  name?: string;
+
+  @ApiPropertyOptional({ type: String, format: "uri" })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => typeof value === "string" ? value.trim() : value)
+  @IsUrl({ protocols: ["http", "https"], require_protocol: true })
+  @MaxLength(2_000)
+  mapUrl?: string;
+
+  @ApiPropertyOptional({ type: String, enum: venueTypes })
+  @IsOptional()
+  @IsIn(venueTypes)
+  venueType?: (typeof venueTypes)[number];
+
+  @ApiPropertyOptional({ type: [String], maxItems: 5 })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @Matches(PHONE_PATTERN, { each: true })
+  bookingPhones?: string[];
+
+  @ApiPropertyOptional({ type: String, nullable: true, format: "uri" })
+  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== null && value !== undefined)
+  @Transform(({ value }: { value: unknown }) => typeof value === "string" ? value.trim() : value)
+  @IsUrl({ protocols: ["http", "https"], require_protocol: true })
+  @MaxLength(2_000)
+  websiteUrl?: string | null;
+}
+
 export class CancelMatchDto {
   @ApiProperty({ type: String, example: "Плохая погода", minLength: 1, maxLength: 500 })
   @IsString()
@@ -192,17 +293,10 @@ export class FinalizeMatchDto {
   @Matches(LOCAL_TIME_PATTERN)
   time!: string;
 
-  @ApiProperty({ type: String, example: "BOX365" })
-  @Transform(({ value }: { value: unknown }) => typeof value === "string" ? value.trim() : value)
+  @ApiProperty({ type: String, example: "15", pattern: "^[1-9]\\d*$" })
   @IsString()
-  @MinLength(2)
-  @MaxLength(200)
-  location!: string;
-
-  @ApiPropertyOptional({ type: String, enum: venueTypes, nullable: true, example: "outdoor" })
-  @IsOptional()
-  @IsIn(venueTypes)
-  venueType?: (typeof venueTypes)[number] | null;
+  @Matches(DECIMAL_ID_PATTERN)
+  venueId!: string;
 
   @ApiProperty({ type: Number, example: 120, minimum: 0 })
   @Type(() => Number)

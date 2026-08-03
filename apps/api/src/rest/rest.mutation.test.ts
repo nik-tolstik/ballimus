@@ -103,6 +103,7 @@ describe("REST mutation transaction adapter", () => {
       timeMode: "exact",
       timeOptions: [],
       selectedTime: null,
+      venueId: null,
       location: "BOX365",
       venueType: "outdoor",
       fieldPriceRubles: null,
@@ -240,6 +241,7 @@ describe("REST mutation transaction adapter", () => {
       timeMode: "availability",
       timeOptions: ["20:00"],
       selectedTime: null,
+      venueId: null,
       location: "BOX365",
       venueType: "outdoor",
       fieldPriceRubles: null,
@@ -367,6 +369,7 @@ describe("REST mutation transaction adapter", () => {
       timeMode: "availability",
       timeOptions: ["19:00", "20:00"],
       selectedTime: null,
+      venueId: null,
       location: null,
       venueType: "outdoor",
       fieldPriceRubles: null,
@@ -383,12 +386,25 @@ describe("REST mutation transaction adapter", () => {
       ...current,
       scheduledAt: new Date("2026-08-03T17:30:00.000Z"),
       selectedTime: "20:00",
+      venueId: 5n,
       location: "BOX365",
       fieldPriceRubles: 120,
       title: "03.08.2026 20:30 (BOX365, 120 рублей)",
       version: 2,
     } as const;
     const confirmed = { ...updated, status: "confirmed", version: 3 } as const;
+    const venue = {
+      id: 5n,
+      name: "BOX365",
+      mapUrl: "https://maps.example.test/box365",
+      venueType: "outdoor",
+      bookingPhones: [],
+      websiteUrl: null,
+      archivedAt: null,
+      version: 1,
+      createdAt: new Date("2026-07-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-07-01T00:00:00.000Z"),
+    } as const;
     const counts = {
       goingVotes: 10,
       externalParticipants: 0,
@@ -408,6 +424,10 @@ describe("REST mutation transaction adapter", () => {
         transitionStatus: vi.fn().mockResolvedValue(confirmed),
         getById: vi.fn().mockResolvedValue(confirmed),
       },
+      venues: {
+        getForUpdate: vi.fn().mockResolvedValue(venue),
+        findById: vi.fn().mockResolvedValue(venue),
+      },
       matchMessages: { findByMatchId: vi.fn().mockResolvedValue(undefined) },
       votes: {
         rosterCounts: vi.fn().mockResolvedValue(counts),
@@ -422,14 +442,14 @@ describe("REST mutation transaction adapter", () => {
 
     const response = await service.finalizeMatch(ownerId, "finalize-key", "1", 1n, {
       time: "20:30",
-      location: "BOX365",
-      venueType: "outdoor",
+      venueId: "5",
       fieldPriceRubles: 120,
     });
 
     expect(repositories.matches.update).toHaveBeenCalledWith(1n, expect.objectContaining({
       expectedVersion: 1,
       selectedTime: "20:00",
+      venueId: 5n,
       location: "BOX365",
       fieldPriceRubles: 120,
     }));
@@ -494,5 +514,94 @@ describe("REST mutation transaction adapter", () => {
         details: { planningStage: "recruiting_players" },
       });
     }
+  });
+
+  it("synchronizes an edited venue into linked active matches and queues a card refresh", async () => {
+    const service = new OwnerRestService(fakeDatabase, config);
+    const updatedAt = new Date("2026-07-01T00:00:00.000Z");
+    const venue = {
+      id: 5n,
+      name: "BOX365 Пушкинская",
+      mapUrl: "https://maps.example.test/box365-pushkin",
+      venueType: "indoor",
+      bookingPhones: ["+375 29 123-45-67"],
+      websiteUrl: "https://box365.example.test",
+      archivedAt: null,
+      version: 2,
+      createdAt: updatedAt,
+      updatedAt,
+    } as const;
+    const linkedMatch = {
+      id: 1n,
+      telegramChatId: -100n,
+      scheduledAt: new Date("2026-08-03T17:00:00.000Z"),
+      scheduleDate: "2026-08-03",
+      timeMode: "exact",
+      timeOptions: [],
+      selectedTime: null,
+      venueId: 5n,
+      location: "BOX365 Октябрьская",
+      venueType: "indoor",
+      fieldPriceRubles: 120,
+      title: "Воскресенье, 3 августа · 20:00 — BOX365 Октябрьская · 120 руб.",
+      requiredPlayers: 10,
+      status: "active",
+      cancellationReason: null,
+      creatorTelegramUserId: ownerId,
+      version: 3,
+      createdAt: updatedAt,
+      updatedAt,
+    } as const;
+    const synchronizedMatch = {
+      ...linkedMatch,
+      location: venue.name,
+      title: "Воскресенье, 3 августа · 20:00 — BOX365 Пушкинская · 120 руб.",
+      version: 4,
+    } as const;
+    const repositories = {
+      idempotency: {
+        beginInTransaction: vi.fn().mockResolvedValue({ status: "started", record: { id: 1n } }),
+        complete: vi.fn().mockResolvedValue({}),
+      },
+      venues: {
+        update: vi.fn().mockResolvedValue(venue),
+        findById: vi.fn().mockResolvedValue(venue),
+      },
+      matches: {
+        list: vi.fn().mockResolvedValue([linkedMatch]),
+        syncVenueDetails: vi.fn().mockResolvedValue(synchronizedMatch),
+        getById: vi.fn().mockResolvedValue(synchronizedMatch),
+      },
+      matchMessages: { findByMatchId: vi.fn().mockResolvedValue({ publicationState: "published" }) },
+      votes: {
+        listByMatchId: vi.fn().mockResolvedValue([]),
+        rosterCounts: vi.fn().mockResolvedValue({
+          goingVotes: 0,
+          externalParticipants: 0,
+          goingCount: 0,
+          requiredPlayers: 10,
+          thresholdReached: false,
+          remainingToThreshold: 10,
+        }),
+      },
+      externalParticipants: { listByMatchId: vi.fn().mockResolvedValue([]) },
+      players: { getById: vi.fn() },
+      outbox: { insertInTransaction: vi.fn().mockResolvedValue({}) },
+    } as unknown as TransactionRepositories;
+    withTransactionMock.mockImplementationOnce(async (_db, callback) => callback(repositories));
+
+    await service.updateVenue(ownerId, "venue-update-key", "1", 5n, { name: venue.name });
+
+    expect(repositories.venues.update).toHaveBeenCalledWith(5n, { name: venue.name, expectedVersion: 1 });
+    expect(repositories.matches.syncVenueDetails).toHaveBeenCalledWith(1n, expect.objectContaining({
+      venueId: 5n,
+      location: venue.name,
+      venueType: "indoor",
+    }));
+    expect(repositories.outbox.insertInTransaction).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "refresh_public_card",
+      matchId: 1n,
+      deduplicationKey: expect.stringMatching(/^refresh_public_card:1:/u),
+    }));
   });
 });

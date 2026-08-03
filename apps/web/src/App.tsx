@@ -10,17 +10,21 @@ import {
   getGetOwnerMatchQueryKey,
   getListOwnerMatchesQueryKey,
   getListOwnerPlayersQueryKey,
+  getListOwnerVenuesQueryKey,
+  useArchiveOwnerVenue,
   useCancelOwnerMatch,
   useCompleteOwnerMatch,
   useConfirmOwnerMatch,
   useCorrectOwnerMatchVote,
   useCreateOwnerExternalParticipant,
   useCreateOwnerMatch,
+  useCreateOwnerVenue,
   useFinalizeOwnerMatch,
   useGetOwnerBootstrap,
   useGetOwnerMatch,
   useListOwnerMatches,
   useListOwnerPlayers,
+  useListOwnerVenues,
   usePatchOwnerMatch,
   usePublishOwnerMatch,
   useReconcileOwnerMatchCard,
@@ -29,6 +33,8 @@ import {
   useSendOwnerMatchWeather,
   useUpdateOwnerExternalParticipant,
   useUpdateOwnerPlayerReadableName,
+  useUpdateOwnerVenue,
+  useRestoreOwnerVenue,
   type MatchCreateDto,
   type PatchMatchDto,
 } from '@football/api-client'
@@ -36,17 +42,21 @@ import {
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { MatchesPanel, PlayersPanel, HistoryPanel, voteRemovalAction, type FinalMatchDetailsValues } from '@/components/football/panels'
+import { VenuesPanel } from '@/components/football/venues-panel'
 import { TabBar, type Tab } from '@/components/football/navigation'
 import { StateScreen } from '@/components/football/state-screen'
 import { ThemeToggle } from '@/components/football/theme-toggle'
 import { applicationBrand } from '@/brand'
 import type { EditorValues } from '@/components/football/match-editor'
+import type { VenueFormValues } from '@/components/football/venue-form'
 import {
   normalizeDashboard,
   normalizeMatchEnvelope,
+  normalizeVenue,
   type NormalizedExternalParticipant,
   type NormalizedMatch,
   type NormalizedPlayer,
+  type NormalizedVenue,
   type NormalizedVote,
   type NormalizedVoteOption,
   type NormalizedRosterTarget,
@@ -106,6 +116,9 @@ export function App({ telegramSession }: AppProps = {}) {
       ...(matchId === undefined ? [] : [queryClient.invalidateQueries({ queryKey: getGetOwnerMatchQueryKey(matchId) })]),
     ])
   }
+  const invalidateVenues = () => {
+    void queryClient.invalidateQueries({ queryKey: getListOwnerVenuesQueryKey({ includeArchived: true }) })
+  }
   const handleMutationError = (error: unknown) => {
     const auth = authFailureFor(error)
     if (auth !== undefined) { setAuthFailure(auth); return }
@@ -123,7 +136,9 @@ export function App({ telegramSession }: AppProps = {}) {
   const bootstrapQuery = useGetOwnerBootstrap({ query: { enabled: queryEnabled } })
   const matchesQuery = useListOwnerMatches({ limit: 100 }, { query: { enabled: queryEnabled } })
   const playersQuery = useListOwnerPlayers({ limit: 100 }, { query: { enabled: queryEnabled } })
+  const venuesQuery = useListOwnerVenues({ includeArchived: true }, { query: { enabled: queryEnabled } })
   const dashboard = useMemo(() => normalizeDashboard(bootstrapQuery.data, matchesQuery.data, playersQuery.data), [bootstrapQuery.data, matchesQuery.data, playersQuery.data])
+  const venues = useMemo(() => venuesQuery.data?.venues.map(normalizeVenue) ?? [], [venuesQuery.data])
   const upcoming = dashboard.matches.filter((match) => match.status !== 'completed' && match.status !== 'cancelled')
   const selectedSummary = upcoming.find((match) => match.id === selectedId)
   const effectiveSelectedId = selectedId
@@ -145,8 +160,12 @@ export function App({ telegramSession }: AppProps = {}) {
   const updateExternalMutation = useUpdateOwnerExternalParticipant(mutationOptions)
   const removeExternalMutation = useRemoveOwnerExternalParticipant(mutationOptions)
   const updatePlayerMutation = useUpdateOwnerPlayerReadableName(mutationOptions)
+  const createVenueMutation = useCreateOwnerVenue(mutationOptions)
+  const updateVenueMutation = useUpdateOwnerVenue(mutationOptions)
+  const archiveVenueMutation = useArchiveOwnerVenue(mutationOptions)
+  const restoreVenueMutation = useRestoreOwnerVenue(mutationOptions)
 
-  const queryErrors = [bootstrapQuery.error, matchesQuery.error, playersQuery.error, matchQuery.error]
+  const queryErrors = [bootstrapQuery.error, matchesQuery.error, playersQuery.error, venuesQuery.error, matchQuery.error]
   const queryAuthFailure = queryErrors.map(authFailureFor).find((value) => value !== undefined)
   const effectiveAuthFailure = authFailure ?? queryAuthFailure
 
@@ -156,7 +175,7 @@ export function App({ telegramSession }: AppProps = {}) {
   if (effectiveAuthFailure === 'expired') return <StateScreen kind="unauthorized" title="Сессия Telegram истекла" copy="Закройте это окно и заново откройте Mini App из Telegram, чтобы получить свежую подписанную сессию." />
   if (session.status === 'error') return <StateScreen kind="error" title="Не удалось запустить Telegram" copy={session.reason ?? 'Telegram не смог запустить мини-приложение.'} />
 
-  const queryLoading = [bootstrapQuery, matchesQuery, playersQuery].some((query) => query.isPending && query.data === undefined)
+  const queryLoading = [bootstrapQuery, matchesQuery, playersQuery, venuesQuery].some((query) => query.isPending && query.data === undefined)
   if (queryLoading) return <StateScreen kind="loading" title="Загружаем команду" copy="Получаем актуальные матчи и состав…" />
   const queryError = queryErrors.find((error) => error !== null && error !== undefined)
   if (queryError !== undefined) return <StateScreen kind="error" title="Не удалось загрузить команду" copy={errorMessage(queryError)} action={<Button variant="secondary" onClick={() => { void queryClient.refetchQueries({ type: 'active' }) }}><RotateCw data-icon="inline-start" /> Повторить</Button>} />
@@ -165,21 +184,20 @@ export function App({ telegramSession }: AppProps = {}) {
   const finishMutation = (matchId?: string) => { invalidateDashboard(matchId); setConflict('') }
 
   const handleCreate = async (values: EditorValues) => {
-    const data: MatchCreateDto = { date: values.date, time: values.timeMode === 'exact' ? values.time : null, timeMode: values.timeMode, ...(values.timeMode !== 'exact' ? { timeOptions: [...values.timeOptions] } : {}), location: values.location || null, venueType: values.venueType || null, requiredPlayers: values.requiredPlayers, fieldPriceRubles: values.fieldPriceByn.trim() === '' ? null : Number(values.fieldPriceByn) }
+    const data: MatchCreateDto = { date: values.date, time: values.timeMode === 'exact' ? values.time : null, timeMode: values.timeMode, ...(values.timeMode !== 'exact' ? { timeOptions: [...values.timeOptions] } : {}), ...(values.venueId === undefined ? {} : { venueId: values.venueId }), requiredPlayers: values.requiredPlayers, fieldPriceRubles: values.fieldPriceByn.trim() === '' ? null : Number(values.fieldPriceByn) }
     const response = await createMutation.mutateAsync({ data, headers: { 'Idempotency-Key': requestKey() } })
     finishMutation(response.match.id)
   }
   const handlePatch = (match: NormalizedMatch, values: EditorValues) => {
-    const data: PatchMatchDto = { date: values.date || null, time: values.timeMode === 'exact' ? values.time : null, timeMode: values.timeMode, ...(values.timeMode !== 'exact' ? { timeOptions: [...values.timeOptions] } : {}), location: values.location || null, venueType: values.venueType || null, requiredPlayers: values.requiredPlayers, fieldPriceRubles: values.fieldPriceByn.trim() === '' ? null : Number(values.fieldPriceByn) }
+    const data: PatchMatchDto = { date: values.date || null, time: values.timeMode === 'exact' ? values.time : null, timeMode: values.timeMode, ...(values.timeMode !== 'exact' ? { timeOptions: [...values.timeOptions] } : {}), ...(values.venueId === undefined ? {} : { venueId: values.venueId }), requiredPlayers: values.requiredPlayers, fieldPriceRubles: values.fieldPriceByn.trim() === '' ? null : Number(values.fieldPriceByn) }
     patchMutation.mutate({ id: match.id, data, headers: versionedHeaders(match) }, { onSuccess: () => finishMutation(match.id) })
   }
   const handlePublish = (match: NormalizedMatch) => publishMutation.mutate({ id: match.id, headers: versionedHeaders(match) }, { onSuccess: () => finishMutation(match.id) })
   const handleFinalize = async (match: NormalizedMatch, values: FinalMatchDetailsValues) => {
     const data = {
       time: values.time,
-      location: values.location,
       fieldPriceRubles: Number(values.fieldPriceRubles),
-      ...(values.venueType === '' ? {} : { venueType: values.venueType }),
+      venueId: values.venueId!,
     }
     await finalizeMutation.mutateAsync({ id: match.id, data, headers: versionedHeaders(match) })
     finishMutation(match.id)
@@ -209,10 +227,23 @@ export function App({ telegramSession }: AppProps = {}) {
   const handleReconcile = (match: NormalizedMatch, action: 'attach' | 'retry', telegramMessageId?: string) => reconcileMutation.mutate({ id: match.id, data: { action, ...(telegramMessageId === undefined ? {} : { telegramMessageId }) }, headers: { 'Idempotency-Key': requestKey() } }, { onSuccess: () => finishMutation(match.id) })
   const handleSendWeather = (match: NormalizedMatch) => weatherMutation.mutate({ id: match.id }, { onSuccess: () => toast.success('Прогноз погоды отправлен в чат.') })
   const handleUpdatePlayer = (player: NormalizedPlayer, displayName: string) => updatePlayerMutation.mutate({ id: player.id, data: { displayName }, headers: { 'Idempotency-Key': requestKey() } }, { onSuccess: () => finishMutation() })
+  const handleCreateVenue = async (values: VenueFormValues) => {
+    const response = await createVenueMutation.mutateAsync({ data: values, headers: { 'Idempotency-Key': requestKey() } })
+    invalidateVenues()
+    return normalizeVenue(response.venue)
+  }
+  const handleUpdateVenue = async (venue: NormalizedVenue, values: VenueFormValues) => {
+    await updateVenueMutation.mutateAsync({ id: venue.id, data: values, headers: { 'Idempotency-Key': requestKey(), 'If-Match': String(venue.version) } })
+    invalidateVenues()
+    invalidateDashboard()
+  }
+  const handleArchiveVenue = (venue: NormalizedVenue) => archiveVenueMutation.mutate({ id: venue.id, headers: { 'Idempotency-Key': requestKey(), 'If-Match': String(venue.version) } }, { onSuccess: () => { invalidateVenues(); invalidateDashboard() } })
+  const handleRestoreVenue = (venue: NormalizedVenue) => restoreVenueMutation.mutate({ id: venue.id, headers: { 'Idempotency-Key': requestKey(), 'If-Match': String(venue.version) } }, { onSuccess: () => { invalidateVenues(); invalidateDashboard() } })
 
   const actionPending = [publishMutation, finalizeMutation, confirmMutation, completeMutation, cancelMutation, reconcileMutation, weatherMutation, correctVoteMutation, removeVoteMutation, createExternalMutation, updateExternalMutation, removeExternalMutation].some((mutation) => mutation.isPending)
   const playerSaving = updatePlayerMutation.isPending
-  const mutationError = [patchMutation, createMutation, publishMutation, finalizeMutation, confirmMutation, completeMutation, cancelMutation, reconcileMutation, correctVoteMutation, removeVoteMutation, createExternalMutation, updateExternalMutation, removeExternalMutation, updatePlayerMutation].map((mutation) => mutation.error).find((error) => error !== null && error !== undefined)
+  const venueSaving = [createVenueMutation, updateVenueMutation, archiveVenueMutation, restoreVenueMutation].some((mutation) => mutation.isPending)
+  const mutationError = [patchMutation, createMutation, publishMutation, finalizeMutation, confirmMutation, completeMutation, cancelMutation, reconcileMutation, correctVoteMutation, removeVoteMutation, createExternalMutation, updateExternalMutation, removeExternalMutation, updatePlayerMutation, createVenueMutation, updateVenueMutation, archiveVenueMutation, restoreVenueMutation].map((mutation) => mutation.error).find((error) => error !== null && error !== undefined)
   const matchDetailOpen = tab === 'matches' && selectedId !== undefined
   const handleTabChange = (nextTab: Tab) => { setSelectedId(undefined); setTab(nextTab) }
 
@@ -220,7 +251,8 @@ export function App({ telegramSession }: AppProps = {}) {
     <main className="app-shell">
       {!matchDetailOpen && <header className="flex h-14 items-center justify-between bg-background/90 shadow-sm backdrop-blur-sm"><div className="flex items-center gap-2.5"><img src={applicationBrand.logo} alt="" width="36" height="36" className="size-9 rounded-full object-cover" /><p className="text-base font-semibold leading-none">{applicationBrand.name}</p></div><ThemeToggle /></header>}
       <div className={matchDetailOpen ? 'px-4 pt-3 pb-24' : 'px-4 py-5 pb-24'}>{mutationError !== undefined && <Alert variant="destructive" className="mb-4"><TriangleAlert /><AlertTitle>Не удалось сохранить изменения</AlertTitle><AlertDescription>{errorMessage(mutationError)}</AlertDescription></Alert>}<AnimatePresence mode="wait" initial={false}><motion.div key={tab} initial={reduceMotion ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? {} : { opacity: 0, y: -4 }} transition={{ duration: 0.18, ease: 'easeOut' }}>
-        {tab === 'matches' && <MatchesPanel matches={upcoming} selected={selected} onSelect={setSelectedId} onCreate={handleCreate} onPatch={handlePatch} onPublish={handlePublish} onFinalize={handleFinalize} onConfirm={handleConfirm} onComplete={handleComplete} onSendWeather={handleSendWeather} onCancel={handleCancel} onCorrectVote={handleCorrectVote} onRemoveVote={handleRemoveVote} onAddExternal={handleAddExternal} onUpdateExternal={handleUpdateExternal} onRemoveExternal={handleRemoveExternal} onReconcile={handleReconcile} conflict={conflict} onClearConflict={() => setConflict('')} saving={createMutation.isPending || patchMutation.isPending} actionPending={actionPending} />}
+        {tab === 'matches' && <MatchesPanel matches={upcoming} venues={venues} selected={selected} onSelect={setSelectedId} onCreate={handleCreate} onPatch={handlePatch} onCreateVenue={handleCreateVenue} onPublish={handlePublish} onFinalize={handleFinalize} onConfirm={handleConfirm} onComplete={handleComplete} onSendWeather={handleSendWeather} onCancel={handleCancel} onCorrectVote={handleCorrectVote} onRemoveVote={handleRemoveVote} onAddExternal={handleAddExternal} onUpdateExternal={handleUpdateExternal} onRemoveExternal={handleRemoveExternal} onReconcile={handleReconcile} conflict={conflict} onClearConflict={() => setConflict('')} saving={createMutation.isPending || patchMutation.isPending || venueSaving} actionPending={actionPending} />}
+        {tab === 'venues' && <VenuesPanel venues={venues} onCreate={handleCreateVenue} onUpdate={handleUpdateVenue} onArchive={handleArchiveVenue} onRestore={handleRestoreVenue} saving={venueSaving} />}
         {tab === 'players' && <PlayersPanel players={dashboard.players} onUpdatePlayer={handleUpdatePlayer} saving={playerSaving} />}
         {tab === 'history' && <HistoryPanel history={dashboard.history} />}
       </motion.div></AnimatePresence></div>

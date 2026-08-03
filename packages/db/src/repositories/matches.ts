@@ -33,6 +33,7 @@ export interface CreateMatchInput {
   readonly timeMode?: MatchTimeMode;
   readonly timeOptions?: readonly string[];
   readonly selectedTime?: string | null;
+  readonly venueId?: DatabaseIdentifier | null;
   readonly location?: string | null;
   readonly venueType?: VenueType | null;
   readonly fieldPriceRubles?: number | null;
@@ -50,6 +51,7 @@ export interface UpdateMatchInput {
   readonly timeMode?: MatchTimeMode;
   readonly timeOptions?: readonly string[];
   readonly selectedTime?: string | null;
+  readonly venueId?: DatabaseIdentifier | null;
   readonly location?: string | null;
   readonly venueType?: VenueType | null;
   readonly fieldPriceRubles?: number | null;
@@ -77,6 +79,15 @@ export interface MatchListOptions {
   readonly statuses?: readonly MatchStatus[];
   readonly limit?: number;
   readonly offset?: number;
+  readonly venueId?: DatabaseIdentifier;
+}
+
+export interface SyncVenueDetailsInput {
+  readonly venueId: DatabaseIdentifier;
+  readonly location: string;
+  readonly venueType: VenueType;
+  readonly title: string | null;
+  readonly now?: Date;
 }
 
 export interface ScheduledMatchWindow {
@@ -230,6 +241,9 @@ export class MatchesRepository {
       ? null
       : nonEmpty(input.title, "title", 500);
     const timeConfiguration = normalizeTimeConfiguration(input);
+    const venueId = input.venueId === undefined || input.venueId === null
+      ? null
+      : positiveBigInt(input.venueId, "venueId");
 
     const rows = await this.db
       .insert(matches)
@@ -240,6 +254,7 @@ export class MatchesRepository {
         timeMode: timeConfiguration.timeMode,
         timeOptions: timeConfiguration.timeOptions,
         selectedTime: timeConfiguration.selectedTime,
+        venueId,
         location,
         venueType: input.venueType ?? null,
         fieldPriceRubles: input.fieldPriceRubles ?? null,
@@ -296,6 +311,7 @@ export class MatchesRepository {
       timeMode?: MatchTimeMode;
       timeOptions?: string[];
       selectedTime?: string | null;
+      venueId?: bigint | null;
       location?: string | null;
       venueType?: VenueType | null;
       fieldPriceRubles?: number | null;
@@ -317,6 +333,9 @@ export class MatchesRepository {
     }
     if (input.location !== undefined) {
       setValues.location = input.location === null ? null : nonEmpty(input.location, "location", 200);
+    }
+    if (input.venueId !== undefined) {
+      setValues.venueId = input.venueId === null ? null : positiveBigInt(input.venueId, "venueId");
     }
     if (input.venueType !== undefined) setValues.venueType = input.venueType;
     if (input.fieldPriceRubles !== undefined) setValues.fieldPriceRubles = input.fieldPriceRubles;
@@ -406,6 +425,7 @@ export class MatchesRepository {
       options.statuses.forEach(validateStatus);
       conditions.push(inArray(matches.status, [...options.statuses]));
     }
+    if (options.venueId !== undefined) conditions.push(eq(matches.venueId, positiveBigInt(options.venueId, "venueId")));
     const query = this.db
       .select()
       .from(matches)
@@ -424,6 +444,24 @@ export class MatchesRepository {
       query.offset(options.offset);
     }
     return query;
+  }
+
+  /** Updates denormalized match details after an owner edits a linked venue, including history. */
+  public async syncVenueDetails(id: DatabaseIdentifier, input: SyncVenueDetailsInput): Promise<Match> {
+    const parsedId = matchId(id);
+    const parsedVenueId = positiveBigInt(input.venueId, "venueId");
+    const rows = await this.db
+      .update(matches)
+      .set({
+        location: nonEmpty(input.location, "location", 200),
+        venueType: input.venueType,
+        title: input.title === null ? null : nonEmpty(input.title, "title", 500),
+        version: sql`${matches.version} + 1`,
+        updatedAt: effectiveNow(input.now),
+      })
+      .where(and(eq(matches.id, parsedId), eq(matches.venueId, parsedVenueId)))
+      .returning();
+    return requireUpdatedMatch(rows[0], parsedId);
   }
 
   public async listByChatId(telegramChatId: DatabaseIdentifier): Promise<Match[]> {

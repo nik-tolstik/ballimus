@@ -5,14 +5,12 @@
  * Owner-facing REST API for the Football Telegram Mini App.
  * OpenAPI spec version: 1.0.0
  */
-import type { FinalizeMatchDtoVenueType } from './finalizeMatchDtoVenueType.js';
 
 export interface FinalizeMatchDto {
   /** @pattern ^(?:[01]\d|2[0-3]):[0-5]\d$ */
   time: string;
-  location: string;
-  /** @nullable */
-  venueType?: FinalizeMatchDtoVenueType;
+  /** @pattern ^[1-9]\d*$ */
+  venueId: string;
   /** @minimum 0 */
   fieldPriceRubles: number;
 }

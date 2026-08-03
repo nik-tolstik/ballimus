@@ -1,0 +1,177 @@
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
+
+import { venues, type Venue, type VenueType } from "../schema.js";
+import {
+  effectiveNow,
+  nonEmpty,
+  optionalText,
+  positiveBigInt,
+  type DatabaseExecutor,
+  type DatabaseIdentifier,
+} from "./common.js";
+import {
+  NotFoundRepositoryError,
+  OptimisticConcurrencyError,
+  ValidationRepositoryError,
+} from "./errors.js";
+
+export interface CreateVenueInput {
+  readonly name: string;
+  readonly mapUrl: string;
+  readonly venueType: VenueType;
+  readonly bookingPhones?: readonly string[];
+  readonly websiteUrl?: string | null;
+  readonly createdAt?: Date;
+}
+
+export interface UpdateVenueInput {
+  readonly name?: string;
+  readonly mapUrl?: string;
+  readonly venueType?: VenueType;
+  readonly bookingPhones?: readonly string[];
+  readonly websiteUrl?: string | null;
+  readonly expectedVersion?: number;
+  readonly now?: Date;
+}
+
+export interface VenueListOptions {
+  readonly includeArchived?: boolean;
+}
+
+function venueId(id: DatabaseIdentifier): bigint {
+  return positiveBigInt(id, "venueId");
+}
+
+function versionOrUndefined(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new ValidationRepositoryError("expectedVersion must be a positive safe integer");
+  }
+  return value;
+}
+
+function normalizedUrl(value: string, fieldName: string): string {
+  return nonEmpty(value, fieldName, 2_000);
+}
+
+function normalizedPhones(values: readonly string[] | undefined): string[] {
+  if (values === undefined) return [];
+  if (values.length > 5) throw new ValidationRepositoryError("bookingPhones can contain at most five values");
+  const phones = values.map((value) => nonEmpty(value, "bookingPhone", 50));
+  if (new Set(phones).size !== phones.length) {
+    throw new ValidationRepositoryError("bookingPhones must not contain duplicates");
+  }
+  return phones;
+}
+
+function requireVenue(record: Venue | undefined, id: bigint): Venue {
+  if (record === undefined) throw new NotFoundRepositoryError(`Venue ${id.toString(10)} was not found`);
+  return record;
+}
+
+/** PostgreSQL repository for the owner-maintained venue catalog. */
+export class VenuesRepository {
+  public constructor(private readonly db: DatabaseExecutor) {}
+
+  public async list(options: VenueListOptions = {}): Promise<Venue[]> {
+    return this.db
+      .select()
+      .from(venues)
+      .where(options.includeArchived ? undefined : isNull(venues.archivedAt))
+      .orderBy(asc(venues.name));
+  }
+
+  public async findById(id: DatabaseIdentifier): Promise<Venue | undefined> {
+    const rows = await this.db.select().from(venues).where(eq(venues.id, venueId(id))).limit(1);
+    return rows[0];
+  }
+
+  public async getById(id: DatabaseIdentifier): Promise<Venue> {
+    const parsedId = venueId(id);
+    return requireVenue(await this.findById(parsedId), parsedId);
+  }
+
+  public async findForUpdate(id: DatabaseIdentifier): Promise<Venue | undefined> {
+    const rows = await this.db
+      .select()
+      .from(venues)
+      .where(eq(venues.id, venueId(id)))
+      .limit(1)
+      .for("update");
+    return rows[0];
+  }
+
+  public async getForUpdate(id: DatabaseIdentifier): Promise<Venue> {
+    const parsedId = venueId(id);
+    return requireVenue(await this.findForUpdate(parsedId), parsedId);
+  }
+
+  public async create(input: CreateVenueInput): Promise<Venue> {
+    const now = effectiveNow(input.createdAt);
+    const rows = await this.db
+      .insert(venues)
+      .values({
+        name: nonEmpty(input.name, "name", 200),
+        mapUrl: normalizedUrl(input.mapUrl, "mapUrl"),
+        venueType: input.venueType,
+        bookingPhones: normalizedPhones(input.bookingPhones),
+        websiteUrl: input.websiteUrl === undefined ? null : optionalText(input.websiteUrl, "websiteUrl", 2_000),
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    return requireVenue(rows[0], 0n);
+  }
+
+  public async update(id: DatabaseIdentifier, input: UpdateVenueInput): Promise<Venue> {
+    const parsedId = venueId(id);
+    const expected = versionOrUndefined(input.expectedVersion);
+    const current = await this.getForUpdate(parsedId);
+    if (expected !== undefined && current.version !== expected) {
+      throw new OptimisticConcurrencyError(expected, current.version);
+    }
+    const values: {
+      name?: string;
+      mapUrl?: string;
+      venueType?: VenueType;
+      bookingPhones?: string[];
+      websiteUrl?: string | null;
+      version: ReturnType<typeof sql>;
+      updatedAt: Date;
+    } = {
+      version: sql`${venues.version} + 1`,
+      updatedAt: effectiveNow(input.now),
+    };
+    if (input.name !== undefined) values.name = nonEmpty(input.name, "name", 200);
+    if (input.mapUrl !== undefined) values.mapUrl = normalizedUrl(input.mapUrl, "mapUrl");
+    if (input.venueType !== undefined) values.venueType = input.venueType;
+    if (input.bookingPhones !== undefined) values.bookingPhones = normalizedPhones(input.bookingPhones);
+    if (input.websiteUrl !== undefined) values.websiteUrl = optionalText(input.websiteUrl, "websiteUrl", 2_000);
+    const rows = await this.db
+      .update(venues)
+      .set(values)
+      .where(and(eq(venues.id, parsedId), ...(expected === undefined ? [] : [eq(venues.version, expected)])))
+      .returning();
+    return requireVenue(rows[0], parsedId);
+  }
+
+  public async setArchived(id: DatabaseIdentifier, archived: boolean, expectedVersion?: number): Promise<Venue> {
+    const parsedId = venueId(id);
+    const expected = versionOrUndefined(expectedVersion);
+    const current = await this.getForUpdate(parsedId);
+    if (expected !== undefined && current.version !== expected) {
+      throw new OptimisticConcurrencyError(expected, current.version);
+    }
+    const now = effectiveNow();
+    const rows = await this.db
+      .update(venues)
+      .set({
+        archivedAt: archived ? now : null,
+        version: sql`${venues.version} + 1`,
+        updatedAt: now,
+      })
+      .where(and(eq(venues.id, parsedId), ...(expected === undefined ? [] : [eq(venues.version, expected)])))
+      .returning();
+    return requireVenue(rows[0], parsedId);
+  }
+}

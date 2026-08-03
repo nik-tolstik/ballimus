@@ -26,7 +26,7 @@ The owner dashboard contains Matches, Players, and History views. The current st
 
 1. Choose **New match**, enter a date, and select the time format. Exact-time mode supports either one fixed time or several precise voting options such as `19:00` and `20:00`; players may select multiple precise options and toggle each one independently. After-time mode supports one or more single-choice availability thresholds such as `after 19:00` and `after 20:00`.
 2. Choose **Опубликовать матч**. One idempotent API transaction creates the active match, records the pending Telegram card, and queues its durable publication event.
-3. For an availability poll, wait for the threshold notification, book the field, and choose **Уточнить время и место**. Enter the exact booked time, location, venue type, and price; one transaction confirms the match, updates the public card, and queues the final chat notification.
+3. For an availability poll, wait for the threshold notification, book the field, and choose **Уточнить время и место**. Enter the exact booked time, select a venue from the catalog, and enter the price; one transaction confirms the match, updates the public card, and queues the final chat notification.
 4. An active time poll can also be edited into one fixed exact time before confirmation. Existing `going` votes are kept and moved to the fixed roster even when the new time is earlier than the players' previous after-time thresholds.
 5. Edit an existing match with its current version in `If-Match`; a stale version produces a conflict instead of overwriting newer data.
 6. Repair an uncertain initial publication by attaching the existing Telegram message ID or confirming that no card exists before retrying.

@@ -2,6 +2,7 @@ export * from "./generated/bootstrap/bootstrap.js";
 export * from "./generated/matches/matches.js";
 export * from "./generated/model/index.js";
 export * from "./generated/players/players.js";
+export * from "./generated/venues/venues.js";
 export {
   ApiClientError,
   configureApiClient,

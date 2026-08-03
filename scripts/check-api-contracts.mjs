@@ -50,7 +50,7 @@ const temporaryRoot = await mkdtemp(join(tmpdir(), "football-contracts-"));
 try {
   const temporaryOpenApi = join(temporaryRoot, "openapi.json");
   const temporaryGenerated = join(temporaryRoot, "generated");
-  run(["--filter", "@football/api", "exec", "tsx", "src/openapi.ts", "--write"], {
+  run(["--filter", "@football/api", "run", "openapi:write"], {
     OPENAPI_OUTPUT: temporaryOpenApi,
   });
   run(["--filter", "@football/api-client", "exec", "orval", "--config", "orval.config.ts"], {

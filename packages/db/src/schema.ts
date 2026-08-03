@@ -181,6 +181,31 @@ export const players = pgTable(
   ],
 );
 
+export const venues = pgTable(
+  "venues",
+  {
+    id: bigint("id", { mode: "bigint" }).generatedAlwaysAsIdentity().primaryKey(),
+    name: text("name").notNull(),
+    mapUrl: text("map_url").notNull(),
+    venueType: text("venue_type", { enum: venueTypes }).notNull(),
+    bookingPhones: text("booking_phones").array().notNull().default(sql`ARRAY[]::text[]`),
+    websiteUrl: text("website_url"),
+    archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }),
+    version: integer("version").notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    check("venues_name_not_empty", sql`length(trim(${table.name})) > 0`),
+    check("venues_map_url_not_empty", sql`length(trim(${table.mapUrl})) > 0`),
+    check("venues_type_valid", sql`${table.venueType} in (${venueTypeSql})`),
+    check("venues_booking_phones_limit", sql`cardinality(${table.bookingPhones}) between 0 and 5`),
+    check("venues_version_positive", sql`${table.version} >= 1`),
+    uniqueIndex("venues_name_ci_unique").on(sql`lower(${table.name})`),
+    index("venues_archived_at_idx").on(table.archivedAt),
+  ],
+);
+
 export const matches = pgTable(
   "matches",
   {
@@ -191,6 +216,10 @@ export const matches = pgTable(
     timeMode: text("time_mode", { enum: matchTimeModes }).notNull().default("exact"),
     timeOptions: jsonb("time_options").$type<string[]>().notNull().default([]),
     selectedTime: text("selected_time"),
+    venueId: bigint("venue_id", { mode: "bigint" }).references(() => venues.id, {
+      onDelete: "restrict",
+      onUpdate: "cascade",
+    }),
     location: text("location"),
     venueType: text("venue_type", { enum: venueTypes }),
     fieldPriceRubles: integer("field_price_rubles"),
@@ -219,6 +248,7 @@ export const matches = pgTable(
       "matches_venue_type_valid",
       sql`${table.venueType} is null or ${table.venueType} in (${venueTypeSql})`,
     ),
+    index("matches_venue_id_idx").on(table.venueId),
     check(
       "matches_field_price_non_negative",
       sql`${table.fieldPriceRubles} is null or ${table.fieldPriceRubles} >= 0`,
@@ -659,11 +689,19 @@ export const jobClaims = pgTable(
 );
 
 export const matchesRelations = relations(matches, ({ one, many }) => ({
+  venue: one(venues, {
+    fields: [matches.venueId],
+    references: [venues.id],
+  }),
   publicCard: one(matchMessages),
   votes: many(votes),
   externalParticipants: many(externalParticipants),
   notifications: many(notifications),
   outbox: many(outbox),
+}));
+
+export const venuesRelations = relations(venues, ({ many }) => ({
+  matches: many(matches),
 }));
 
 export const playersRelations = relations(players, ({ many }) => ({
@@ -734,6 +772,8 @@ export type TelegramUpdate = typeof telegramUpdates.$inferSelect;
 export type NewTelegramUpdate = typeof telegramUpdates.$inferInsert;
 export type Player = typeof players.$inferSelect;
 export type NewPlayer = typeof players.$inferInsert;
+export type Venue = typeof venues.$inferSelect;
+export type NewVenue = typeof venues.$inferInsert;
 export type Match = typeof matches.$inferSelect;
 export type NewMatch = typeof matches.$inferInsert;
 export type PlayerUsername = typeof playerUsernames.$inferSelect;
@@ -756,6 +796,7 @@ export type NewJobClaim = typeof jobClaims.$inferInsert;
 export const schema = {
   telegramUpdates,
   players,
+  venues,
   matches,
   playerUsernames,
   matchMessages,

@@ -25,6 +25,7 @@ import {
   type MatchMessage as DbMatchMessage,
   type Player as DbPlayer,
   type PlayerUsername as DbPlayerUsername,
+  type Venue as DbVenue,
   type Vote as DbVote,
   ExternalParticipantsRepository,
   HttpIdempotencyRepository,
@@ -35,6 +36,7 @@ import {
   OutboxRepository,
   PlayerUsernamesRepository,
   PlayersRepository,
+  VenuesRepository,
   type TransactionRepositories,
   VotesRepository,
   withTransaction,
@@ -67,6 +69,9 @@ import {
   type ReconcileMatchDto,
   type UpdateAliasDto,
   type UpdatePlayerDto,
+  type VenueCreateDto,
+  type VenueListQueryDto,
+  type VenueUpdateDto,
   type VoteCorrectionDto,
 } from "./rest.dto.js";
 import { serializeRestObject, type RestJsonValue } from "./rest.serialization.js";
@@ -83,6 +88,7 @@ type RestRepositories = Pick<
   | "playerUsernames"
   | "votes"
   | "externalParticipants"
+  | "venues"
   | "idempotency"
   | "outbox"
 >;
@@ -121,6 +127,7 @@ interface MatchDetailsBody extends Record<string, unknown> {
   };
   readonly location: string | null;
   readonly venueType: string | null;
+  readonly venue: VenueBody | null;
   readonly fieldPriceRubles: number | null;
   readonly title: string | null;
   readonly displayTitle: string;
@@ -140,6 +147,17 @@ interface MatchDetailsBody extends Record<string, unknown> {
   readonly publicCard: PublicCardBody;
 }
 
+interface VenueBody extends Record<string, unknown> {
+  readonly id: string;
+  readonly name: string;
+  readonly mapUrl: string;
+  readonly venueType: "outdoor" | "indoor";
+  readonly bookingPhones: readonly string[];
+  readonly websiteUrl: string | null;
+  readonly archivedAt: string | null;
+  readonly version: number;
+}
+
 interface PlayerBody extends Record<string, unknown> {
   readonly id: string;
   readonly telegramUserId: string | null;
@@ -156,6 +174,7 @@ interface PlayerBody extends Record<string, unknown> {
 
 interface MatchAggregate {
   readonly match: DbMatch;
+  readonly venue: DbVenue | undefined;
   readonly message: DbMatchMessage | undefined;
   readonly votes: readonly DbVote[];
   readonly externalParticipants: readonly DbExternalParticipant[];
@@ -202,6 +221,7 @@ function readRepositories(db: AppDatabase): RestRepositories {
     playerUsernames: new PlayerUsernamesRepository(db),
     votes: new VotesRepository(db),
     externalParticipants: new ExternalParticipantsRepository(db),
+    venues: new VenuesRepository(db),
     idempotency: new HttpIdempotencyRepository(db),
     outbox: new OutboxRepository(db),
   };
@@ -385,6 +405,75 @@ export class OwnerRestService {
     });
   }
 
+  public async listVenues(
+    ownerTelegramUserId: bigint,
+    query: VenueListQueryDto,
+  ): Promise<Record<string, unknown>> {
+    return this.read(ownerTelegramUserId, async () => {
+      const venues = await readRepositories(this.db).venues.list({ includeArchived: query.includeArchived ?? false });
+      return { venues: venues.map((venue) => this.toVenue(venue)) };
+    });
+  }
+
+  public async createVenue(
+    ownerTelegramUserId: bigint,
+    idempotencyKey: string | undefined,
+    input: VenueCreateDto,
+  ): Promise<Record<string, unknown>> {
+    return this.mutate(ownerTelegramUserId, idempotencyKey, {
+      method: "POST",
+      path: "/venues",
+      body: input,
+    }, 201, async (repositories) => {
+      const venue = await repositories.venues.create(input);
+      return { venue: this.toVenue(venue) };
+    });
+  }
+
+  public async updateVenue(
+    ownerTelegramUserId: bigint,
+    idempotencyKey: string | undefined,
+    ifMatchHeader: string | undefined,
+    venueId: bigint,
+    input: VenueUpdateDto,
+  ): Promise<Record<string, unknown>> {
+    if (!hasOwn(input, "name") && !hasOwn(input, "mapUrl") && !hasOwn(input, "venueType") && !hasOwn(input, "bookingPhones") && !hasOwn(input, "websiteUrl")) {
+      throw restRequestError(400, "VENUE_UPDATE_EMPTY", "At least one editable venue field is required.");
+    }
+    const expectedVersion = parseIfMatch(ifMatchHeader, true);
+    return this.mutate(ownerTelegramUserId, idempotencyKey, {
+      method: "PATCH",
+      path: `/venues/${venueId.toString(10)}`,
+      body: input,
+      ifMatch: expectedVersion,
+    }, 200, async (repositories, requestHash) => {
+      const venue = await repositories.venues.update(venueId, {
+        ...input,
+        ...(expectedVersion === undefined ? {} : { expectedVersion }),
+      });
+      await this.syncVenueMatches(repositories, venue, requestHash);
+      return { venue: this.toVenue(venue) };
+    });
+  }
+
+  public async setVenueArchived(
+    ownerTelegramUserId: bigint,
+    idempotencyKey: string | undefined,
+    ifMatchHeader: string | undefined,
+    venueId: bigint,
+    archived: boolean,
+  ): Promise<Record<string, unknown>> {
+    const expectedVersion = parseIfMatch(ifMatchHeader, true);
+    return this.mutate(ownerTelegramUserId, idempotencyKey, {
+      method: "POST",
+      path: `/venues/${venueId.toString(10)}/${archived ? "archive" : "restore"}`,
+      ifMatch: expectedVersion,
+    }, 200, async (repositories) => {
+      const venue = await repositories.venues.setArchived(venueId, archived, expectedVersion);
+      return { venue: this.toVenue(venue) };
+    });
+  }
+
   public async createMatch(
     ownerTelegramUserId: bigint,
     idempotencyKey: string | undefined,
@@ -392,22 +481,25 @@ export class OwnerRestService {
   ): Promise<Record<string, unknown>> {
     const matchInput = this.normalizeCreateInput(input);
     const scheduledAt = this.scheduledAt(matchInput.date, matchInput.time);
-    const title = formatDerivedTitle(matchInput);
     return this.mutate(ownerTelegramUserId, idempotencyKey, {
       method: "POST",
       path: "/matches",
       body: input,
     }, 201, async (repositories) => {
+      const venue = await this.selectedVenue(repositories, input.venueId);
+      const location = venue?.name ?? matchInput.location;
+      const venueType = venue?.venueType ?? matchInput.venueType;
       const match = await repositories.matches.create({
         telegramChatId: this.config.telegramGroupChatId,
         scheduledAt,
         scheduleDate: matchInput.date,
         timeMode: matchInput.timeMode ?? "exact",
         timeOptions: matchInput.timeOptions ?? [],
-        location: matchInput.location,
-        venueType: matchInput.venueType,
+        venueId: venue?.id ?? null,
+        location,
+        venueType,
         fieldPriceRubles: matchInput.fieldPriceRubles ?? null,
-        title,
+        title: formatDerivedTitle({ ...matchInput, location }),
         requiredPlayers: matchInput.requiredPlayers,
         creatorTelegramUserId: ownerTelegramUserId,
         status: "active",
@@ -450,7 +542,7 @@ export class OwnerRestService {
       if (expectedVersion === undefined || current.version !== expectedVersion) {
         throw new OptimisticConcurrencyError(expectedVersion ?? 0, current.version);
       }
-      const patch = this.patchValues(current, input);
+      const patch = await this.patchValues(repositories, current, input);
       const movesPollVotesToFixedTime = current.timeMode !== "exact" && patch.timeMode === "exact";
       if (patch.timeMode !== undefined || patch.timeOptions !== undefined) {
         const currentVotes = await repositories.votes.listByMatchId(matchId);
@@ -677,12 +769,17 @@ export class OwnerRestService {
           "The final time must be one of the exact time options.",
         );
       }
-      const location = input.location.trim();
+      const venue = await this.selectedVenue(repositories, input.venueId);
+      if (venue === undefined) {
+        throw restRequestError(400, "MATCH_VENUE_REQUIRED", "Choose a venue before finalizing the match.");
+      }
+      const location = venue.name;
       const updated = await repositories.matches.update(matchId, {
         scheduledAt,
         selectedTime: selectedTime ?? null,
+        venueId: venue.id,
         location,
-        venueType: input.venueType ?? current.venueType,
+        venueType: venue.venueType,
         fieldPriceRubles: input.fieldPriceRubles,
         title: formatDerivedTitle({
           date: current.scheduleDate,
@@ -1197,7 +1294,7 @@ export class OwnerRestService {
       time: input.time,
       timeMode: input.timeMode ?? "exact",
       timeOptions: input.timeOptions ?? [],
-      location: input.location,
+      location: input.location ?? null,
       venueType: input.venueType ?? null,
       requiredPlayers: input.requiredPlayers,
       ...(input.fieldPriceRubles === undefined ? {} : { fieldPriceRubles: input.fieldPriceRubles }),
@@ -1221,18 +1318,19 @@ export class OwnerRestService {
     return `${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}`;
   }
 
-  private patchValues(current: DbMatch, input: PatchMatchDto): {
+  private async patchValues(repositories: RestRepositories, current: DbMatch, input: PatchMatchDto): Promise<{
     readonly scheduledAt?: Date | null;
     readonly scheduleDate?: string | null;
     readonly timeMode?: MatchTimeMode;
     readonly timeOptions?: readonly string[];
     readonly selectedTime?: string | null;
+    readonly venueId?: bigint | null;
     readonly location?: string | null;
     readonly venueType?: "outdoor" | "indoor" | null;
     readonly fieldPriceRubles?: number | null;
     readonly requiredPlayers?: number;
     readonly title?: string | null;
-  } {
+  }> {
     const datePresent = hasOwn(input, "date");
     const timePresent = hasOwn(input, "time");
     const timeModePresent = hasOwn(input, "timeMode");
@@ -1249,6 +1347,7 @@ export class OwnerRestService {
       timeMode?: MatchTimeMode;
       timeOptions?: readonly string[];
       selectedTime?: string | null;
+      venueId?: bigint | null;
       location?: string | null;
       venueType?: "outdoor" | "indoor" | null;
       fieldPriceRubles?: number | null;
@@ -1284,8 +1383,18 @@ export class OwnerRestService {
         values.selectedTime = null;
       }
     }
-    if (hasOwn(input, "location")) values.location = input.location ?? null;
-    if (hasOwn(input, "venueType")) values.venueType = input.venueType ?? null;
+    if (hasOwn(input, "venueId")) {
+      const venue = await this.selectedVenue(repositories, input.venueId);
+      values.venueId = venue?.id ?? null;
+      values.location = venue?.name ?? null;
+      values.venueType = venue?.venueType ?? null;
+    } else {
+      if (hasOwn(input, "location")) {
+        values.location = input.location ?? null;
+        values.venueId = null;
+      }
+      if (hasOwn(input, "venueType")) values.venueType = input.venueType ?? null;
+    }
     if (hasOwn(input, "fieldPriceRubles")) values.fieldPriceRubles = input.fieldPriceRubles ?? null;
     if (hasOwn(input, "requiredPlayers")) {
       if (input.requiredPlayers === undefined) {
@@ -1296,7 +1405,7 @@ export class OwnerRestService {
     if (Object.keys(values).length === 0) {
       throw restRequestError(400, "MATCH_UPDATE_EMPTY", "At least one editable match field is required.");
     }
-    const titleChanged = datePresent || hasOwn(input, "location") || hasOwn(input, "fieldPriceRubles");
+    const titleChanged = datePresent || hasOwn(input, "location") || hasOwn(input, "venueId") || hasOwn(input, "fieldPriceRubles");
     if (titleChanged) {
       const scheduleDate = values.scheduleDate ?? current.scheduleDate;
       const timeMode = values.timeMode ?? current.timeMode;
@@ -1320,21 +1429,64 @@ export class OwnerRestService {
   private async loadAggregate(repositories: RestRepositories, matchId: bigint): Promise<MatchAggregate> {
     const match = await repositories.matches.getById(matchId);
     this.assertConfiguredMatch(match);
-    const message = await repositories.matchMessages.findByMatchId(matchId);
-    const votes = await repositories.votes.listByMatchId(matchId);
-    const externalParticipants = await repositories.externalParticipants.listByMatchId(matchId);
-    const counts = await repositories.votes.rosterCounts(matchId);
+    const [message, venue, votes, externalParticipants, counts] = await Promise.all([
+      repositories.matchMessages.findByMatchId(matchId),
+      match.venueId === null ? Promise.resolve(undefined) : repositories.venues.findById(match.venueId),
+      repositories.votes.listByMatchId(matchId),
+      repositories.externalParticipants.listByMatchId(matchId),
+      repositories.votes.rosterCounts(matchId),
+    ]);
     const playerIds = [...new Set(votes.map((vote) => vote.playerId))];
     const players = await Promise.all(playerIds.map(async (playerId) => repositories.players.getById(playerId)));
     const currentReadableNames = new Map(players.map((player) => [player.id, player.displayName] as const));
     const currentPlayers = new Map(players.map((player) => [player.id, player] as const));
-    return { match, message, votes, externalParticipants, counts, currentReadableNames, currentPlayers };
+    return { match, venue, message, votes, externalParticipants, counts, currentReadableNames, currentPlayers };
   }
 
   private async getLockedConfiguredMatch(repositories: RestRepositories, matchId: bigint): Promise<DbMatch> {
     const match = await repositories.matches.getForUpdate(matchId);
     this.assertConfiguredMatch(match);
     return match;
+  }
+
+  private async selectedVenue(
+    repositories: RestRepositories,
+    venueId: string | bigint | null | undefined,
+  ): Promise<DbVenue | undefined> {
+    if (venueId === undefined || venueId === null) return undefined;
+    const venue = await repositories.venues.getForUpdate(venueId);
+    if (venue.archivedAt !== null) {
+      throw restRequestError(409, "VENUE_ARCHIVED", "Archived venues cannot be selected for a match.");
+    }
+    return venue;
+  }
+
+  private async syncVenueMatches(
+    repositories: RestRepositories,
+    venue: DbVenue,
+    requestHash: string,
+  ): Promise<void> {
+    const linkedMatches = await repositories.matches.list({ venueId: venue.id });
+    for (const match of linkedMatches) {
+      const title = match.scheduleDate === null
+        ? match.title
+        : formatDerivedTitle({
+          date: match.scheduleDate,
+          time: this.localTime(match.scheduledAt),
+          timeMode: match.timeMode,
+          location: venue.name,
+          fieldPriceRubles: match.fieldPriceRubles,
+        });
+      const updated = await repositories.matches.syncVenueDetails(match.id, {
+        venueId: venue.id,
+        location: venue.name,
+        venueType: venue.venueType,
+        title,
+      });
+      if (updated.status === "active" || updated.status === "confirmed") {
+        await this.enqueueRefreshForMatch(repositories, updated, requestHash);
+      }
+    }
   }
 
   private assertConfiguredMatch(match: DbMatch): void {
@@ -1380,6 +1532,7 @@ export class OwnerRestService {
       schedule,
       location: aggregate.match.location,
       venueType: aggregate.match.venueType,
+      venue: aggregate.venue === undefined ? null : this.toVenue(aggregate.venue),
       fieldPriceRubles: aggregate.match.fieldPriceRubles,
       title: aggregate.match.title,
       displayTitle: formatMatchCardTitle(match, { timezone: this.config.groupTimezone }),
@@ -1431,6 +1584,21 @@ export class OwnerRestService {
 
   private toSummary(aggregate: MatchAggregate): Record<string, unknown> {
     return this.toDetails(aggregate);
+  }
+
+  private toVenue(venue: DbVenue): VenueBody {
+    return serializeRestObject({
+      id: venue.id,
+      name: venue.name,
+      mapUrl: venue.mapUrl,
+      venueType: venue.venueType,
+      bookingPhones: venue.bookingPhones,
+      websiteUrl: venue.websiteUrl,
+      archivedAt: venue.archivedAt,
+      version: venue.version,
+      createdAt: venue.createdAt,
+      updatedAt: venue.updatedAt,
+    }) as unknown as VenueBody;
   }
 
   private groupSummaries(summaries: readonly Record<string, unknown>[]): Record<string, unknown> {

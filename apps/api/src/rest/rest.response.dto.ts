@@ -151,6 +151,48 @@ export class PublicCardResponseDto {
   publicationUncertainAt!: string | null;
 }
 
+export class VenueResponseDto {
+  @ApiProperty({ type: String, example: "15" })
+  id!: string;
+
+  @ApiProperty({ type: String, example: "BOX365 Октябрьская" })
+  name!: string;
+
+  @ApiProperty({ type: String, format: "uri" })
+  mapUrl!: string;
+
+  @ApiProperty({ type: String, enum: ["outdoor", "indoor"] })
+  venueType!: "outdoor" | "indoor";
+
+  @ApiProperty({ type: [String] })
+  bookingPhones!: string[];
+
+  @ApiProperty({ type: String, nullable: true, format: "uri" })
+  websiteUrl!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, format: "date-time" })
+  archivedAt!: string | null;
+
+  @ApiProperty({ type: Number, minimum: 1 })
+  version!: number;
+
+  @ApiProperty({ type: String, format: "date-time" })
+  createdAt!: string;
+
+  @ApiProperty({ type: String, format: "date-time" })
+  updatedAt!: string;
+}
+
+export class VenueListResponseDto {
+  @ApiProperty({ type: [VenueResponseDto] })
+  venues!: VenueResponseDto[];
+}
+
+export class VenueEnvelopeResponseDto {
+  @ApiProperty({ type: VenueResponseDto })
+  venue!: VenueResponseDto;
+}
+
 export class MatchResponseDto {
   @ApiProperty({ type: String, example: "42" })
   id!: string;
@@ -178,6 +220,9 @@ export class MatchResponseDto {
 
   @ApiProperty({ type: String, enum: ["outdoor", "indoor"], nullable: true })
   venueType!: "outdoor" | "indoor" | null;
+
+  @ApiProperty({ type: VenueResponseDto, nullable: true })
+  venue!: VenueResponseDto | null;
 
   @ApiProperty({ type: Number, nullable: true, minimum: 0 })
   fieldPriceRubles!: number | null;

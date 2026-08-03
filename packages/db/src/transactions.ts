@@ -34,6 +34,7 @@ import {
   type TelegramVoteResult,
   type VoteMutationResult,
 } from "./repositories/votes.js";
+import { VenuesRepository } from "./repositories/venues.js";
 import type { DatabaseTransaction } from "./repositories/common.js";
 import type { BindTelegramUserResult } from "./repositories/players.js";
 import type { Match } from "./schema.js";
@@ -45,6 +46,7 @@ export interface TransactionRepositories {
   readonly playerUsernames: PlayerUsernamesRepository;
   readonly votes: VotesRepository;
   readonly externalParticipants: ExternalParticipantsRepository;
+  readonly venues: VenuesRepository;
   readonly telegramUpdates: TelegramUpdatesRepository;
   readonly idempotency: HttpIdempotencyRepository;
   readonly notifications: NotificationsRepository;
@@ -68,6 +70,7 @@ export function createTransactionRepositories(tx: DatabaseTransaction): Transact
     playerUsernames: new PlayerUsernamesRepository(tx),
     votes: new VotesRepository(tx),
     externalParticipants: new ExternalParticipantsRepository(tx),
+    venues: new VenuesRepository(tx),
     telegramUpdates: new TelegramUpdatesRepository(tx),
     idempotency: new HttpIdempotencyRepository(tx),
     notifications: new NotificationsRepository(tx),
