@@ -177,18 +177,25 @@ function escapePlainTextId(value: string | number | bigint): string {
   return escapeHtml(String(value));
 }
 
-function namedExternalParticipantLines(
+function namedExternalParticipantItems(
   participants: readonly ExternalParticipant[],
   matchId: Match["id"],
 ): string[] {
   return groupExternalParticipants(participants, matchId)
-    .map(({ label }) => {
+    .flatMap(({ label, quantity }) => {
       const truncatedLabel = truncatePlainText(label, 512);
       const sourceLabel = /^от(?:\s|$)/iu.test(truncatedLabel)
         ? truncatedLabel.replace(/^от/iu, "От")
         : `От ${truncatedLabel}`;
-      return `• ${escapeHtml(sourceLabel)}`;
+      return Array.from(
+        { length: Math.max(0, quantity) },
+        (_, index) => `${escapeHtml(sourceLabel)} #${index + 1}`,
+      );
     });
+}
+
+function participantItems(participants: readonly Vote[]): string[] {
+  return participants.map(participantHtml);
 }
 
 function isExternalParticipantEligibleForMatch(
@@ -259,25 +266,24 @@ function addParticipantSection(
 
 function addParticipantListLine(
   lines: string[],
-  participants: readonly Vote[],
+  items: readonly string[],
   maxLength: number,
 ): void {
   let shown = 0;
   let participantList = "";
-  for (const [index, participant] of participants.entries()) {
-    const item = participantHtml(participant);
+  for (const [index, item] of items.entries()) {
     const nextParticipantList = participantList === "" ? item : `${participantList}, ${item}`;
-    const remainingAfterLine = participants.length - index - 1;
+    const remainingAfterLine = items.length - index - 1;
     const separatorLength = lines.length === 0 ? 0 : 1;
-    const overflowLine = `<i>… ещё ${participants.length - shown}</i>`;
+    const overflowLine = `<i>… ещё ${items.length - shown}</i>`;
     const reservedOverflowLength = remainingAfterLine === 0 ? 0 : overflowLine.length + 1;
     if (currentLength(lines) + separatorLength + nextParticipantList.length + reservedOverflowLength > maxLength) break;
     participantList = nextParticipantList;
     shown += 1;
   }
   if (participantList !== "") lines.push(participantList);
-  if (shown < participants.length) {
-    appendLine(lines, `<i>… ещё ${participants.length - shown}</i>`, maxLength, { allowTruncate: false });
+  if (shown < items.length) {
+    appendLine(lines, `<i>… ещё ${items.length - shown}</i>`, maxLength, { allowTruncate: false });
   }
 }
 
@@ -287,10 +293,11 @@ function addExternalParticipantLines(
   matchId: Match["id"],
   maxLength: number,
 ): void {
-  const externalLines = namedExternalParticipantLines(participants, matchId);
+  const externalItems = namedExternalParticipantItems(participants, matchId);
   let shown = 0;
-  for (const line of externalLines) {
-    const remainingAfterLine = externalLines.length - shown - 1;
+  for (const item of externalItems) {
+    const line = `• ${item}`;
+    const remainingAfterLine = externalItems.length - shown - 1;
     const separatorLength = lines.length === 0 ? 0 : 1;
     const overflowLine = "<i>… ещё внешние группы</i>";
     const reservedOverflowLength = remainingAfterLine === 0 ? 0 : overflowLine.length + 1;
@@ -298,7 +305,7 @@ function addExternalParticipantLines(
     lines.push(line);
     shown += 1;
   }
-  if (shown < externalLines.length) {
+  if (shown < externalItems.length) {
     appendLine(lines, "<i>… ещё внешние группы</i>", maxLength, { allowTruncate: false });
   }
 }
@@ -312,7 +319,7 @@ function addVoteListSection(
   isLast: boolean,
 ): void {
   appendLine(lines, `${icon} <b>${label} · ${participants.length}</b>`, maxLength);
-  addParticipantListLine(lines, participants, maxLength);
+  addParticipantListLine(lines, participantItems(participants), maxLength);
   if (!isLast && participants.length > 0) appendLine(lines, "", maxLength);
 }
 
@@ -346,8 +353,11 @@ function addTimeOptionParticipantSections(
       `${selected ? "✅" : hasParticipants ? "🟢" : "⚪"} <b>${label} · ${countLabel}</b>`,
       maxLength,
     );
-    addParticipantListLine(lines, participants, maxLength);
-    addExternalParticipantLines(lines, externalAtTime, match.id, maxLength);
+    addParticipantListLine(
+      lines,
+      [...participantItems(participants), ...namedExternalParticipantItems(externalAtTime, match.id)],
+      maxLength,
+    );
     if (index < options.length - 1) appendLine(lines, "", maxLength);
   }
 }
