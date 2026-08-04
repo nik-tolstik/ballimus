@@ -47,7 +47,7 @@ export async function inspectTelegramWebhook(
 ): Promise<TelegramWebhookStatus> {
   const expectedUrl = expectedWebhookUrl(input.expectedUrl);
   const fetchImplementation = input.fetchImplementation ?? fetch;
-  const endpoint = new URL(`bot${input.botToken}/getWebhookInfo`, "https://api.telegram.org/");
+  const endpoint = new URL(`/bot${input.botToken}/getWebhookInfo`, "https://api.telegram.org");
   const response = await fetchImplementation(endpoint, { signal: AbortSignal.timeout(5_000) });
   if (!response.ok) throw new Error("Telegram webhook status request failed");
 

@@ -32,6 +32,18 @@ describe("Telegram webhook status", () => {
     expect(JSON.stringify(status)).not.toContain(botToken);
   });
 
+  it("uses the Telegram HTTPS endpoint for a standard bot token", async () => {
+    await inspectTelegramWebhook({
+      botToken,
+      expectedUrl,
+      fetchImplementation: async (input) => {
+        expect(input).toBeInstanceOf(URL);
+        expect(input.toString()).toBe(`https://api.telegram.org/bot${botToken}/getWebhookInfo`);
+        return new Response(JSON.stringify({ ok: true, result: {} }), { status: 200 });
+      },
+    });
+  });
+
   it("detects a misconfigured webhook and a Telegram delivery error", async () => {
     const status = await inspectTelegramWebhook({
       botToken,
