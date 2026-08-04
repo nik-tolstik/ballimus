@@ -1502,6 +1502,7 @@ export class OwnerRestService {
         ...toDomainVote(vote),
         displayNameSnapshot: aggregate.currentReadableNames.get(vote.playerId) ?? vote.displayNameSnapshot,
       })),
+      mapUrl: aggregate.venue?.mapUrl ?? null,
       externalParticipants: aggregate.externalParticipants.map(toDomainExternalParticipant),
     }, { timezone: this.config.groupTimezone });
   }
