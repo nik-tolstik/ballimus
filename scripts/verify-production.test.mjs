@@ -8,6 +8,7 @@ import {
   evaluateRailwayServices,
   evaluateVercelStatus,
   evaluateWebhookStatus,
+  parseJsonOutput,
   parsePublicProductionConfig,
 } from "./verify-production.mjs";
 
@@ -43,6 +44,16 @@ test("detects a GitHub CI run for another commit and a failed Vercel status", ()
   assert.equal(evaluateVercelStatus({
     statuses: [{ context: "Vercel", state: "failure" }],
   }).ok, false);
+});
+
+test("parses formatted JSON returned by Railway CLI", () => {
+  assert.deepEqual(parseJsonOutput(JSON.stringify([
+    { name: "api", status: "SUCCESS", stopped: false },
+    { name: "jobs", status: "SUCCESS", stopped: true },
+  ], null, 2), "Railway services"), [
+    { name: "api", status: "SUCCESS", stopped: false },
+    { name: "jobs", status: "SUCCESS", stopped: true },
+  ]);
 });
 
 test("accepts healthy Railway, CORS, migration, and webhook checks", () => {
