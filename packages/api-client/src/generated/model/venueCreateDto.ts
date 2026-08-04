@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { VenueCreateDtoVenueType } from './venueCreateDtoVenueType.js';
+import type { VenueBookingContactDto } from './venueBookingContactDto.js';
 
 export interface VenueCreateDto {
   /**
@@ -16,7 +17,7 @@ export interface VenueCreateDto {
   mapUrl: string;
   venueType: VenueCreateDtoVenueType;
   /** @maxItems 5 */
-  bookingPhones?: string[];
+  bookingContacts?: VenueBookingContactDto[];
   /** @nullable */
   websiteUrl?: string | null;
 }

@@ -70,7 +70,7 @@ export interface NormalizedVenue {
   readonly name: string
   readonly mapUrl: string
   readonly venueType: 'outdoor' | 'indoor'
-  readonly bookingPhones: readonly string[]
+  readonly bookingContacts: readonly { readonly name?: string; readonly phone: string }[]
   readonly websiteUrl: string | undefined
   readonly archivedAt: string | undefined
   readonly version: number
@@ -179,7 +179,10 @@ export function normalizeVenue(venue: VenueResponseDto): NormalizedVenue {
     name: venue.name,
     mapUrl: venue.mapUrl,
     venueType: venue.venueType,
-    bookingPhones: venue.bookingPhones,
+    bookingContacts: venue.bookingContacts.map((contact) => ({
+      ...(contact.name === undefined ? {} : { name: contact.name }),
+      phone: contact.phone,
+    })),
     websiteUrl: venue.websiteUrl ?? undefined,
     archivedAt: venue.archivedAt ?? undefined,
     version: venue.version,

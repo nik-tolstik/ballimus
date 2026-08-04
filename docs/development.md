@@ -99,7 +99,9 @@ pnpm test:e2e
 pnpm --filter @football/web build
 ```
 
-Playwright runs the owner Mini App against a local Vite server with mocked API responses and a Telegram WebApp fixture. Install Chromium once with `pnpm --filter @football/web exec playwright install chromium` before the first E2E run.
+Playwright runs the owner Mini App against a local Vite server with mocked API responses and a Telegram WebApp fixture. It is the supported browser-verification path for this repository and is confirmed to run in desktop and mobile Chromium. Use `pnpm test:e2e` for rendered frontend changes. Install Chromium once with `pnpm --filter @football/web exec playwright install chromium` before the first E2E run.
+
+Codex Browser QA is not available in this repository because of its `sandboxCwd is not a local file URI` runtime blocker. Do not treat that limitation as a Playwright limitation.
 
 Regenerate the API contract and client together:
 
