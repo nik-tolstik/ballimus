@@ -27,11 +27,13 @@ function repositories() {
   const claimInTransaction = vi.fn().mockResolvedValue({ status: "claimed", notification: { id: 55n } });
   const listByMatchId = vi.fn().mockResolvedValue([]);
   const rosterCounts = vi.fn().mockResolvedValue({ goingVotes: 0, externalParticipants: 0, goingCount: 0, requiredPlayers: 3, thresholdReached: false, remainingToThreshold: 3 });
+  const findVenueById = vi.fn().mockResolvedValue(undefined);
   return {
-    value: { notifications: { claimInTransaction }, votes: { listByMatchId, rosterCounts } } as unknown as TransactionRepositories,
+    value: { notifications: { claimInTransaction }, votes: { listByMatchId, rosterCounts }, venues: { findById: findVenueById } } as unknown as TransactionRepositories,
     claimInTransaction,
     listByMatchId,
     rosterCounts,
+    findVenueById,
   };
 }
 
@@ -143,10 +145,28 @@ describe("application notification events", () => {
     const text = String(event?.payload?.["text"]);
     expect(text).toContain("⚽ <b>Состав набран — матч состоится!</b>");
     expect(text).toContain("🗓 Понедельник, 3 августа · 20:00");
+    expect(text).toContain("📍 Field");
+    expect(text).not.toContain("Точка на карте");
     expect(text).toContain("💰 Стоимость поля: не указана");
     expect(text).toContain("👥 Идут: 3 игрока");
     expect(text).toContain('<a href="tg://user?id=101">Никита</a>');
     expect(text).not.toContain("Максим");
     expect(text).not.toContain("Антон");
+  });
+
+  it("links the selected venue map in the confirmed-match notification", async () => {
+    const fixture = repositories();
+    fixture.findVenueById.mockResolvedValue({ mapUrl: "https://maps.example.test/field" });
+
+    const event = await claimLifecycleNotificationEvent(fixture.value, {
+      ...match,
+      status: "confirmed",
+      venueId: 5n,
+    }, 42n, "Europe/Minsk", "active");
+
+    expect(fixture.findVenueById).toHaveBeenCalledWith(5n);
+    expect(event?.payload?.["text"]).toContain(
+      '📍 Field, <i><a href="https://maps.example.test/field">Точка на карте</a></i>',
+    );
   });
 });

@@ -104,11 +104,15 @@ export async function claimLifecycleNotificationEvent(
     ? await Promise.all([
       repositories.votes.listByMatchId(match.id),
       repositories.votes.rosterCounts(match.id),
-    ]).then(([votes, counts]) => lifecycleNotificationTransition({
+      match.venueId === null || match.venueId === undefined
+        ? Promise.resolve(undefined)
+        : repositories.venues.findById(match.venueId),
+    ]).then(([votes, counts, venue]) => lifecycleNotificationTransition({
       matchId: match.id,
       status: "confirmed",
       scheduledAt: match.scheduledAt,
       location: match.location,
+      ...(venue === undefined ? {} : { mapUrl: venue.mapUrl }),
       fieldPriceRubles: match.fieldPriceRubles,
       goingCount: counts.goingCount,
       votes: votes.filter((vote) => isVoteEligibleForMatch(match, vote)),

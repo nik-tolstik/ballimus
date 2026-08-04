@@ -125,6 +125,7 @@ export function formatConfirmationNotification(
   input: {
     readonly scheduledAt: Date | null;
     readonly location: string | null;
+    readonly mapUrl?: string | null;
     readonly fieldPriceRubles: number | null;
     readonly goingCount: number;
     readonly votes: readonly Vote[];
@@ -140,6 +141,10 @@ export function formatConfirmationNotification(
     ? "Дата и время уточняются"
     : `${formatWeekdayDateInTimeZone(input.scheduledAt, timezone)} · ${formatTimeInTimeZone(input.scheduledAt, timezone)}`;
   const location = input.location?.trim() || "Место уточняется";
+  const mapUrl = input.mapUrl?.trim();
+  const locationLine = mapUrl === undefined || mapUrl === ""
+    ? `📍 ${escapeHtml(truncatePlainText(location, 512))}`
+    : `📍 ${escapeHtml(truncatePlainText(location, 512))}, <i><a href="${escapeHtml(mapUrl)}">Точка на карте</a></i>`;
   const fieldPrice = input.fieldPriceRubles === null ? "не указана" : `${input.fieldPriceRubles} руб.`;
   const playerWord = (() => {
     const absolute = input.goingCount % 100;
@@ -153,7 +158,7 @@ export function formatConfirmationNotification(
     "⚽ <b>Состав набран — матч состоится!</b>",
     "",
     `🗓 ${escapeHtml(schedule)}`,
-    `📍 ${escapeHtml(truncatePlainText(location, 512))}`,
+    locationLine,
     `💰 Стоимость поля: ${fieldPrice}`,
     `👥 Идут: ${input.goingCount} ${playerWord}`,
   ].join("\n");
@@ -248,6 +253,7 @@ export function lifecycleNotificationTransition(input: {
   readonly status: "confirmed";
   readonly scheduledAt: Date | null;
   readonly location: string | null;
+  readonly mapUrl?: string | null;
   readonly fieldPriceRubles: number | null;
   readonly goingCount: number;
   readonly votes: readonly Vote[];
