@@ -454,6 +454,16 @@ export function voteOptionFromDropTarget(value: unknown): NormalizedRosterTarget
   return value === 'going' || value === 'maybe' || value === 'not_going' || (typeof value === 'string' && /^(?:after|at):(?:[01]\d|2[0-3]):[0-5]\d$/u.test(value)) ? value as NormalizedRosterTarget : undefined
 }
 
+export function optimisticVoteForRosterTarget(match: NormalizedMatch, vote: NormalizedVote, target: NormalizedRosterTarget): NormalizedVote {
+  const option = rosterTargetOption(target)
+  if (option !== 'going') return { ...vote, option, availableAfter: undefined, exactTimes: [] }
+  if (target.startsWith('after:')) return { ...vote, option, availableAfter: target.slice(target.indexOf(':') + 1), exactTimes: [] }
+  if (target.startsWith('at:')) return { ...vote, option, availableAfter: undefined, exactTimes: [target.slice(target.indexOf(':') + 1)] }
+  if (match.timeMode === 'availability' && match.selectedTime !== undefined) return { ...vote, option, availableAfter: match.selectedTime, exactTimes: [] }
+  if (match.timeMode === 'exact_options' && match.selectedTime !== undefined) return { ...vote, option, availableAfter: undefined, exactTimes: [match.selectedTime] }
+  return { ...vote, option, availableAfter: undefined, exactTimes: [] }
+}
+
 export type VoteRemovalAction =
   | { readonly type: 'remove_vote' }
   | { readonly type: 'replace_exact_times'; readonly exactTimes: readonly string[] }
@@ -590,9 +600,7 @@ export function MatchRoster({ match, onCorrectVote, onRemoveVote, onAddExternal,
   const votes = useMemo(() => match.roster.votes.map((vote) => {
     const target = optimisticTargets[vote.playerId]
     if (target === undefined || target === rosterTargetForVote(match, vote)) return vote
-    return target.startsWith('after:') || target.startsWith('at:')
-      ? { ...vote, option: 'going' as const, availableAfter: target.startsWith('after:') ? target.slice(target.indexOf(':') + 1) : undefined, exactTimes: target.startsWith('at:') ? [target.slice(target.indexOf(':') + 1)] : [] }
-      : { ...vote, option: target as NormalizedVoteOption, availableAfter: undefined }
+    return optimisticVoteForRosterTarget(match, vote, target)
   }), [match, optimisticTargets])
   const rosterTargets: readonly NormalizedRosterTarget[] = match.timeMode !== 'exact' && match.selectedTime === undefined
     ? [...match.timeOptions.map((time) => `${match.timeMode === 'availability' ? 'after' : 'at'}:${time}` as const), 'maybe', 'not_going']
