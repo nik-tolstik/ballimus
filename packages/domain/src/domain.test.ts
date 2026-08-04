@@ -600,6 +600,7 @@ describe("Minsk time and weather rules", () => {
     expect(formatConfirmationNotification({
       scheduledAt: new Date("2026-08-01T15:30:00.000Z"),
       location: "BOX365",
+      mapUrl: "https://maps.example.test/box365",
       fieldPriceRubles: 120,
       goingCount: 3,
       votes: [
@@ -611,7 +612,7 @@ describe("Minsk time and weather rules", () => {
     })).toBe(
       "⚽ <b>Состав набран — матч состоится!</b>\n\n" +
       "🗓 Суббота, 1 августа · 18:30\n" +
-      "📍 BOX365\n" +
+      '📍 BOX365, <i><a href="https://maps.example.test/box365">Точка на карте</a></i>\n' +
       "💰 Стоимость поля: 120 руб.\n" +
       "👥 Идут: 3 игрока\n\n" +
       '<a href="tg://user?id=1">Никита</a>, <a href="tg://user?id=2">Иван &amp; Пётр</a> — увидимся на поле!',
