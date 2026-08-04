@@ -419,6 +419,17 @@ describe("PostgreSQL baseline migration and repositories", () => {
       selectedTime: "20:00",
     });
     expect(await exactCounts.rosterCounts(exactOptionsMatch.id)).toMatchObject({ goingVotes: 1, thresholdReached: false });
+    await expect(runVoteChangeTransaction(database.db, {
+      updateId: 10_097n,
+      matchId: exactOptionsMatch.id,
+      identity: identity(20_097n, "confirmed_exact_player", "Confirmed exact"),
+      option: "going",
+    })).resolves.toMatchObject({ status: "applied" });
+    expect(await exactCounts.find(exactOptionsMatch.id, 20_097n)).toMatchObject({
+      availableAfter: null,
+      exactTimes: ["20:00"],
+    });
+    expect(await exactCounts.rosterCounts(exactOptionsMatch.id)).toMatchObject({ goingVotes: 2, thresholdReached: true });
   }, TEST_TIMEOUT_MS);
 
   it("stores availability votes and counts only players eligible for the confirmed time", async () => {
@@ -476,6 +487,13 @@ describe("PostgreSQL baseline migration and repositories", () => {
     ]));
     expect(await votes.rosterCounts(match.id)).toMatchObject({ goingVotes: 2, externalParticipants: 3, goingCount: 5, thresholdReached: true });
 
+    await expect(runVoteChangeTransaction(database.db, {
+      updateId: 10_103n,
+      matchId: match.id,
+      identity: identity(20_103n, "unconfirmed_player", "Unconfirmed"),
+      option: "going",
+    })).rejects.toThrow("availableAfter must be one of the match time options");
+
     await new MatchesRepository(database.db).transitionStatus(match.id, {
       to: "confirmed",
       scheduledAt: MATCH_TIME,
@@ -489,11 +507,22 @@ describe("PostgreSQL baseline migration and repositories", () => {
       remainingToThreshold: 0,
     });
     await expect(runVoteChangeTransaction(database.db, {
-      updateId: 10_103n,
+      updateId: 10_104n,
       matchId: match.id,
-      identity: identity(20_103n, "invalid_player", "Invalid"),
+      identity: identity(20_104n, "confirmed_player", "Confirmed"),
       option: "going",
-    })).rejects.toThrow("availableAfter must be one of the match time options");
+    })).resolves.toMatchObject({ status: "applied" });
+    expect(await votes.find(match.id, 20_104n)).toMatchObject({
+      availableAfter: "19:00",
+      exactTimes: [],
+    });
+    expect(await votes.rosterCounts(match.id)).toMatchObject({
+      goingVotes: 2,
+      externalParticipants: 1,
+      goingCount: 3,
+      thresholdReached: true,
+      remainingToThreshold: 0,
+    });
   }, TEST_TIMEOUT_MS);
 
   it("keeps going votes when their poll-specific time selections are cleared", async () => {
