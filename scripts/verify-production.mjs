@@ -179,6 +179,11 @@ export function evaluateWebhookStatus(status) {
 }
 
 export function parseJsonOutput(output, label) {
+  try {
+    return JSON.parse(output.trim());
+  } catch {
+    // Some commands prepend diagnostics before a single-line JSON payload.
+  }
   for (const line of output.trim().split(/\r?\n/u).reverse()) {
     try {
       return JSON.parse(line);
