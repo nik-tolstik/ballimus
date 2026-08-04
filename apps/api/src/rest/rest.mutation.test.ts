@@ -56,6 +56,78 @@ function httpResponse(error: unknown): unknown {
 }
 
 describe("REST mutation transaction adapter", () => {
+  it("passes the linked venue map URL and mixed roster to the outbox card renderer", () => {
+    const service = new OwnerRestService(fakeDatabase, config);
+    const renderAggregate = (service as unknown as {
+      renderAggregate: (aggregate: unknown) => { readonly text: string; readonly isActive: boolean };
+    }).renderAggregate;
+    const card = renderAggregate.call(service, {
+      match: {
+        id: 1n,
+        telegramChatId: -100n,
+        scheduledAt: new Date("2026-08-04T17:00:00.000Z"),
+        scheduleDate: "2026-08-04",
+        timeMode: "availability",
+        timeOptions: ["19:00", "20:00"],
+        selectedTime: "20:00",
+        venueId: 2n,
+        location: "Ракета",
+        venueType: "outdoor",
+        fieldPriceRubles: 85,
+        title: "Вторник, 4 августа · 20:00",
+        requiredPlayers: 10,
+        status: "confirmed",
+        cancellationReason: null,
+        creatorTelegramUserId: ownerId,
+        version: 3,
+      },
+      venue: { mapUrl: "https://maps.example.test/raketa" },
+      votes: [{
+        playerId: 1n,
+        matchId: 1n,
+        telegramUserId: 10n,
+        usernameSnapshot: null,
+        firstNameSnapshot: "Никита",
+        lastNameSnapshot: null,
+        displayNameSnapshot: "Никита",
+        option: "going",
+        availableAfter: "19:00",
+        exactTimes: [],
+        source: "owner_correction",
+        telegramUpdateId: null,
+        createdAt: new Date("2026-08-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-08-01T00:00:00.000Z"),
+      }],
+      externalParticipants: [{
+        id: 1n,
+        matchId: 1n,
+        createdByTelegramUserId: ownerId,
+        sourceUpdateId: null,
+        displayName: "Ромы",
+        availableAfter: "19:00",
+        quantity: 1,
+        createdAt: new Date("2026-08-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-08-01T00:00:00.000Z"),
+      }],
+      currentReadableNames: new Map([[1n, "Никита"]]),
+      currentPlayers: new Map(),
+      message: undefined,
+      counts: {
+        goingVotes: 1,
+        externalParticipants: 1,
+        goingCount: 2,
+        requiredPlayers: 10,
+        thresholdReached: false,
+        remainingToThreshold: 8,
+      },
+    });
+
+    expect(card.text).toContain('📍 Ракета, <i><a href="https://maps.example.test/raketa">Точка на карте</a></i>');
+    expect(card.text).toContain("🟢 <b>Участвуют · 2</b>");
+    expect(card.text).toContain('<a href="tg://user?id=10">Никита</a>, От Ромы #1');
+    expect(card.text).not.toContain("Доп. участники");
+  });
+
   it("replays a stored idempotent response without invoking the business callback", async () => {
     const service = new OwnerRestService(fakeDatabase, config);
     const response = { matchId: "9000000000001", accepted: true };
