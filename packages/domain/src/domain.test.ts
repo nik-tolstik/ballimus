@@ -311,7 +311,7 @@ describe("roster and threshold rules", () => {
 });
 
 describe("HTML-safe card formatting", () => {
-  it("escapes fields, numbers external participants, and strips legacy title details", () => {
+  it("escapes fields, mixes external participants, and strips legacy title details", () => {
     expect(escapeHtml(`<&>"`)).toBe("&lt;&amp;&gt;&quot;");
     const card = renderMatchCard({
       match: baseMatch,
@@ -325,17 +325,19 @@ describe("HTML-safe card formatting", () => {
     expect(card.text).toContain("Понедельник, 27 июля · 20:00");
     expect(card.text).not.toContain("27.07.2026");
     expect(card.text).not.toContain("BOX365 &lt;main&gt;, 100 рублей)");
+    expect(card.text).toContain("📍 BOX365 &lt;main&gt;\n");
+    expect(card.text).not.toContain("Точка на карте");
     expect(card.text).toContain("Иван &lt;важный&gt;");
     expect(card.text).toContain("Пётр &amp; Саша");
-    expect(card.text).toContain("➕ <b>Доп. участники · 3</b>");
     expect(card.text).toContain("🟢 <b>Готов к подтверждению</b>");
-    expect(card.text).toContain("• От Никиты #1");
-    expect(card.text).toContain("• От Никиты #2");
+    expect(card.text).toContain("🟢 <b>Участвуют · 4</b>");
+    expect(card.text).toContain("От Никиты #1");
+    expect(card.text).toContain("От Никиты #2");
     expect(card.text).not.toContain("• От Никиты:");
     expect(card.text).not.toContain("От От Никиты");
-    expect(card.text).toContain("• От Ваня #1");
+    expect(card.text).toContain("От Ваня #1");
     expect(card.text).not.toContain("• От Ваня:");
-    expect(card.text).toContain("🟢 <b>Участвуют · 1</b>");
+    expect(card.text).not.toContain("Доп. участники");
     expect(card.text).toContain("🟡 <b>Под вопросом · 1</b>");
     expect(card.text).toContain("🔴 <b>Не смогут · 1</b>");
     expect(card.text).toContain('<a href="tg://user?id=1">Иван &lt;важный&gt;</a>');
@@ -464,6 +466,40 @@ describe("HTML-safe card formatting", () => {
     expect(card.text).not.toContain("Доступны к времени:");
     expect(card.text).toContain("🟢 <b>Участвуют · 1</b>");
     expect(card.text).toContain("🔴 <b>Не смогут к выбранному времени · 1</b>");
+  });
+
+  it("mixes eligible external participants into the confirmed going list", () => {
+    const card = renderMatchCard({
+      match: {
+        ...baseMatch,
+        status: "confirmed",
+        scheduledAt: new Date("2026-08-03T17:30:00.000Z"),
+        scheduleDate: "2026-08-03",
+        timeMode: "availability",
+        timeOptions: ["19:00", "20:00"],
+        selectedTime: "20:00",
+      },
+      mapUrl: "https://maps.example.test/field?place=1",
+      votes: [{ ...vote(1, "going", "Никита"), availableAfter: "19:00" }],
+      externalParticipants: [external(1, 1, "Ромы", null, "19:00")],
+    });
+
+    expect(card.text).toContain('📍 BOX365 &lt;main&gt;, <i><a href="https://maps.example.test/field?place=1">Точка на карте</a></i>');
+    expect(card.text).toContain("🟢 <b>Участвуют · 2</b>");
+    expect(card.text).toContain('<a href="tg://user?id=1">Никита</a>, От Ромы #1');
+    expect(card.text).not.toContain("Доп. участники");
+  });
+
+  it("mixes external participants into the going list for exact matches", () => {
+    const card = renderMatchCard({
+      match: { ...baseMatch, status: "confirmed" },
+      votes: [vote(1, "going", "Никита")],
+      externalParticipants: [external(1, 1, "Ромы")],
+    });
+
+    expect(card.text).toContain("🟢 <b>Участвуют · 2</b>");
+    expect(card.text).toContain('<a href="tg://user?id=1">Никита</a>, От Ромы #1');
+    expect(card.text).not.toContain("Доп. участники");
   });
 });
 

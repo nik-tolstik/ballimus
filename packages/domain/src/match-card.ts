@@ -17,6 +17,8 @@ export const DEFAULT_MATCH_CARD_TIMEZONE = MINSK_TIMEZONE;
 export interface MatchCardData {
   readonly match: Match;
   readonly votes: readonly Vote[];
+  /** Saved map link for the selected venue, when one exists. */
+  readonly mapUrl?: string | null;
   /** When omitted, the external quantity ledger is summed from externalParticipants. */
   readonly externalCount?: number;
   readonly externalParticipants?: readonly ExternalParticipant[];
@@ -41,6 +43,15 @@ function fieldPriceLabel(match: Match): string {
 function locationLabel(match: Match): string {
   const location = match.location?.trim();
   return location === undefined || location === "" ? "Место уточняется" : location;
+}
+
+function locationLine(match: Match, mapUrl: string | null | undefined): string {
+  const location = escapeHtml(truncatePlainText(locationLabel(match), 512));
+  const normalizedMapUrl = mapUrl?.trim();
+  if (normalizedMapUrl === undefined || normalizedMapUrl === "") {
+    return `📍 ${location}`;
+  }
+  return `📍 ${location}, <i><a href="${escapeHtml(normalizedMapUrl)}">Точка на карте</a></i>`;
 }
 
 function timeLabel(match: Match, timezone: string): string {
@@ -323,6 +334,24 @@ function addVoteListSection(
   if (!isLast && participants.length > 0) appendLine(lines, "", maxLength);
 }
 
+function addMixedParticipantListSection(
+  lines: string[],
+  votes: readonly Vote[],
+  externalParticipants: readonly ExternalParticipant[],
+  matchId: Match["id"],
+  label: string,
+  icon: string,
+  maxLength: number,
+  isLast: boolean,
+): void {
+  const externalItems = namedExternalParticipantItems(externalParticipants, matchId);
+  const participantCount = votes.length + externalItems.length;
+  if (participantCount === 0) return;
+  appendLine(lines, `${icon} <b>${label} · ${participantCount}</b>`, maxLength);
+  addParticipantListLine(lines, [...participantItems(votes), ...externalItems], maxLength);
+  if (!isLast) appendLine(lines, "", maxLength);
+}
+
 function addTimeOptionParticipantSections(
   lines: string[],
   match: Match,
@@ -413,20 +442,14 @@ export function renderMatchCard(
       ? []
       : [`Причина отмены: ${escapeHtml(truncatePlainText(cancellationReason, 512))}`]),
     "",
-    `📍 ${escapeHtml(truncatePlainText(locationLabel(match), 512))}`,
+    locationLine(match, data.mapUrl),
     `🏠 ${venueLabel(match.venueType)}`,
     `💰 ${fieldPriceLabel(match)}`,
     ...(isTimePollMode(timeMode)
       ? [`🕒 ${timeLabel(match, displayOptions.timezone ?? DEFAULT_MATCH_CARD_TIMEZONE)}`]
       : []),
-    ...(!timeSelectionPending && eligibleExternalCount > 0
-      ? ["", `➕ <b>Доп. участники · ${eligibleExternalCount}</b>`]
-      : []),
   ];
   for (const line of baseLines) appendLine(lines, line, maxLength);
-  if (!timeSelectionPending && eligibleExternalCount > 0) {
-    addExternalParticipantLines(lines, eligibleExternalParticipants, match.id, maxLength);
-  }
   appendLine(lines, "", maxLength);
 
   if (timeSelectionPending) {
@@ -435,9 +458,16 @@ export function renderMatchCard(
   } else if (isTimePollMode(timeMode)) {
     const eligibleGoing = votes.filter((vote) => isVoteEligibleForMatch(match, vote));
     const unavailableGoing = votes.filter((vote) => vote.option === "going" && !isVoteEligibleForMatch(match, vote));
-    if (eligibleGoing.length > 0) {
-      addVoteListSection(lines, eligibleGoing, "Участвуют", "🟢", maxLength, false);
-    }
+    addMixedParticipantListSection(
+      lines,
+      eligibleGoing,
+      eligibleExternalParticipants,
+      match.id,
+      "Участвуют",
+      "🟢",
+      maxLength,
+      false,
+    );
     if (unavailableGoing.length > 0) {
       addVoteListSection(
         lines,
@@ -449,7 +479,16 @@ export function renderMatchCard(
       );
     }
   } else {
-    addParticipantSection(lines, votes, "going", maxLength, false);
+    addMixedParticipantListSection(
+      lines,
+      votes.filter((vote) => vote.option === "going"),
+      eligibleExternalParticipants,
+      match.id,
+      "Участвуют",
+      "🟢",
+      maxLength,
+      false,
+    );
   }
   addParticipantSection(lines, votes, "maybe", maxLength, false);
   if (votes.some((vote) => vote.option === "not_going")) {

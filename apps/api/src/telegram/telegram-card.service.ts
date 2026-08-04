@@ -13,6 +13,7 @@ import {
   ExternalParticipantsRepository,
   MatchMessagesRepository,
   MatchesRepository,
+  VenuesRepository,
   VotesRepository,
   type MatchMessage,
   type PublicationState,
@@ -196,6 +197,7 @@ export class TelegramCardService {
   private readonly matchMessages: MatchMessagesRepository;
   private readonly votes: VotesRepository;
   private readonly externalParticipants: ExternalParticipantsRepository;
+  private readonly venues: VenuesRepository;
 
   public constructor(
     @Inject(APP_DATABASE) db: AppDatabase,
@@ -206,6 +208,7 @@ export class TelegramCardService {
     this.matchMessages = new MatchMessagesRepository(db);
     this.votes = new VotesRepository(db);
     this.externalParticipants = new ExternalParticipantsRepository(db);
+    this.venues = new VenuesRepository(db);
   }
 
   public async validateVoteSource(
@@ -218,14 +221,16 @@ export class TelegramCardService {
 
   public async renderPublicCard(matchId: bigint): Promise<MatchCardView> {
     const match = await this.matches.getById(matchId);
-    const [votes, externalParticipants] = await Promise.all([
+    const [votes, externalParticipants, venue] = await Promise.all([
       this.votes.listByMatchId(matchId),
       this.externalParticipants.listByMatchId(matchId),
+      match.venueId === null ? Promise.resolve(undefined) : this.venues.findById(match.venueId),
     ]);
     const card = renderMatchCard(
       {
         match: toDomainMatch(match),
         votes: votes.map(toDomainVote),
+        mapUrl: venue?.mapUrl ?? null,
         externalParticipants: externalParticipants.map(toDomainExternalParticipant),
       },
       { timezone: this.apiConfig.groupTimezone, maxLength: TELEGRAM_MAX_MESSAGE_LENGTH },
