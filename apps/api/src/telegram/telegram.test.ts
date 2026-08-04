@@ -26,6 +26,7 @@ import { parseTelegramCallbackPayload } from "./callback-payload.js";
 import {
   handleInitializedTelegramUpdate,
   TelegramBotService,
+  telegramUpdateErrorCategory,
 } from "./telegram-effects.js";
 import {
   TelegramWebhookController,
@@ -208,6 +209,25 @@ describe("Telegram webhook security", () => {
 });
 
 describe("Telegram API effects", () => {
+  it("sanitizes Telegram update errors before they reach application logs", () => {
+    const catchSpy = vi.spyOn(Bot.prototype, "catch");
+    const sensitiveError = new Error("bot-token-must-not-appear-in-logs");
+    sensitiveError.name = "BotError";
+
+    try {
+      new TelegramBotService(apiConfig);
+
+      const handler = catchSpy.mock.calls[0]?.[0];
+      expect(handler).toBeDefined();
+      expect(() => handler?.(sensitiveError as never))
+        .toThrow("Telegram update processing failed (telegram_update)");
+      expect(`Telegram update processing failed (${telegramUpdateErrorCategory(sensitiveError)})`)
+        .not.toContain("bot-token-must-not-appear-in-logs");
+    } finally {
+      catchSpy.mockRestore();
+    }
+  });
+
   it("treats an unchanged message edit as an idempotent success", async () => {
     const service = new TelegramBotService(apiConfig);
     const editMessageText = vi.fn().mockRejectedValue(

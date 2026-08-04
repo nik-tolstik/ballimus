@@ -48,6 +48,12 @@ type TelegramAbortSignal = NonNullable<Parameters<Bot["api"]["sendMessage"]>[3]>
 type TelegramInitSignal = NonNullable<Parameters<Bot["init"]>[0]>;
 type TelegramUpdateBot = Pick<Bot, "handleUpdate" | "init" | "isInited">;
 
+export function telegramUpdateErrorCategory(error: unknown): string {
+  if (error instanceof GrammyError) return "telegram_api";
+  if (error instanceof Error && error.name === "BotError") return "telegram_update";
+  return "unexpected";
+}
+
 /** Initializes grammY before manually dispatching an update in webhook mode. */
 export async function handleInitializedTelegramUpdate(
   bot: TelegramUpdateBot,
@@ -109,6 +115,9 @@ export class TelegramBotService {
   public constructor(@Inject(API_CONFIG) apiConfig: ApiConfig) {
     this.botToken = apiConfig.telegramBotToken;
     this.bot = new Bot(apiConfig.telegramBotToken);
+    this.bot.catch((error) => {
+      throw new Error(`Telegram update processing failed (${telegramUpdateErrorCategory(error)})`);
+    });
   }
 
   public registerCallbackHandler(handler: TelegramCallbackHandler): void {

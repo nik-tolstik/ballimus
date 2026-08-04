@@ -160,6 +160,17 @@ function normalizedTimeSelection(
     }
     return { availableAfter: null, exactTimes: [] };
   }
+  if (
+    match.status === "confirmed"
+    && match.selectedTime !== null
+    && match.selectedTime !== undefined
+    && availableAfterInput === undefined
+    && exactTimesInput === undefined
+  ) {
+    return match.timeMode === "availability"
+      ? { availableAfter: match.selectedTime, exactTimes: [] }
+      : { availableAfter: null, exactTimes: [match.selectedTime] };
+  }
   if (match.timeMode === "availability") {
     if (availableAfterInput === undefined || availableAfterInput === null || !match.timeOptions.includes(availableAfterInput)) {
       throw new ValidationRepositoryError("availableAfter must be one of the match time options");
