@@ -47,11 +47,11 @@ vi.mock('@football/api-client', () => ({
   useUpdateOwnerPlayerReadableName: () => queryState.mutation,
 }))
 
-import App, { MatchEditor, TabBar, weatherWarningMessage } from './App'
+import App, { MatchEditor, TabBar, voteCorrectionForRosterTarget, weatherWarningMessage } from './App'
 import { brandForEnvironment } from './brand'
 import { DatePicker } from './components/football/date-time-picker'
 import { currentHourTime, editorTimeConfiguration, validateEditorValues } from './components/football/match-editor'
-import { availabilityCountAt, cancellationReasonText, CancellationReasonFields, groupMatchesByLifecycle, initialsForName, matchProgressRank, MatchesPanel, MatchRoster, MatchSettings, playerAvatarColor, PlayersPanel, rosterGroupCount, validateCancellationReason, validateExternalParticipantName, validateExternalParticipantValues, validateFinalMatchDetails, validatePlayerPseudonym, voteDropZoneStyle, voteOptionFromDropTarget, voteRemovalAction } from './components/football/panels'
+import { availabilityCountAt, cancellationReasonText, CancellationReasonFields, groupMatchesByLifecycle, initialsForName, matchProgressRank, MatchesPanel, MatchRoster, MatchSettings, optimisticVoteForRosterTarget, playerAvatarColor, PlayersPanel, rosterGroupCount, validateCancellationReason, validateExternalParticipantName, validateExternalParticipantValues, validateFinalMatchDetails, validatePlayerPseudonym, voteDropZoneStyle, voteOptionFromDropTarget, voteRemovalAction } from './components/football/panels'
 import type { NormalizedMatch, NormalizedPlayer, NormalizedVenue } from './normalize'
 import type { TelegramSession } from './telegram'
 
@@ -455,6 +455,26 @@ describe('API-backed surface states', () => {
     expect(voteDropZoneStyle('after:19:00')).toMatchObject({ zone: expect.stringContaining('success') })
     expect(availabilityCountAt(match, '19:00')).toBe(2)
     expect(availabilityCountAt(match, '20:00')).toBe(3)
+  })
+
+  it('preserves the selected flexible-time choice when moving a player to going', () => {
+    const vote = { playerId: 'player-1', telegramUserId: '1', username: 'timofey', readableName: 'Тимофей', avatarUrl: undefined, option: 'maybe' as const, exactTimes: [] }
+    const availabilityMatch: NormalizedMatch = {
+      ...normalizedMatch,
+      time: '20:00',
+      timeMode: 'availability',
+      timeOptions: ['19:00', '20:00'],
+      selectedTime: '20:00',
+    }
+    const exactOptionsMatch: NormalizedMatch = {
+      ...availabilityMatch,
+      timeMode: 'exact_options',
+    }
+
+    expect(voteCorrectionForRosterTarget(availabilityMatch, vote, 'going')).toEqual({ playerId: 'player-1', option: 'going', availableAfter: '20:00' })
+    expect(voteCorrectionForRosterTarget(exactOptionsMatch, vote, 'going')).toEqual({ playerId: 'player-1', option: 'going', availableAfter: null, exactTimes: ['20:00'] })
+    expect(optimisticVoteForRosterTarget(availabilityMatch, vote, 'going')).toMatchObject({ option: 'going', availableAfter: '20:00', exactTimes: [] })
+    expect(optimisticVoteForRosterTarget(exactOptionsMatch, vote, 'going')).toMatchObject({ option: 'going', availableAfter: undefined, exactTimes: ['20:00'] })
   })
 
   it('renders several precise time groups without after-time labels', () => {

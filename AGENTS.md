@@ -14,6 +14,8 @@
 
 ## Production verification
 
+- Production PostgreSQL may be queried read-only for diagnosis when the user requests production analysis. Use the configured Railway or database access path, inspect only the minimum data needed, and never print credentials, tokens, connection strings, or signed Telegram data.
+- A production PostgreSQL mutation is allowed only when the user explicitly requests that specific database change. Resolve and verify the exact target with read-only checks first, keep the change narrow and auditable, and do not infer permission to deploy code, run migrations, change a webhook, change BotFather settings, or send Telegram messages.
 - Production deployment, migrations, webhook registration, BotFather changes, and Telegram messages still require explicit owner authorization.
 - `pnpm release:verify-production` is the minimum post-deploy check. It is read-only: it validates GitHub CI and Vercel status, Railway API and Jobs, API health and CORS, the migration ledger, and Telegram webhook health. It must never deploy, migrate, change a webhook, or create Telegram data.
 - The command reads only public verifier settings from the ignored `.env.production.local`; do not put Telegram or PostgreSQL secrets in those verifier settings. It requires authenticated `gh` and `railway` CLIs.

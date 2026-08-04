@@ -37,6 +37,7 @@ import {
   useRestoreOwnerVenue,
   type MatchCreateDto,
   type PatchMatchDto,
+  type VoteCorrectionDto,
 } from '@football/api-client'
 
 import { Button } from '@/components/ui/button'
@@ -69,6 +70,22 @@ type AuthFailure = 'unauthorized' | 'expired' | undefined
 function requestKey(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
   return `football-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+}
+
+export function voteCorrectionForRosterTarget(match: NormalizedMatch, vote: NormalizedVote, target: NormalizedRosterTarget): VoteCorrectionDto {
+  const timeTarget = target.startsWith('after:') || target.startsWith('at:')
+  const option: NormalizedVoteOption = timeTarget ? 'going' : target as NormalizedVoteOption
+  const availableAfter = target.startsWith('after:')
+    ? target.slice(target.indexOf(':') + 1)
+    : match.timeMode === 'availability' && match.selectedTime !== undefined && option === 'going'
+      ? match.selectedTime
+      : null
+  const exactTimes = target.startsWith('at:')
+    ? [target.slice(target.indexOf(':') + 1)]
+    : match.timeMode === 'exact_options' && match.selectedTime !== undefined && option === 'going'
+      ? [match.selectedTime]
+      : undefined
+  return { playerId: vote.playerId, option, availableAfter, ...(exactTimes === undefined ? {} : { exactTimes }) }
 }
 
 function errorMessage(error: unknown): string {
@@ -206,11 +223,7 @@ export function App({ telegramSession }: AppProps = {}) {
   const handleComplete = (match: NormalizedMatch) => completeMutation.mutate({ id: match.id, headers: versionedHeaders(match) }, { onSuccess: () => finishMutation(match.id) })
   const handleCancel = (match: NormalizedMatch, cancellationReason: string) => cancelMutation.mutate({ id: match.id, data: { cancellationReason }, headers: versionedHeaders(match) }, { onSuccess: () => finishMutation(match.id) })
   const handleCorrectVote = async (match: NormalizedMatch, vote: NormalizedVote, target: NormalizedRosterTarget) => {
-    const timeTarget = target.startsWith('after:') || target.startsWith('at:')
-    const option: NormalizedVoteOption = timeTarget ? 'going' : target as NormalizedVoteOption
-    const availableAfter = target.startsWith('after:') ? target.slice(target.indexOf(':') + 1) : null
-    const exactTimes = target.startsWith('at:') ? [target.slice(target.indexOf(':') + 1)] : undefined
-    await correctVoteMutation.mutateAsync({ id: match.id, data: { playerId: vote.playerId, option, availableAfter, ...(exactTimes === undefined ? {} : { exactTimes }) }, headers: { 'Idempotency-Key': requestKey() } })
+    await correctVoteMutation.mutateAsync({ id: match.id, data: voteCorrectionForRosterTarget(match, vote, target), headers: { 'Idempotency-Key': requestKey() } })
     finishMutation(match.id)
   }
   const handleRemoveVote = (match: NormalizedMatch, vote: NormalizedVote, target: NormalizedRosterTarget) => {
