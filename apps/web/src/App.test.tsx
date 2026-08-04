@@ -51,8 +51,8 @@ import App, { MatchEditor, TabBar, weatherWarningMessage } from './App'
 import { brandForEnvironment } from './brand'
 import { DatePicker } from './components/football/date-time-picker'
 import { currentHourTime, editorTimeConfiguration, validateEditorValues } from './components/football/match-editor'
-import { availabilityCountAt, cancellationReasonText, CancellationReasonFields, initialsForName, MatchesPanel, MatchRoster, MatchSettings, playerAvatarColor, PlayersPanel, rosterGroupCount, validateCancellationReason, validateExternalParticipantName, validateExternalParticipantValues, validateFinalMatchDetails, validatePlayerPseudonym, voteDropZoneStyle, voteOptionFromDropTarget, voteRemovalAction } from './components/football/panels'
-import type { NormalizedMatch, NormalizedPlayer } from './normalize'
+import { availabilityCountAt, cancellationReasonText, CancellationReasonFields, groupMatchesByLifecycle, initialsForName, matchProgressRank, MatchesPanel, MatchRoster, MatchSettings, playerAvatarColor, PlayersPanel, rosterGroupCount, validateCancellationReason, validateExternalParticipantName, validateExternalParticipantValues, validateFinalMatchDetails, validatePlayerPseudonym, voteDropZoneStyle, voteOptionFromDropTarget, voteRemovalAction } from './components/football/panels'
+import type { NormalizedMatch, NormalizedPlayer, NormalizedVenue } from './normalize'
 import type { TelegramSession } from './telegram'
 
 const readySession: TelegramSession = {
@@ -264,6 +264,50 @@ describe('API-backed surface states', () => {
     expect(detailMarkup.indexOf('Сводка')).toBeLessThan(detailMarkup.indexOf('Ближайшее действие'))
     expect(detailMarkup.indexOf('Карточка опубликована')).toBeLessThan(detailMarkup.indexOf(normalizedMatch.dateLabel))
     expect(detailMarkup).not.toContain('>Telegram</span>')
+  })
+
+  it('orders match cards by progression in a status-railed itinerary without a duplicate title', () => {
+    const sharedProps = {
+      onSelect: vi.fn(), onCreate: vi.fn().mockResolvedValue(undefined), onPatch: vi.fn(), onPublish: vi.fn(), onFinalize: vi.fn().mockResolvedValue(undefined), onConfirm: vi.fn(), onComplete: vi.fn(), onSendWeather: vi.fn(), onCancel: vi.fn(), onCorrectVote: vi.fn(), onRemoveVote: vi.fn(), onAddExternal: vi.fn(), onUpdateExternal: vi.fn(), onRemoveExternal: vi.fn(), onReconcile: vi.fn(), conflict: '', onClearConflict: vi.fn(), saving: false, actionPending: false,
+    }
+    const draft = { ...normalizedMatch, id: '1', status: 'draft' as const, planningStage: undefined, statusLabel: 'Черновик', statusShortLabel: 'Черновик' }
+    const recruiting = { ...normalizedMatch, id: '2', title: 'Устаревший заголовок матча', dateLabel: 'Среда, 29 июля · время выбираем', timeMode: 'availability' as const, time: '', timeOptions: ['19:00'], selectedTime: undefined }
+    const finalizing = { ...normalizedMatch, id: '3', planningStage: 'finalizing_details' as const, statusLabel: 'Уточняем время и место', statusShortLabel: 'Уточнить детали' }
+    const ready = { ...normalizedMatch, id: '4', planningStage: 'ready_to_confirm' as const, statusLabel: 'Готов к подтверждению', statusShortLabel: 'Можно подтверждать' }
+    const confirmed = { ...normalizedMatch, id: '5', status: 'confirmed' as const, planningStage: undefined, statusLabel: 'Подтверждён', statusShortLabel: 'Подтверждён' }
+    const groups = groupMatchesByLifecycle([draft, recruiting, finalizing, ready, confirmed])
+    const markup = renderToStaticMarkup(<MatchesPanel {...sharedProps} matches={[draft, recruiting, finalizing, ready, confirmed]} selected={undefined} />)
+
+    expect(groups.map((group) => group.key)).toEqual(['confirmed', 'active', 'draft'])
+    expect(groups[1]?.matches.map((match) => match.id)).toEqual(['4', '3', '2'])
+    expect(matchProgressRank(confirmed)).toBeLessThan(matchProgressRank(finalizing))
+    expect(matchProgressRank(finalizing)).toBeLessThan(matchProgressRank(recruiting))
+    expect(markup.indexOf('Подтверждённые')).toBeLessThan(markup.indexOf('Открытые'))
+    expect(markup.indexOf('Открытые')).toBeLessThan(markup.indexOf('Черновики'))
+    expect(markup).not.toContain('Дата и время')
+    expect(markup).not.toContain('Место')
+    expect(markup).not.toContain('data-slot="separator"')
+    expect(markup).not.toContain(recruiting.title)
+    expect(markup.match(/время выбираем/gu)).toHaveLength(1)
+    expect(markup).toContain(`${recruiting.goingCount} из ${recruiting.requiredPlayers}`)
+    expect(markup).toContain('data-match-status-accent="active"')
+    expect(markup).toContain('data-match-status-label="active"')
+    expect(markup).toContain('text-blue-700')
+    expect(markup).toContain('data-match-status-label="confirmed"')
+    expect(markup).toContain('text-success')
+  })
+
+  it('labels a named booking contact next to its call button', () => {
+    const venue: NormalizedVenue = {
+      id: 'venue-1', name: 'BOX365', mapUrl: 'https://maps.example.test/box365', venueType: 'indoor', bookingContacts: [{ name: 'Администратор', phone: '+375 29 123-45-67' }, { phone: '+375 44 765-43-21' }], websiteUrl: undefined, archivedAt: undefined, version: 1,
+    }
+    const sharedProps = {
+      matches: [normalizedMatch], selected: { ...normalizedMatch, venue }, onSelect: vi.fn(), onCreate: vi.fn().mockResolvedValue(undefined), onPatch: vi.fn(), onPublish: vi.fn(), onFinalize: vi.fn().mockResolvedValue(undefined), onConfirm: vi.fn(), onComplete: vi.fn(), onSendWeather: vi.fn(), onCancel: vi.fn(), onCorrectVote: vi.fn(), onRemoveVote: vi.fn(), onAddExternal: vi.fn(), onUpdateExternal: vi.fn(), onRemoveExternal: vi.fn(), onReconcile: vi.fn(), conflict: '', onClearConflict: vi.fn(), saving: false, actionPending: false,
+    }
+    const markup = renderToStaticMarkup(<MatchesPanel {...sharedProps} />)
+
+    expect(markup).toContain('Администратор · +375 29 123-45-67')
+    expect(markup).toContain('+375 44 765-43-21')
   })
 
   it('shows the next action for every planning stage', () => {

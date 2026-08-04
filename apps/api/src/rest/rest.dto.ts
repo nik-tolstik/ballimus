@@ -16,6 +16,7 @@ import {
   Min,
   MinLength,
   ValidateIf,
+  ValidateNested,
 } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
@@ -204,6 +205,26 @@ export class VenueListQueryDto {
   includeArchived?: boolean;
 }
 
+export class VenueBookingContactDto {
+  @ApiPropertyOptional({ type: String, example: "Администратор", maxLength: 100 })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => {
+    if (typeof value !== "string") return value;
+    const normalized = value.trim();
+    return normalized === "" ? undefined : normalized;
+  })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  name?: string;
+
+  @ApiProperty({ type: String, example: "+375 29 123-45-67" })
+  @Transform(({ value }: { value: unknown }) => typeof value === "string" ? value.trim() : value)
+  @IsString()
+  @Matches(PHONE_PATTERN)
+  phone!: string;
+}
+
 export class VenueCreateDto {
   @ApiProperty({ type: String, example: "BOX365 Октябрьская", minLength: 2, maxLength: 200 })
   @Transform(({ value }: { value: unknown }) => typeof value === "string" ? value.trim() : value)
@@ -222,14 +243,14 @@ export class VenueCreateDto {
   @IsIn(venueTypes)
   venueType!: (typeof venueTypes)[number];
 
-  @ApiPropertyOptional({ type: [String], example: ["+375 29 123-45-67"], maxItems: 5 })
+  @ApiPropertyOptional({ type: [VenueBookingContactDto], example: [{ name: "Администратор", phone: "+375 29 123-45-67" }], maxItems: 5 })
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(5)
-  @ArrayUnique()
-  @IsString({ each: true })
-  @Matches(PHONE_PATTERN, { each: true })
-  bookingPhones?: string[];
+  @ArrayUnique((contact: VenueBookingContactDto) => contact.phone)
+  @ValidateNested({ each: true })
+  @Type(() => VenueBookingContactDto)
+  bookingContacts?: VenueBookingContactDto[];
 
   @ApiPropertyOptional({ type: String, nullable: true, example: "https://box365.by", format: "uri" })
   @IsOptional()
@@ -261,14 +282,14 @@ export class VenueUpdateDto {
   @IsIn(venueTypes)
   venueType?: (typeof venueTypes)[number];
 
-  @ApiPropertyOptional({ type: [String], maxItems: 5 })
+  @ApiPropertyOptional({ type: [VenueBookingContactDto], maxItems: 5 })
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(5)
-  @ArrayUnique()
-  @IsString({ each: true })
-  @Matches(PHONE_PATTERN, { each: true })
-  bookingPhones?: string[];
+  @ArrayUnique((contact: VenueBookingContactDto) => contact.phone)
+  @ValidateNested({ each: true })
+  @Type(() => VenueBookingContactDto)
+  bookingContacts?: VenueBookingContactDto[];
 
   @ApiPropertyOptional({ type: String, nullable: true, format: "uri" })
   @IsOptional()

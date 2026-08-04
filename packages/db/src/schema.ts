@@ -21,6 +21,11 @@ export type MatchStatus = (typeof matchStatuses)[number];
 export const venueTypes = ["outdoor", "indoor"] as const;
 export type VenueType = (typeof venueTypes)[number];
 
+export interface BookingContact {
+  readonly name?: string;
+  readonly phone: string;
+}
+
 export const matchTimeModes = ["exact", "exact_options", "availability"] as const;
 export type MatchTimeMode = (typeof matchTimeModes)[number];
 
@@ -188,7 +193,7 @@ export const venues = pgTable(
     name: text("name").notNull(),
     mapUrl: text("map_url").notNull(),
     venueType: text("venue_type", { enum: venueTypes }).notNull(),
-    bookingPhones: text("booking_phones").array().notNull().default(sql`ARRAY[]::text[]`),
+    bookingContacts: jsonb("booking_contacts").$type<BookingContact[]>().notNull().default(sql`'[]'::jsonb`),
     websiteUrl: text("website_url"),
     archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }),
     version: integer("version").notNull().default(1),
@@ -199,7 +204,7 @@ export const venues = pgTable(
     check("venues_name_not_empty", sql`length(trim(${table.name})) > 0`),
     check("venues_map_url_not_empty", sql`length(trim(${table.mapUrl})) > 0`),
     check("venues_type_valid", sql`${table.venueType} in (${venueTypeSql})`),
-    check("venues_booking_phones_limit", sql`cardinality(${table.bookingPhones}) between 0 and 5`),
+    check("venues_booking_contacts_valid", sql`case when jsonb_typeof(${table.bookingContacts}) = 'array' then jsonb_array_length(${table.bookingContacts}) between 0 and 5 else false end`),
     check("venues_version_positive", sql`${table.version} >= 1`),
     uniqueIndex("venues_name_ci_unique").on(sql`lower(${table.name})`),
     index("venues_archived_at_idx").on(table.archivedAt),

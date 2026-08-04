@@ -64,6 +64,13 @@
       "when": 1786012800000,
       "tag": "0008_venues",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786099200000,
+      "tag": "0009_booking_contacts",
+      "breakpoints": true
     }
   ]
 }

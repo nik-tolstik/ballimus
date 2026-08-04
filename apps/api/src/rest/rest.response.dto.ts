@@ -151,6 +151,14 @@ export class PublicCardResponseDto {
   publicationUncertainAt!: string | null;
 }
 
+export class VenueBookingContactResponseDto {
+  @ApiPropertyOptional({ type: String })
+  name?: string;
+
+  @ApiProperty({ type: String })
+  phone!: string;
+}
+
 export class VenueResponseDto {
   @ApiProperty({ type: String, example: "15" })
   id!: string;
@@ -164,8 +172,8 @@ export class VenueResponseDto {
   @ApiProperty({ type: String, enum: ["outdoor", "indoor"] })
   venueType!: "outdoor" | "indoor";
 
-  @ApiProperty({ type: [String] })
-  bookingPhones!: string[];
+  @ApiProperty({ type: [VenueBookingContactResponseDto] })
+  bookingContacts!: VenueBookingContactResponseDto[];
 
   @ApiProperty({ type: String, nullable: true, format: "uri" })
   websiteUrl!: string | null;

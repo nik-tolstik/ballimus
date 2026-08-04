@@ -5,7 +5,7 @@ const catalogVenue = {
   name: 'BOX365 Пушкинская',
   mapUrl: 'https://maps.example.test/box365-pushkin',
   venueType: 'indoor',
-  bookingPhones: ['+375 29 123-45-67'],
+  bookingContacts: [{ name: 'Администратор', phone: '+375 29 123-45-67' }],
   websiteUrl: 'https://box365.example.test',
   archivedAt: null,
   version: 1,
@@ -13,7 +13,36 @@ const catalogVenue = {
   updatedAt: '2026-08-01T12:00:00.000Z',
 }
 
-async function mockOwnerApp(page: Page): Promise<string[]> {
+function matchFixture(overrides: Record<string, unknown>) {
+  return {
+    id: '1',
+    chatId: '-100',
+    scheduledAt: '2026-08-12T17:00:00.000Z',
+    timeMode: 'exact',
+    timeOptions: [],
+    selectedTime: null,
+    schedule: { date: '2026-08-12', time: '20:00', timezone: 'Europe/Minsk' },
+    location: 'BOX365 Пушкинская',
+    venueType: 'indoor',
+    venue: catalogVenue,
+    fieldPriceRubles: 120,
+    title: 'Устаревший заголовок матча',
+    displayTitle: 'Устаревший заголовок матча',
+    requiredPlayers: 10,
+    status: 'active',
+    planningStage: 'recruiting_players',
+    version: 1,
+    cancellationReason: null,
+    creatorTelegramUserId: '1',
+    createdAt: '2026-08-01T12:00:00.000Z',
+    updatedAt: '2026-08-01T12:00:00.000Z',
+    roster: { counts: { goingVotes: 4, externalParticipants: 0, goingCount: 4, requiredPlayers: 10, thresholdReached: false, remainingToThreshold: 6 }, votes: [], externalParticipants: [] },
+    publicCard: { publicationState: 'published', reconciliationState: 'none', reconciliationRequired: false, telegramChatId: '-100', telegramTopicId: '1', telegramMessageId: '10', publicationAttemptedAt: null, publicationUncertainAt: null },
+    ...overrides,
+  }
+}
+
+async function mockOwnerApp(page: Page, matches: readonly Record<string, unknown>[] = []): Promise<string[]> {
   const availableVenues = [catalogVenue]
   const consoleErrors: string[] = []
 
@@ -58,11 +87,11 @@ async function mockOwnerApp(page: Page): Promise<string[]> {
         matches: { drafts: [], active: [], confirmed: [], history: [] },
       })
     }
-    if (request.method() === 'GET' && pathname === '/v1/matches') return json({ matches: [] })
+    if (request.method() === 'GET' && pathname === '/v1/matches') return json({ matches })
     if (request.method() === 'GET' && pathname === '/v1/players') return json({ players: [] })
     if (request.method() === 'GET' && pathname === '/v1/venues') return json({ venues: availableVenues })
     if (request.method() === 'POST' && pathname === '/v1/venues') {
-      const values = request.postDataJSON() as Pick<typeof catalogVenue, 'name' | 'mapUrl' | 'venueType' | 'bookingPhones' | 'websiteUrl'>
+      const values = request.postDataJSON() as Pick<typeof catalogVenue, 'name' | 'mapUrl' | 'venueType' | 'bookingContacts' | 'websiteUrl'>
       const venue = { ...catalogVenue, ...values, id: '2', version: 1 }
       availableVenues.push(venue)
       return json({ venue })
@@ -125,9 +154,44 @@ test('searches by venue name and selects a venue created from the match form', a
   await expect(page.getByRole('heading', { name: 'Новое место', exact: true })).toBeVisible()
   await page.locator('#venue-name').fill('BOX365 Октябрьская')
   await page.locator('#venue-map-url').fill('https://maps.example.test/box365-october')
+  await page.getByLabel('Имя контакта 1').fill('Администратор')
+  await page.getByLabel('Телефон для бронирования 1').fill('+375 29 123-45-67')
   await page.getByRole('button', { name: 'Добавить место', exact: true }).click()
 
   await expect(venueSelect).toContainText('BOX365 Октябрьская')
   expect(consoleErrors).toEqual([])
   await page.screenshot({ path: testInfo.outputPath('venue-autocomplete.png'), fullPage: false })
+})
+
+test('orders match cards by progression without duplicating the pending-time label', async ({ page }, testInfo) => {
+  const consoleErrors = await mockOwnerApp(page, [
+    matchFixture({ id: '1', status: 'draft', planningStage: null }),
+    matchFixture({ id: '2', timeMode: 'availability', timeOptions: ['19:00', '20:00'], scheduledAt: null, schedule: { date: '2026-08-12', time: null, timezone: 'Europe/Minsk' }, displayTitle: 'Вторник, 12 августа · время выбираем' }),
+    matchFixture({ id: '3', status: 'confirmed', planningStage: null }),
+    matchFixture({ id: '4', planningStage: 'finalizing_details' }),
+  ])
+  await page.goto('/')
+
+  await expect(page.locator('[aria-label="Предстоящие матчи"] > section')).toHaveCount(3)
+  const groupOrder = await page.locator('[aria-label="Предстоящие матчи"] > section').evaluateAll((sections) => sections.map((section) => section.getAttribute('aria-labelledby')))
+  const activeMatchOrder = await page.locator('[aria-labelledby="match-group-active"] [aria-label^="Открыть матч"]').evaluateAll((cards) => cards.map((card) => card.getAttribute('aria-label')))
+  expect(groupOrder).toEqual(['match-group-confirmed', 'match-group-active', 'match-group-draft'])
+  expect(activeMatchOrder).toEqual(['Открыть матч #4', 'Открыть матч #2'])
+  await expect(page.getByRole('heading', { name: 'Черновики', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Открытые', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Подтверждённые', exact: true })).toBeVisible()
+  const pendingTimeCard = page.getByRole('button', { name: 'Открыть матч #2', exact: true })
+  await expect(pendingTimeCard).not.toContainText('Дата и время')
+  await expect(pendingTimeCard).not.toContainText('Место')
+  await expect(pendingTimeCard.locator('[data-slot="separator"]')).toHaveCount(0)
+  await expect(pendingTimeCard).toContainText('время выбираем')
+  await expect(pendingTimeCard).toContainText('4 из 10')
+  await expect(pendingTimeCard).not.toContainText('Устаревший заголовок матча')
+  const pendingTimeCardText = await pendingTimeCard.textContent()
+  expect(pendingTimeCardText?.match(/время выбираем/gu) ?? []).toHaveLength(1)
+  await expect(pendingTimeCard.locator('[data-match-status-label="active"]')).toHaveClass(/text-blue-700/u)
+  await expect(page.locator('[data-match-status-accent="active"].bg-blue-500')).toHaveCount(1)
+  await expect(page.locator('[data-match-status-label="confirmed"]')).toHaveClass(/text-success/u)
+  expect(consoleErrors).toEqual([])
+  await page.screenshot({ path: testInfo.outputPath('match-lifecycle-groups.png'), fullPage: false })
 })

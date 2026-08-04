@@ -84,6 +84,8 @@ export * from './updateOwnerPlayerAliasHeaders.js';
 export * from './updateOwnerPlayerReadableNameHeaders.js';
 export * from './updateOwnerVenueHeaders.js';
 export * from './updatePlayerDto.js';
+export * from './venueBookingContactDto.js';
+export * from './venueBookingContactResponseDto.js';
 export * from './venueCreateDto.js';
 export * from './venueCreateDtoVenueType.js';
 export * from './venueEnvelopeResponseDto.js';

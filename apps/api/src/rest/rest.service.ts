@@ -152,7 +152,7 @@ interface VenueBody extends Record<string, unknown> {
   readonly name: string;
   readonly mapUrl: string;
   readonly venueType: "outdoor" | "indoor";
-  readonly bookingPhones: readonly string[];
+  readonly bookingContacts: readonly { readonly name?: string; readonly phone: string }[];
   readonly websiteUrl: string | null;
   readonly archivedAt: string | null;
   readonly version: number;
@@ -437,7 +437,7 @@ export class OwnerRestService {
     venueId: bigint,
     input: VenueUpdateDto,
   ): Promise<Record<string, unknown>> {
-    if (!hasOwn(input, "name") && !hasOwn(input, "mapUrl") && !hasOwn(input, "venueType") && !hasOwn(input, "bookingPhones") && !hasOwn(input, "websiteUrl")) {
+    if (!hasOwn(input, "name") && !hasOwn(input, "mapUrl") && !hasOwn(input, "venueType") && !hasOwn(input, "bookingContacts") && !hasOwn(input, "websiteUrl")) {
       throw restRequestError(400, "VENUE_UPDATE_EMPTY", "At least one editable venue field is required.");
     }
     const expectedVersion = parseIfMatch(ifMatchHeader, true);
@@ -1592,7 +1592,7 @@ export class OwnerRestService {
       name: venue.name,
       mapUrl: venue.mapUrl,
       venueType: venue.venueType,
-      bookingPhones: venue.bookingPhones,
+      bookingContacts: venue.bookingContacts,
       websiteUrl: venue.websiteUrl,
       archivedAt: venue.archivedAt,
       version: venue.version,

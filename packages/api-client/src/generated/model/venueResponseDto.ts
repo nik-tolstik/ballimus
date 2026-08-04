@@ -6,13 +6,14 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { VenueResponseDtoVenueType } from './venueResponseDtoVenueType.js';
+import type { VenueBookingContactResponseDto } from './venueBookingContactResponseDto.js';
 
 export interface VenueResponseDto {
   id: string;
   name: string;
   mapUrl: string;
   venueType: VenueResponseDtoVenueType;
-  bookingPhones: string[];
+  bookingContacts: VenueBookingContactResponseDto[];
   /** @nullable */
   websiteUrl: string | null;
   /** @nullable */

@@ -123,10 +123,115 @@ interface MatchesPanelProps {
 
 function statusBadge(match: NormalizedMatch) {
   if (match.status === 'cancelled') return <Badge variant="destructive">{match.statusLabel}</Badge>
-  if (match.status === 'confirmed' || match.status === 'completed' || match.planningStage === 'ready_to_confirm') {
+  if (match.status === 'confirmed' || match.planningStage === 'ready_to_confirm') {
     return <Badge variant="secondary" className="bg-success/12 text-success"><span className="size-1.5 rounded-full bg-success" />{match.statusShortLabel}</Badge>
   }
+  if (match.status === 'active' && match.planningStage === 'finalizing_details') {
+    return <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:bg-amber-400/20 dark:text-amber-200"><span className="size-1.5 rounded-full bg-amber-500" />{match.statusShortLabel}</Badge>
+  }
+  if (match.status === 'active') {
+    return <Badge variant="secondary" className="bg-blue-500/12 text-blue-700 dark:bg-blue-400/20 dark:text-blue-200"><span className="size-1.5 rounded-full bg-blue-500" />{match.statusShortLabel}</Badge>
+  }
+  if (match.status === 'draft' || match.status === 'completed') {
+    return <Badge variant="secondary" className="bg-slate-500/12 text-slate-700 dark:bg-slate-400/20 dark:text-slate-200">{match.statusShortLabel}</Badge>
+  }
   return <Badge variant="secondary">{match.statusShortLabel}</Badge>
+}
+
+function statusAccentClass(match: NormalizedMatch): string {
+  if (match.status === 'cancelled') return 'bg-destructive'
+  if (match.status === 'confirmed' || match.planningStage === 'ready_to_confirm') return 'bg-success'
+  if (match.status === 'active' && match.planningStage === 'finalizing_details') return 'bg-amber-500'
+  if (match.status === 'active') return 'bg-blue-500'
+  return 'bg-slate-400 dark:bg-slate-500'
+}
+
+function matchCardStatusClass(match: NormalizedMatch): string {
+  if (match.status === 'cancelled') return 'text-destructive'
+  if (match.status === 'confirmed' || match.planningStage === 'ready_to_confirm') return 'text-success'
+  if (match.status === 'active' && match.planningStage === 'finalizing_details') return 'text-amber-700 dark:text-amber-200'
+  if (match.status === 'active') return 'text-blue-700 dark:text-blue-200'
+  return 'text-slate-700 dark:text-slate-200'
+}
+
+function MatchListCard({ match, onOpen }: { readonly match: NormalizedMatch; readonly onOpen: () => void }) {
+  return (
+    <Card size="sm" className="relative overflow-hidden border-border/80 py-0 shadow-sm">
+      <span aria-hidden="true" data-match-status-accent={match.status} className={cn('absolute inset-y-0 left-0 w-1', statusAccentClass(match))} />
+      <button type="button" className="w-full px-5 py-1 text-left" onClick={onOpen} aria-label={`Открыть матч #${match.id}`}>
+        <div className="flex min-h-9 items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span data-match-status-label={match.status} className={cn('inline-flex min-w-0 items-center gap-1.5 truncate text-xs font-medium', matchCardStatusClass(match))}>
+              <span aria-hidden="true" className={cn('size-2 shrink-0 rounded-full', statusAccentClass(match))} />
+              <span className="truncate">{match.statusShortLabel}</span>
+            </span>
+            <span className="shrink-0 text-xs text-muted-foreground">#{match.id}</span>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-secondary px-2.5 text-xs font-semibold tabular-nums text-secondary-foreground">
+              <Users className="size-3.5 text-muted-foreground" />
+              {match.goingCount} из {match.requiredPlayers}
+            </span>
+            <ChevronRight className="size-4 text-muted-foreground" />
+          </div>
+        </div>
+        <div className="flex flex-col">
+          <div className="flex min-h-8 items-center gap-3">
+            <CalendarDays className="size-4 shrink-0 text-muted-foreground" />
+            <p className="min-w-0 truncate text-sm font-normal leading-5">{compactMatchDateLabel(match.dateLabel)}</p>
+          </div>
+          <div className="flex min-h-8 items-center gap-3">
+            <MapPin className="size-4 shrink-0 text-muted-foreground" />
+            <p className="min-w-0 truncate text-sm font-normal leading-5">{match.location}</p>
+          </div>
+        </div>
+      </button>
+    </Card>
+  )
+}
+
+function compactMatchDateLabel(label: string): string {
+  return label
+    .replace(/^Понедельник,/u, 'Пн,')
+    .replace(/^Вторник,/u, 'Вт,')
+    .replace(/^Среда,/u, 'Ср,')
+    .replace(/^Четверг,/u, 'Чт,')
+    .replace(/^Пятница,/u, 'Пт,')
+    .replace(/^Суббота,/u, 'Сб,')
+    .replace(/^Воскресенье,/u, 'Вс,')
+}
+
+export interface MatchListGroup {
+  readonly key: 'draft' | 'active' | 'confirmed'
+  readonly title: string
+  readonly matches: readonly NormalizedMatch[]
+}
+
+export function matchProgressRank(match: NormalizedMatch): number {
+  if (match.status === 'confirmed') return 0
+  if (match.status === 'active' && match.planningStage === 'ready_to_confirm') return 1
+  if (match.status === 'active' && match.planningStage === 'finalizing_details') return 2
+  if (match.status === 'active' && match.planningStage === 'recruiting_players') return 3
+  if (match.status === 'active') return 4
+  return 5
+}
+
+function sortMatchesByProgress(matches: readonly NormalizedMatch[]): readonly NormalizedMatch[] {
+  return matches
+    .map((match, index) => ({ match, index }))
+    .sort((left, right) => matchProgressRank(left.match) - matchProgressRank(right.match) || left.index - right.index)
+    .map(({ match }) => match)
+}
+
+export function groupMatchesByLifecycle(matches: readonly NormalizedMatch[]): readonly MatchListGroup[] {
+  const groups: readonly Omit<MatchListGroup, 'matches'>[] = [
+    { key: 'confirmed', title: 'Подтверждённые' },
+    { key: 'active', title: 'Открытые' },
+    { key: 'draft', title: 'Черновики' },
+  ]
+  return groups
+    .map((group) => ({ ...group, matches: sortMatchesByProgress(matches.filter((match) => match.status === group.key)) }))
+    .filter((group) => group.matches.length > 0)
 }
 
 function plural(count: number, one: string, few: string, many: string): string {
@@ -687,6 +792,7 @@ export function MatchesPanel(props: MatchesPanelProps) {
   const editorSheetRef = useRef<HTMLDivElement>(null)
   const reduceMotion = useReducedMotion()
   const editingMatch = selected?.id === editingMatchId ? selected : matches.find((match) => match.id === editingMatchId)
+  const matchGroups = groupMatchesByLifecycle(matches)
   const openCreate = () => { setEditingMatchId(null); setEditorOpen(true) }
   const openEdit = () => { if (selected) { setEditingMatchId(selected.id); setEditorOpen(true) } }
   const openMatch = (id: string) => { setDetailTab('overview'); onSelect(id) }
@@ -728,11 +834,11 @@ export function MatchesPanel(props: MatchesPanelProps) {
   return (
     <section className="flex flex-col gap-5">
       {selected === undefined ? <>
-        <div className="flex items-end justify-between gap-4"><div><h1 className="text-2xl font-semibold tracking-tight">Матчи</h1><p className="mt-1 text-sm text-muted-foreground">{matches.length === 0 ? 'Запланируйте следующую игру' : `${matches.length} ${plural(matches.length, 'предстоящий матч', 'предстоящих матча', 'предстоящих матчей')}`}</p></div><Button className="h-10 px-3" onClick={openCreate}><Plus data-icon="inline-start" /> Новый матч</Button></div>
-        {matches.length === 0 ? <EmptyState icon={CalendarDays} title="Матчей пока нет" /> : <div className="flex flex-col gap-2" aria-label="Предстоящие матчи">{matches.map((match, index) => <motion.div key={match.id} layout initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: reduceMotion ? 0 : index * 0.025, duration: 0.18 }}><Card size="sm" className="py-0"><button type="button" className="w-full p-3 text-left" onClick={() => openMatch(match.id)}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="mb-2 flex items-center gap-2">{statusBadge(match)}<span className="truncate text-xs text-muted-foreground">#{match.id}</span></div><h2 className="truncate text-[15px] font-medium text-foreground">{match.title}</h2><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span className="inline-flex items-center gap-1.5"><Clock3 className="size-3.5" />{match.dateLabel}</span><span className="inline-flex items-center gap-1.5"><MapPin className="size-3.5" />{match.location}</span></div></div><div className="flex shrink-0 items-center gap-2 text-xs font-medium"><Users className="size-4 text-muted-foreground" />{match.goingCount}/{match.requiredPlayers}<ChevronRight className="size-4 text-muted-foreground" /></div></div></button></Card></motion.div>)}</div>}
+        <div className="flex items-end justify-between gap-4"><div><h1 className="text-2xl font-semibold tracking-tight">Матчи</h1><p className="mt-1 text-sm text-muted-foreground">{matches.length === 0 ? 'Запланируйте следующую игру' : `${matches.length} ${plural(matches.length, 'матч', 'матча', 'матчей')} в работе`}</p></div><Button className="h-10 px-3" onClick={openCreate}><Plus data-icon="inline-start" /> Новый матч</Button></div>
+        {matches.length === 0 ? <EmptyState icon={CalendarDays} title="Матчей пока нет" /> : <div className="flex flex-col gap-5" aria-label="Предстоящие матчи">{matchGroups.map((group) => <section key={group.key} aria-labelledby={`match-group-${group.key}`}><div className="mb-2 flex items-center justify-between"><h2 id={`match-group-${group.key}`} className="text-sm font-semibold text-muted-foreground">{group.title}</h2><Badge variant="secondary" className="tabular-nums">{group.matches.length}</Badge></div><div className="flex flex-col gap-2">{group.matches.map((match, index) => <motion.div key={match.id} layout initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: reduceMotion ? 0 : index * 0.025, duration: 0.18 }}><MatchListCard match={match} onOpen={() => openMatch(match.id)} /></motion.div>)}</div></section>)}</div>}
       </> : <motion.div key={selected.id} initial={reduceMotion ? false : { opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.18 }}>
         <div className="relative flex min-h-12 items-center justify-center"><Button variant="ghost" size="icon" className="absolute left-0" onClick={closeMatch} aria-label="Вернуться к списку матчей"><ArrowLeft /></Button><div className="text-center"><h1 className="text-xl font-semibold">Матч #{selected.id}</h1><p className={cn('mt-0.5 text-xs', selected.status === 'cancelled' ? 'text-destructive' : selected.status === 'confirmed' || selected.status === 'completed' || selected.planningStage === 'ready_to_confirm' ? 'text-success' : 'text-muted-foreground')}>{selected.statusLabel}</p></div></div>
-        <div className="mt-5 flex flex-col gap-3 text-sm"><p className={cn('flex items-center gap-3', selected.reconciliationRequired ? 'text-destructive' : selected.publicCardState === 'published' ? 'text-success' : 'text-muted-foreground')}><Send className="size-5" />{publicCardStateLabel(selected)}</p><p className="flex items-center gap-3"><CalendarDays className="size-5 text-muted-foreground" />{selected.dateLabel}</p><p className="flex items-center gap-3"><MapPin className="size-5 text-muted-foreground" />{selected.location} · {venueLabel(selected)}</p>{selected.venue !== undefined ? <Card size="sm" className="gap-3"><CardHeader><div><CardTitle className="text-base">{selected.venue.name}</CardTitle><CardDescription>{selected.venue.venueType === 'indoor' ? 'В помещении' : 'На улице'}</CardDescription></div></CardHeader><CardContent className="flex flex-wrap gap-2"><a href={selected.venue.mapUrl} target="_blank" rel="noreferrer"><Button size="sm" variant="outline"><MapPin data-icon="inline-start" />Карта</Button></a>{selected.venue.websiteUrl !== undefined ? <a href={selected.venue.websiteUrl} target="_blank" rel="noreferrer"><Button size="sm" variant="outline"><Link2 data-icon="inline-start" />Сайт</Button></a> : null}{selected.venue.bookingPhones.map((phone) => <a key={phone} href={`tel:${phone.replace(/[^+\d]/gu, '')}`}><Button size="sm" variant="outline"><Phone data-icon="inline-start" />{phone}</Button></a>)}</CardContent></Card> : null}<div><p className="mb-2 flex items-center gap-3"><Users className="size-5 text-muted-foreground" /><span>{selected.goingCount} из {selected.requiredPlayers} игроков</span></p><Progress value={Math.min(100, (selected.goingCount / selected.requiredPlayers) * 100)} className={cn('ml-8 h-1.5 w-[calc(100%-2rem)]', selected.goingCount >= selected.requiredPlayers && '[&_[data-slot=progress-indicator]]:bg-success')} /></div></div>
+        <div className="mt-5 flex flex-col gap-3 text-sm"><p className={cn('flex items-center gap-3', selected.reconciliationRequired ? 'text-destructive' : selected.publicCardState === 'published' ? 'text-success' : 'text-muted-foreground')}><Send className="size-5" />{publicCardStateLabel(selected)}</p><p className="flex items-center gap-3"><CalendarDays className="size-5 text-muted-foreground" />{selected.dateLabel}</p><p className="flex items-center gap-3"><MapPin className="size-5 text-muted-foreground" />{selected.location} · {venueLabel(selected)}</p>{selected.venue !== undefined ? <Card size="sm" className="gap-3"><CardHeader><div><CardTitle className="text-base">{selected.venue.name}</CardTitle><CardDescription>{selected.venue.venueType === 'indoor' ? 'В помещении' : 'На улице'}</CardDescription></div></CardHeader><CardContent className="flex flex-wrap gap-2"><a href={selected.venue.mapUrl} target="_blank" rel="noreferrer"><Button size="sm" variant="outline"><MapPin data-icon="inline-start" />Карта</Button></a>{selected.venue.websiteUrl !== undefined ? <a href={selected.venue.websiteUrl} target="_blank" rel="noreferrer"><Button size="sm" variant="outline"><Link2 data-icon="inline-start" />Сайт</Button></a> : null}{selected.venue.bookingContacts.map((contact) => <a key={contact.phone} href={`tel:${contact.phone.replace(/[^+\d]/gu, '')}`}><Button size="sm" variant="outline"><Phone data-icon="inline-start" />{contact.name === undefined ? contact.phone : `${contact.name} · ${contact.phone}`}</Button></a>)}</CardContent></Card> : null}<div><p className="mb-2 flex items-center gap-3"><Users className="size-5 text-muted-foreground" /><span>{selected.goingCount} из {selected.requiredPlayers} игроков</span></p><Progress value={Math.min(100, (selected.goingCount / selected.requiredPlayers) * 100)} className={cn('ml-8 h-1.5 w-[calc(100%-2rem)]', selected.goingCount >= selected.requiredPlayers && '[&_[data-slot=progress-indicator]]:bg-success')} /></div></div>
         <ToggleGroup type="single" value={detailTab} onValueChange={(value) => { if (value !== '') setDetailTab(value as MatchDetailTab) }} variant="segment" spacing={1} className="mt-5 w-full rounded-xl border bg-muted p-1" aria-label="Разделы матча">{MATCH_DETAIL_TABS.map((item) => <ToggleGroupItem key={item.value} value={item.value} className="h-10 flex-1 rounded-lg">{item.label}</ToggleGroupItem>)}</ToggleGroup>
         <motion.div key={detailTab} className="mt-6" initial={reduceMotion ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }}>{detailTab === 'overview' ? <MatchOverview match={selected} onNavigate={setDetailTab} onPublish={props.onPublish} onFinalizeRequest={openFinalization} onConfirm={props.onConfirm} onComplete={props.onComplete} onSendWeather={props.onSendWeather} onCancelRequest={openCancellation} disabled={props.actionPending} /> : detailTab === 'roster' ? (selected.status === 'active' || selected.status === 'confirmed' ? <MatchRoster match={selected} onCorrectVote={props.onCorrectVote} onRemoveVote={props.onRemoveVote} onAddExternal={props.onAddExternal} onUpdateExternal={props.onUpdateExternal} onRemoveExternal={props.onRemoveExternal} disabled={props.actionPending} /> : <EmptyState icon={Users} title="Состав пока недоступен" copy="Опубликуйте матч, чтобы участники могли проголосовать." />) : <MatchSettings match={selected} openEdit={openEdit} onReconcile={props.onReconcile} disabled={props.actionPending} />}</motion.div>
       </motion.div>}

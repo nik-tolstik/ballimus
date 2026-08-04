@@ -1,6 +1,6 @@
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
-import { venues, type Venue, type VenueType } from "../schema.js";
+import { venues, type BookingContact, type Venue, type VenueType } from "../schema.js";
 import {
   effectiveNow,
   nonEmpty,
@@ -19,7 +19,7 @@ export interface CreateVenueInput {
   readonly name: string;
   readonly mapUrl: string;
   readonly venueType: VenueType;
-  readonly bookingPhones?: readonly string[];
+  readonly bookingContacts?: readonly BookingContact[];
   readonly websiteUrl?: string | null;
   readonly createdAt?: Date;
 }
@@ -28,7 +28,7 @@ export interface UpdateVenueInput {
   readonly name?: string;
   readonly mapUrl?: string;
   readonly venueType?: VenueType;
-  readonly bookingPhones?: readonly string[];
+  readonly bookingContacts?: readonly BookingContact[];
   readonly websiteUrl?: string | null;
   readonly expectedVersion?: number;
   readonly now?: Date;
@@ -54,14 +54,19 @@ function normalizedUrl(value: string, fieldName: string): string {
   return nonEmpty(value, fieldName, 2_000);
 }
 
-function normalizedPhones(values: readonly string[] | undefined): string[] {
+function normalizedContacts(values: readonly BookingContact[] | undefined): BookingContact[] {
   if (values === undefined) return [];
-  if (values.length > 5) throw new ValidationRepositoryError("bookingPhones can contain at most five values");
-  const phones = values.map((value) => nonEmpty(value, "bookingPhone", 50));
-  if (new Set(phones).size !== phones.length) {
-    throw new ValidationRepositoryError("bookingPhones must not contain duplicates");
+  if (values.length > 5) throw new ValidationRepositoryError("bookingContacts can contain at most five values");
+  const contacts = values.map((value) => {
+    const name = optionalText(value.name, "bookingContact.name", 100);
+    return name === null
+      ? { phone: nonEmpty(value.phone, "bookingContact.phone", 50) }
+      : { name, phone: nonEmpty(value.phone, "bookingContact.phone", 50) };
+  });
+  if (new Set(contacts.map((contact) => contact.phone)).size !== contacts.length) {
+    throw new ValidationRepositoryError("bookingContacts must not contain duplicate phones");
   }
-  return phones;
+  return contacts;
 }
 
 function requireVenue(record: Venue | undefined, id: bigint): Venue {
@@ -114,7 +119,7 @@ export class VenuesRepository {
         name: nonEmpty(input.name, "name", 200),
         mapUrl: normalizedUrl(input.mapUrl, "mapUrl"),
         venueType: input.venueType,
-        bookingPhones: normalizedPhones(input.bookingPhones),
+        bookingContacts: normalizedContacts(input.bookingContacts),
         websiteUrl: input.websiteUrl === undefined ? null : optionalText(input.websiteUrl, "websiteUrl", 2_000),
         createdAt: now,
         updatedAt: now,
@@ -134,7 +139,7 @@ export class VenuesRepository {
       name?: string;
       mapUrl?: string;
       venueType?: VenueType;
-      bookingPhones?: string[];
+      bookingContacts?: BookingContact[];
       websiteUrl?: string | null;
       version: ReturnType<typeof sql>;
       updatedAt: Date;
@@ -145,7 +150,7 @@ export class VenuesRepository {
     if (input.name !== undefined) values.name = nonEmpty(input.name, "name", 200);
     if (input.mapUrl !== undefined) values.mapUrl = normalizedUrl(input.mapUrl, "mapUrl");
     if (input.venueType !== undefined) values.venueType = input.venueType;
-    if (input.bookingPhones !== undefined) values.bookingPhones = normalizedPhones(input.bookingPhones);
+    if (input.bookingContacts !== undefined) values.bookingContacts = normalizedContacts(input.bookingContacts);
     if (input.websiteUrl !== undefined) values.websiteUrl = optionalText(input.websiteUrl, "websiteUrl", 2_000);
     const rows = await this.db
       .update(venues)

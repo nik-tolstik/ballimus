@@ -122,7 +122,7 @@ describe("PostgreSQL baseline migration and repositories", () => {
     const migrationRows = await database.sql.unsafe<{ hash: string; created_at: string }[]>(
       `select hash, created_at from ${quoteIdentifier(database.migrationSchemaName)}."__drizzle_migrations"`,
     );
-    expect(migrationRows).toHaveLength(9);
+    expect(migrationRows).toHaveLength(10);
     expect(migrationRows[0]?.hash).toMatch(/^[a-f0-9]{64}$/u);
 
     const constraintRows = await database.sql<{ conname: string }[]>`
@@ -192,10 +192,16 @@ describe("PostgreSQL baseline migration and repositories", () => {
       name: "BOX365 Октябрьская",
       mapUrl: "https://maps.example.test/box365-oct",
       venueType: "indoor",
-      bookingPhones: ["+375 29 123-45-67"],
+      bookingContacts: [{ name: "Администратор", phone: "+375 29 123-45-67" }],
       websiteUrl: "https://box365.example.test",
       createdAt: timestamp(4),
     });
+    expect(venue.bookingContacts).toEqual([{ name: "Администратор", phone: "+375 29 123-45-67" }]);
+
+    await expect(venueRepository.update(venue.id, {
+      bookingContacts: [{ phone: "+375 29 123-45-67" }, { phone: "+375 29 123-45-67" }],
+      expectedVersion: venue.version,
+    })).rejects.toThrow("bookingContacts must not contain duplicate phones");
 
     await expect(venueRepository.create({
       name: "box365 октябрьская",

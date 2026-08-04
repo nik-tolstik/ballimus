@@ -1615,6 +1615,20 @@
           "timezone"
         ]
       },
+      "VenueBookingContactResponseDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone"
+        ]
+      },
       "VenueResponseDto": {
         "type": "object",
         "properties": {
@@ -1637,10 +1651,10 @@
               "indoor"
             ]
           },
-          "bookingPhones": {
+          "bookingContacts": {
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/VenueBookingContactResponseDto"
             }
           },
           "websiteUrl": {
@@ -1671,7 +1685,7 @@
           "name",
           "mapUrl",
           "venueType",
-          "bookingPhones",
+          "bookingContacts",
           "websiteUrl",
           "archivedAt",
           "version",
@@ -2778,6 +2792,23 @@
           "venues"
         ]
       },
+      "VenueBookingContactDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Администратор",
+            "maxLength": 100
+          },
+          "phone": {
+            "type": "string",
+            "example": "+375 29 123-45-67"
+          }
+        },
+        "required": [
+          "phone"
+        ]
+      },
       "VenueCreateDto": {
         "type": "object",
         "properties": {
@@ -2800,14 +2831,17 @@
             ],
             "example": "indoor"
           },
-          "bookingPhones": {
+          "bookingContacts": {
             "example": [
-              "+375 29 123-45-67"
+              {
+                "name": "Администратор",
+                "phone": "+375 29 123-45-67"
+              }
             ],
             "maxItems": 5,
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/VenueBookingContactDto"
             }
           },
           "websiteUrl": {
@@ -2853,11 +2887,11 @@
               "indoor"
             ]
           },
-          "bookingPhones": {
+          "bookingContacts": {
             "maxItems": 5,
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/VenueBookingContactDto"
             }
           },
           "websiteUrl": {
