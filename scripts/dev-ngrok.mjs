@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import { get as getHttp } from "node:http";
 import { resolve } from "node:path";
@@ -12,7 +13,7 @@ const packageManager = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const ngrokExecutable = process.platform === "win32" ? "ngrok.exe" : "ngrok";
 const childEnvironment = { ...process.env };
 const requestedFlags = new Set(process.argv.slice(2).filter((argument) => argument !== "--"));
-const knownFlags = new Set(["--help", "-h", "--set-menu-button"]);
+const knownFlags = new Set(["--help", "-h", "--set-menu-button", "--set-webhook"]);
 
 for (const flag of requestedFlags) {
   if (!knownFlags.has(flag)) {
@@ -68,6 +69,7 @@ function printUsage() {
   console.info(`Usage:
   pnpm dev
   pnpm dev -- --set-menu-button
+  pnpm dev -- --set-webhook
 
 The default command opens API and Web ngrok tunnels and starts the API and Vite
 processes with the public URLs. Start local PostgreSQL and apply migrations
@@ -75,6 +77,7 @@ separately before running this command.
 
 Options:
   --set-menu-button   Set the owner's Telegram menu button to the public Web URL.
+  --set-webhook       Register the local poll-only Telegram webhook for this run.
 `);
 }
 
@@ -282,6 +285,18 @@ Open the Mini App from the local bot using the Mini App URL above.
       },
     });
     console.info("The owner's local Telegram menu button was configured.");
+  }
+
+  if (requestedFlags.has("--set-webhook")) {
+    const secretToken = createHash("sha256")
+      .update(`football-bot-poll-webhook:${process.env.TELEGRAM_BOT_TOKEN}`, "utf8")
+      .digest("hex");
+    await telegramApi("setWebhook", {
+      url: `${apiUrl}/v1/telegram/webhook`,
+      secret_token: secretToken,
+      allowed_updates: ["poll"],
+    });
+    console.info("The local poll-only Telegram webhook was configured.");
   }
 
   await new Promise(() => {});

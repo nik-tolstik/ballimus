@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { validateEditorValues } from './components/football/match-editor'
+import { validatePollEditorValues } from './components/football/poll-editor'
 import { normalizeMatch } from './normalize'
 
 describe('information-card Mini App', () => {
@@ -21,5 +22,20 @@ describe('information-card Mini App', () => {
 
     expect(match).toMatchObject({ id: '42', date: '2026-08-10', time: '20:00', durationMinutes: 90, fieldPriceByn: 25, publicCardState: 'published' })
     expect('roster' in match).toBe(false)
+  })
+
+  it('requires valid native poll options and defaults notifications to disabled', () => {
+    const valid = {
+      question: 'Кто играет?',
+      options: [
+        { key: '1', text: 'Буду', notificationThreshold: '10' },
+        { key: '2', text: 'Не буду', notificationThreshold: null },
+      ],
+      isAnonymous: true,
+      allowsMultipleAnswers: false,
+    }
+    expect(validatePollEditorValues(valid)).toBeUndefined()
+    expect(validatePollEditorValues({ ...valid, options: [valid.options[0]!] })).toBe('Добавьте от 2 до 12 вариантов ответа.')
+    expect(validatePollEditorValues({ ...valid, options: [{ ...valid.options[0]!, notificationThreshold: '0' }, valid.options[1]!] })).toBe('Порог оповещения должен быть целым числом от 1 до 1 000 000.')
   })
 })

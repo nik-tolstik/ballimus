@@ -92,7 +92,7 @@ export function evaluateMigrationStatus(status, expectedMigrationCount) {
   return { ok: true, summary: `Production database has ${expectedMigrationCount} committed migrations` };
 }
 
-export function evaluateTelegramWebhookStatus(status) {
+export function evaluateTelegramWebhookStatus(status, expectedUrl) {
   if (
     !isRecord(status)
     || typeof status.url !== "string"
@@ -101,8 +101,10 @@ export function evaluateTelegramWebhookStatus(status) {
   ) {
     return { ok: false, summary: "Telegram webhook status response was invalid" };
   }
-  if (status.url !== "") return { ok: false, summary: "Telegram webhook is still configured" };
-  return { ok: true, summary: `Telegram webhook is disabled (pending updates: ${status.pendingUpdateCount})` };
+  if (typeof expectedUrl !== "string" || status.url !== expectedUrl) {
+    return { ok: false, summary: "Telegram poll webhook URL does not match the production API" };
+  }
+  return { ok: true, summary: `Telegram poll webhook is configured (pending updates: ${status.pendingUpdateCount})` };
 }
 
 export function parseJsonOutput(output, label) {
@@ -228,7 +230,7 @@ async function main() {
       "exec", "railway", "ssh", "--project", config.railwayProjectId, "--environment", config.railwayEnvironment,
       "--service", config.railwayApiService, "--", "node", "apps/api/dist/telegram/webhook-status-cli.js",
     ]), "Telegram webhook status");
-    return evaluateTelegramWebhookStatus(status);
+    return evaluateTelegramWebhookStatus(status, `${config.apiUrl}/v1/telegram/webhook`);
   }));
   for (const check of checks) {
     console.info(`${check.ok ? "PASS" : "FAIL"} ${check.name}: ${check.summary}`);

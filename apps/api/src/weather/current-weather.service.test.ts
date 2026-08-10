@@ -12,6 +12,7 @@ const config: ApiConfig = {
   telegramGeneralTopicId: 1n,
   telegramChatTopicId: 42n,
   telegramMiniAppUrl: "https://mini.example.test",
+  telegramWebhookSecret: "test-webhook-secret",
   webOrigin: "https://mini.example.test",
   groupTimezone: "Europe/Minsk",
   logLevel: "debug",

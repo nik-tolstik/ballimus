@@ -8,11 +8,13 @@ import {
   MatchMessagesRepository,
   MatchesRepository,
   OutboxRepository,
+  TelegramPollsRepository,
   VenuesRepository,
   withTransaction,
   type AppDatabase,
   type Match as DbMatch,
   type MatchMessage,
+  type TelegramPoll as DbTelegramPoll,
   type TransactionRepositories,
   type Venue as DbVenue,
 } from "@football/db";
@@ -26,6 +28,7 @@ import {
   type MatchCreateDto,
   type MatchListQueryDto,
   type PatchMatchDto,
+  type PollCreateDto,
   type VenueCreateDto,
   type VenueListQueryDto,
   type VenueUpdateDto,
@@ -35,13 +38,14 @@ import { serializeRestObject, type RestJsonValue } from "./rest.serialization.js
 
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1_000;
 
-type ReadRepositories = Pick<TransactionRepositories, "matches" | "matchMessages" | "venues" | "outbox">;
-type MutationRepositories = Pick<TransactionRepositories, "matches" | "matchMessages" | "venues" | "outbox" | "idempotency">;
+type ReadRepositories = Pick<TransactionRepositories, "matches" | "matchMessages" | "polls" | "venues" | "outbox">;
+type MutationRepositories = Pick<TransactionRepositories, "matches" | "matchMessages" | "polls" | "venues" | "outbox" | "idempotency">;
 
 function readRepositories(db: AppDatabase): ReadRepositories {
   return {
     matches: new MatchesRepository(db),
     matchMessages: new MatchMessagesRepository(db),
+    polls: new TelegramPollsRepository(db),
     venues: new VenuesRepository(db),
     outbox: new OutboxRepository(db),
   };
@@ -119,6 +123,49 @@ export class OwnerRestService {
     } catch (error) {
       throw toRestHttpException(error);
     }
+  }
+
+  public async listPolls(ownerTelegramUserId: bigint): Promise<Record<string, unknown>> {
+    this.assertOwner(ownerTelegramUserId);
+    try {
+      const polls = await new TelegramPollsRepository(this.db).listByChat(this.config.telegramGroupChatId);
+      return serializeRestObject({ polls: polls.map((poll) => this.pollBody(poll)) });
+    } catch (error) {
+      throw toRestHttpException(error);
+    }
+  }
+
+  public async createPoll(
+    ownerTelegramUserId: bigint,
+    idempotencyKey: string | undefined,
+    input: PollCreateDto,
+  ): Promise<Record<string, unknown>> {
+    this.assertOwner(ownerTelegramUserId);
+    const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "create-poll", input }, 201, async (repositories) => {
+      try {
+        const poll = await repositories.polls.create({
+          telegramChatId: this.config.telegramGroupChatId,
+          telegramTopicId: this.config.telegramChatTopicId,
+          question: input.question,
+          options: input.options,
+          isAnonymous: input.isAnonymous,
+          allowsMultipleAnswers: input.allowsMultipleAnswers,
+          creatorTelegramUserId: ownerTelegramUserId,
+        });
+        await repositories.outbox.insertInTransaction({
+          eventType: "publish_poll",
+          deduplicationKey: `poll:${poll.id.toString(10)}:publish`,
+          telegramChatId: poll.telegramChatId,
+          telegramTopicId: poll.telegramTopicId,
+          payload: { pollId: poll.id.toString(10) },
+        });
+        return serializeRestObject({ poll: this.pollBody(poll) });
+      } catch (error) {
+        throw toRestHttpException(error);
+      }
+    });
+    await this.tryDeliverOutbox();
+    return body;
   }
 
   public async createMatch(
@@ -413,6 +460,21 @@ export class OwnerRestService {
       version: venue.version,
       createdAt: venue.createdAt,
       updatedAt: venue.updatedAt,
+    });
+  }
+
+  private pollBody(poll: DbTelegramPoll): Record<string, RestJsonValue> {
+    return serializeRestObject({
+      id: poll.id,
+      question: poll.question,
+      options: poll.options,
+      isAnonymous: poll.isAnonymous,
+      allowsMultipleAnswers: poll.allowsMultipleAnswers,
+      publicationState: poll.publicationState,
+      closedAt: poll.closedAt,
+      lastError: poll.lastError,
+      createdAt: poll.createdAt,
+      updatedAt: poll.updatedAt,
     });
   }
 

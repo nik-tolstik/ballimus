@@ -1,6 +1,6 @@
 # Bot and Mini App Guide
 
-Football Bot is an owner-only Telegram Mini App for publishing match information. It does not run polls, collect players, maintain rosters, or process Telegram updates.
+Football Bot is an owner-only Telegram Mini App for publishing match information and independent native Telegram polls. It does not collect players or maintain rosters.
 
 ## Telegram card
 
@@ -11,7 +11,7 @@ Creating a match publishes one read-only Telegram card in the configured General
 - venue type (indoor or outdoor);
 - optional field price.
 
-The card has no inline keyboard, vote status, player list, threshold, or lifecycle controls. The organizer creates any poll through Telegram's native interface when it is needed.
+The card has no inline keyboard, vote status, player list, threshold, or lifecycle controls. Polls remain separate from cards and matches.
 
 Editing or republishing a match updates the same Telegram message. Deleting a match marks it unavailable in the Mini App and queues deletion of the Telegram message. A jobs invocation retries transient Telegram failures. There is no match history.
 
@@ -19,10 +19,13 @@ Editing or republishing a match updates the same Telegram message. Deleting a ma
 
 The configured owner opens the Mini App from Telegram. Signed Telegram `initData` is required; an ordinary browser tab or another Telegram user cannot access the API.
 
-The Mini App has two sections:
+The Mini App has three sections:
 
 - **Matches** — create and edit information cards; the actions menu republishes or deletes a card;
+- **Polls** — create native regular Telegram polls in the configured Chat topic;
 - **Venues** — maintain the reusable venue catalog; the actions menu archives or restores a venue.
+
+A poll has a question, 2–12 ordered options, anonymous-voting and multiple-answer settings. Every option starts without a notification. Enabling an option notification sets its threshold to 10 people by default; the organizer can change it before publication. When Telegram reports that the option reached the threshold, the bot sends one message to the Chat topic. Further updates never duplicate that option notification.
 
 The global **Weather** action sends the current Minsk weather to the configured Telegram chat/topic. It is independent of matches, has no daily cap, and can be pressed repeatedly.
 
@@ -30,6 +33,6 @@ All mutations use idempotency keys. Updating or deleting a match and editing a v
 
 ## Operational boundary
 
-The API never accepts Telegram webhooks or callbacks. Telegram is used only through bounded outbound Bot API calls for cards and manual weather messages.
+The API accepts only authenticated native `poll` updates at `/v1/telegram/webhook`. The endpoint ignores unrelated updates and unknown poll identifiers. It has no callback-query, message, roster, or `poll_answer` handling. Outbound cards, polls, threshold notifications, and weather messages use bounded Bot API calls.
 
-Local and production bots, chats, databases, origins, and secrets must remain separate. Production deployment, migration, card cleanup, and disabling a legacy webhook require separate explicit owner authorization.
+Local and production bots, chats, databases, origins, and secrets must remain separate. Production deployment, migration, webhook registration, and Telegram messages require separate explicit owner authorization.

@@ -4,6 +4,7 @@ import {
   MatchMessagesRepository,
   MatchesRepository,
   OutboxRepository,
+  TelegramPollsRepository,
   VenuesRepository,
 } from "./index.js";
 import {
@@ -44,6 +45,7 @@ describe("information-card PostgreSQL schema", () => {
       "match_messages",
       "matches",
       "outbox",
+      "telegram_polls",
       "venues",
     ]);
   });
@@ -85,5 +87,50 @@ describe("information-card PostgreSQL schema", () => {
     expect(repeatedDeletion.deletionRequestedAt).toEqual(firstDeletion.deletionRequestedAt);
     expect(await matches.list({ telegramChatId: CHAT_ID })).toEqual([]);
     expect((await outbox.findByDeduplicationKey(`match:${match.id.toString(10)}:delete`))?.eventType).toBe("delete_public_card");
+  });
+
+  it("persists native polls and emits each configured threshold only once", async () => {
+    const polls = new TelegramPollsRepository(database.db);
+    const poll = await polls.create({
+      telegramChatId: CHAT_ID,
+      telegramTopicId: 2n,
+      question: "Кто играет?",
+      options: [
+        { text: "Буду", notificationThreshold: 10 },
+        { text: "Не буду", notificationThreshold: null },
+      ],
+      isAnonymous: true,
+      allowsMultipleAnswers: false,
+      creatorTelegramUserId: OWNER_ID,
+    });
+    const published = await polls.markPublished(poll.id, "telegram-poll-1", 202n, [
+      { text: "Буду", voterCount: 0 },
+      { text: "Не буду", voterCount: 0 },
+    ]);
+
+    const first = await database.db.transaction(async (tx) => {
+      const repository = new TelegramPollsRepository(tx);
+      const current = await repository.getByTelegramPollIdForUpdate("telegram-poll-1");
+      if (current === undefined) throw new Error("Published poll was not found");
+      return repository.applyTelegramUpdate(current, [
+        { text: "Буду", voterCount: 10 },
+        { text: "Не буду", voterCount: 4 },
+      ], false, new Date("2026-08-11T10:00:00.000Z"));
+    });
+    const repeated = await database.db.transaction(async (tx) => {
+      const repository = new TelegramPollsRepository(tx);
+      const current = await repository.getByTelegramPollIdForUpdate("telegram-poll-1");
+      if (current === undefined) throw new Error("Published poll was not found");
+      return repository.applyTelegramUpdate(current, [
+        { text: "Буду", voterCount: 11 },
+        { text: "Не буду", voterCount: 5 },
+      ], false, new Date("2026-08-11T10:01:00.000Z"));
+    });
+
+    expect(published.publicationState).toBe("published");
+    expect(first.triggers).toEqual([{ optionIndex: 0, optionText: "Буду", threshold: 10, voterCount: 10 }]);
+    expect(first.poll.options[0]?.notificationQueuedAt).toBe("2026-08-11T10:00:00.000Z");
+    expect(repeated.triggers).toEqual([]);
+    expect(repeated.poll.options.map((option) => option.voterCount)).toEqual([11, 5]);
   });
 });

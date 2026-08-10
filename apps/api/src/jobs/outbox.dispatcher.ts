@@ -1,6 +1,7 @@
 import { Inject, Injectable, Optional } from "@nestjs/common";
-import type { AppDatabase, MatchMessage, OutboxEvent } from "@football/db";
-import { MatchMessagesRepository, MatchesRepository, OutboxRepository } from "@football/db";
+import type { AppDatabase, MatchMessage, OutboxEvent, TelegramPoll } from "@football/db";
+import { MatchMessagesRepository, MatchesRepository, OutboxRepository, TelegramPollsRepository } from "@football/db";
+import { formatPollThresholdNotification } from "@football/domain";
 
 import { APP_DATABASE } from "../database/database.constants.js";
 import { TelegramCardService, type TelegramCardPublicationResult, type TelegramCardRefreshResult } from "../telegram/telegram-card.service.js";
@@ -25,6 +26,18 @@ export interface MatchDeletionRepositoryPort {
   deleteIfDeletionRequested(matchId: bigint): Promise<boolean>;
 }
 
+export interface TelegramPollRepositoryPort {
+  getById(id: bigint): Promise<TelegramPoll>;
+  markPublished(
+    id: bigint,
+    telegramPollId: string,
+    telegramMessageId: bigint,
+    options: readonly { readonly text: string; readonly voterCount: number }[],
+    attemptedAt?: Date,
+  ): Promise<TelegramPoll>;
+  markPublicationUncertain(id: bigint, error: string, attemptedAt?: Date): Promise<TelegramPoll>;
+}
+
 export type OutboxDispatchResult =
   | { readonly status: "delivered"; readonly eventId: bigint; readonly event: OutboxEvent }
   | { readonly status: "failed"; readonly eventId: bigint; readonly event: OutboxEvent; readonly error: string; readonly availableAt: Date }
@@ -33,6 +46,26 @@ export type OutboxDispatchResult =
 function requiredMatchId(event: OutboxEvent): bigint {
   if (event.matchId === null) throw new Error(`${event.eventType} event is missing matchId`);
   return event.matchId;
+}
+
+function requiredPollId(event: OutboxEvent): bigint {
+  const value = event.payload["pollId"];
+  if (typeof value !== "string" || !/^[1-9]\d*$/u.test(value)) {
+    throw new Error(`${event.eventType} event is missing pollId`);
+  }
+  return BigInt(value);
+}
+
+function requiredPayloadText(event: OutboxEvent, field: string): string {
+  const value = event.payload[field];
+  if (typeof value !== "string" || value.trim() === "") throw new Error(`${event.eventType} event is missing ${field}`);
+  return value;
+}
+
+function requiredPayloadCount(event: OutboxEvent, field: string): number {
+  const value = event.payload[field];
+  if (!Number.isSafeInteger(value) || Number(value) < 1) throw new Error(`${event.eventType} event has invalid ${field}`);
+  return Number(value);
 }
 
 function errorText(error: unknown): string {
@@ -70,6 +103,7 @@ export class OutboxDispatcher {
   private readonly delivery: OutboxDeliveryRepository;
   private readonly matchMessages: MatchMessageRepositoryPort;
   private readonly matches: MatchDeletionRepositoryPort;
+  private readonly polls: TelegramPollRepositoryPort;
 
   public constructor(
     @Inject(APP_DATABASE) db: AppDatabase,
@@ -78,10 +112,12 @@ export class OutboxDispatcher {
     @Optional() delivery?: OutboxDeliveryRepository,
     @Optional() matchMessages?: MatchMessageRepositoryPort,
     @Optional() matches?: MatchDeletionRepositoryPort,
+    @Optional() polls?: TelegramPollRepositoryPort,
   ) {
     this.delivery = delivery ?? new OutboxRepository(db);
     this.matchMessages = matchMessages ?? new MatchMessagesRepository(db);
     this.matches = matches ?? new MatchesRepository(db);
+    this.polls = polls ?? new TelegramPollsRepository(db);
   }
 
   public async dispatch(event: OutboxEvent, options: { readonly now?: Date } = {}): Promise<OutboxDispatchResult> {
@@ -91,6 +127,8 @@ export class OutboxDispatcher {
         case "publish_public_card": return this.dispatchPublish(event, now);
         case "refresh_public_card": return this.dispatchRefresh(event, now);
         case "delete_public_card": return this.dispatchDelete(event, now);
+        case "publish_poll": return this.dispatchPublishPoll(event, now);
+        case "send_poll_threshold_notification": return this.dispatchPollThresholdNotification(event, now);
         default: throw new Error(`Unsupported outbox event type: ${event.eventType}`);
       }
     } catch (error) {
@@ -98,6 +136,10 @@ export class OutboxDispatcher {
       if (event.eventType === "publish_public_card") {
         await this.markInitialPublicationUncertain(event, reason, now);
         return this.markUncertain(event, `Initial public-card publication requires reconciliation: ${reason}`, now);
+      }
+      if (event.eventType === "publish_poll") {
+        await this.markPollPublicationUncertain(event, reason, now);
+        return this.markUncertain(event, `Initial poll publication requires reconciliation: ${reason}`, now);
       }
       const availableAt = retryAt(event, now);
       const failed = await this.delivery.markFailed(event.id, reason, { availableAt, failedAt: now });
@@ -136,6 +178,38 @@ export class OutboxDispatcher {
     return delivered;
   }
 
+  private async dispatchPublishPoll(event: OutboxEvent, now: Date): Promise<OutboxDispatchResult> {
+    const pollId = requiredPollId(event);
+    const poll = await this.polls.getById(pollId);
+    if (poll.publicationState === "published") return this.markDelivered(event, now);
+    if (poll.publicationState !== "pending") {
+      throw new Error(`Poll ${pollId.toString(10)} cannot be published from state ${poll.publicationState}`);
+    }
+    const sent = await this.effects.sendPoll({
+      chatId: poll.telegramChatId,
+      ...(poll.telegramTopicId === null ? {} : { messageThreadId: poll.telegramTopicId }),
+      question: poll.question,
+      options: poll.options.map((option) => option.text),
+      isAnonymous: poll.isAnonymous,
+      allowsMultipleAnswers: poll.allowsMultipleAnswers,
+    });
+    await this.polls.markPublished(poll.id, sent.pollId, sent.messageId, sent.options, now);
+    return this.markDelivered(event, now);
+  }
+
+  private async dispatchPollThresholdNotification(event: OutboxEvent, now: Date): Promise<OutboxDispatchResult> {
+    await this.effects.sendMessage({
+      chatId: event.telegramChatId,
+      ...(event.telegramTopicId === null ? {} : { messageThreadId: event.telegramTopicId }),
+      text: formatPollThresholdNotification({
+        question: requiredPayloadText(event, "question"),
+        optionText: requiredPayloadText(event, "optionText"),
+        threshold: requiredPayloadCount(event, "threshold"),
+      }),
+    });
+    return this.markDelivered(event, now);
+  }
+
   private async markDelivered(event: OutboxEvent, now: Date): Promise<OutboxDispatchResult> {
     const delivered = await this.delivery.markDelivered(event.id, now);
     return { status: "delivered", eventId: event.id, event: delivered };
@@ -152,6 +226,14 @@ export class OutboxDispatcher {
       const reference = await this.matchMessages.findByMatchId(event.matchId);
       if (reference === undefined || reference.publicationState !== "pending") return;
       await this.matchMessages.markUncertain(event.matchId, `Initial Telegram publication requires reconciliation: ${reason}`, now);
+    } catch {
+      // The uncertain outbox event remains available for manual recovery.
+    }
+  }
+
+  private async markPollPublicationUncertain(event: OutboxEvent, reason: string, now: Date): Promise<void> {
+    try {
+      await this.polls.markPublicationUncertain(requiredPollId(event), `Initial Telegram poll publication requires reconciliation: ${reason}`, now);
     } catch {
       // The uncertain outbox event remains available for manual recovery.
     }

@@ -26,8 +26,23 @@ export interface TelegramDeleteMessageInput {
   readonly messageId: bigint | number | string;
 }
 
+export interface TelegramSendPollInput {
+  readonly chatId: bigint | number | string;
+  readonly messageThreadId?: bigint | number | string;
+  readonly question: string;
+  readonly options: readonly string[];
+  readonly isAnonymous: boolean;
+  readonly allowsMultipleAnswers: boolean;
+}
+
 export interface TelegramSentMessage {
   readonly messageId: bigint;
+}
+
+export interface TelegramSentPoll {
+  readonly pollId: string;
+  readonly messageId: bigint;
+  readonly options: readonly { readonly text: string; readonly voterCount: number }[];
 }
 
 type TelegramAbortSignal = NonNullable<Parameters<Bot["api"]["sendMessage"]>[3]>;
@@ -109,6 +124,27 @@ export class TelegramBotService {
     ));
   }
 
+  public async sendPoll(input: TelegramSendPollInput): Promise<TelegramSentPoll> {
+    const messageThreadId = optionalTelegramNumber(input.messageThreadId, "messageThreadId");
+    const sent = await this.withDeadline((signal) => this.bot.api.sendPoll(
+      chatId(input.chatId),
+      input.question,
+      input.options.map((text) => ({ text })),
+      {
+        is_anonymous: input.isAnonymous,
+        type: "regular",
+        allows_multiple_answers: input.allowsMultipleAnswers,
+        ...(messageThreadId === undefined ? {} : { message_thread_id: messageThreadId }),
+      },
+      signal,
+    ));
+    return {
+      pollId: sent.poll.id,
+      messageId: BigInt(sent.message_id),
+      options: sent.poll.options.map((option) => ({ text: option.text, voterCount: option.voter_count })),
+    };
+  }
+
   private withDeadline<T>(operation: (signal: TelegramAbortSignal) => Promise<T>): Promise<T> {
     return operation(AbortSignal.timeout(TELEGRAM_API_TIMEOUT_MS) as unknown as TelegramAbortSignal);
   }
@@ -129,5 +165,9 @@ export class TelegramEffects {
 
   public deleteMessage(input: TelegramDeleteMessageInput): Promise<void> {
     return this.bot.deleteMessage(input);
+  }
+
+  public sendPoll(input: TelegramSendPollInput): Promise<TelegramSentPoll> {
+    return this.bot.sendPoll(input);
   }
 }

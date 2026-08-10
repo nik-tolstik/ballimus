@@ -49,4 +49,71 @@ describe("OutboxDispatcher", () => {
     await expect(dispatcher.dispatch(event())).resolves.toMatchObject({ status: "delivered" });
     expect(markDelivered).toHaveBeenCalledOnce();
   });
+
+  it("publishes a native poll and stores its Telegram reference", async () => {
+    const pollEvent = { ...event(), eventType: "publish_poll" as const, matchId: null, payload: { pollId: "7" } };
+    const markDelivered = vi.fn().mockResolvedValue({ ...pollEvent, deliveryState: "delivered", deliveredAt: new Date() });
+    const sendPoll = vi.fn().mockResolvedValue({
+      pollId: "telegram-poll-7",
+      messageId: 70n,
+      options: [{ text: "Да", voterCount: 0 }, { text: "Нет", voterCount: 0 }],
+    });
+    const markPublished = vi.fn().mockResolvedValue(undefined);
+    const dispatcher = new OutboxDispatcher(
+      {} as never,
+      { sendPoll } as never,
+      {} as never,
+      { markDelivered, markFailed: vi.fn(), markUncertain: vi.fn() },
+      {} as never,
+      {} as never,
+      {
+        getById: vi.fn().mockResolvedValue({
+          id: 7n, telegramChatId: -100n, telegramTopicId: 2n, question: "Играем?",
+          options: [{ text: "Да" }, { text: "Нет" }], isAnonymous: true,
+          allowsMultipleAnswers: false, publicationState: "pending",
+        }),
+        markPublished,
+        markPublicationUncertain: vi.fn(),
+      } as never,
+    );
+
+    await expect(dispatcher.dispatch(pollEvent)).resolves.toMatchObject({ status: "delivered" });
+    expect(sendPoll).toHaveBeenCalledWith({
+      chatId: -100n,
+      messageThreadId: 2n,
+      question: "Играем?",
+      options: ["Да", "Нет"],
+      isAnonymous: true,
+      allowsMultipleAnswers: false,
+    });
+    expect(markPublished).toHaveBeenCalledWith(7n, "telegram-poll-7", 70n, expect.any(Array), expect.any(Date));
+  });
+
+  it("sends a formatted threshold notification to the poll topic", async () => {
+    const notificationEvent = {
+      ...event(),
+      eventType: "send_poll_threshold_notification" as const,
+      matchId: null,
+      telegramTopicId: 2n,
+      payload: { pollId: "7", question: "Играем?", optionText: "Да", threshold: 10 },
+    };
+    const markDelivered = vi.fn().mockResolvedValue({ ...notificationEvent, deliveryState: "delivered", deliveredAt: new Date() });
+    const sendMessage = vi.fn().mockResolvedValue({ messageId: 71n });
+    const dispatcher = new OutboxDispatcher(
+      {} as never,
+      { sendMessage } as never,
+      {} as never,
+      { markDelivered, markFailed: vi.fn(), markUncertain: vi.fn() },
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(dispatcher.dispatch(notificationEvent)).resolves.toMatchObject({ status: "delivered" });
+    expect(sendMessage).toHaveBeenCalledWith({
+      chatId: -100n,
+      messageThreadId: 2n,
+      text: "🙌 <b>Набралось 10 человек</b>\nОпрос: Играем?\nВариант: Да",
+    });
+  });
 });

@@ -99,6 +99,13 @@
       "when": 1786444800002,
       "tag": "0013_clear_legacy_runtime_state",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786444800003,
+      "tag": "0014_native_telegram_polls",
+      "breakpoints": true
     }
   ]
 }

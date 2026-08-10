@@ -73,6 +73,62 @@ export class PublicCardResponseDto {
   lastError!: string | null;
 }
 
+export class PollOptionResponseDto {
+  @ApiProperty({ type: String })
+  text!: string;
+
+  @ApiProperty({ type: Number, minimum: 0 })
+  voterCount!: number;
+
+  @ApiProperty({ type: Number, nullable: true, minimum: 1 })
+  notificationThreshold!: number | null;
+
+  @ApiProperty({ type: String, nullable: true, format: "date-time" })
+  notificationQueuedAt!: string | null;
+}
+
+export class PollResponseDto {
+  @ApiProperty({ type: String, example: "42" })
+  id!: string;
+
+  @ApiProperty({ type: String })
+  question!: string;
+
+  @ApiProperty({ type: [PollOptionResponseDto] })
+  options!: PollOptionResponseDto[];
+
+  @ApiProperty({ type: Boolean })
+  isAnonymous!: boolean;
+
+  @ApiProperty({ type: Boolean })
+  allowsMultipleAnswers!: boolean;
+
+  @ApiProperty({ enum: ["pending", "published", "uncertain", "failed"] })
+  publicationState!: "pending" | "published" | "uncertain" | "failed";
+
+  @ApiProperty({ type: String, nullable: true, format: "date-time" })
+  closedAt!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  lastError!: string | null;
+
+  @ApiProperty({ type: String, format: "date-time" })
+  createdAt!: string;
+
+  @ApiProperty({ type: String, format: "date-time" })
+  updatedAt!: string;
+}
+
+export class PollEnvelopeResponseDto {
+  @ApiProperty({ type: PollResponseDto })
+  poll!: PollResponseDto;
+}
+
+export class PollListResponseDto {
+  @ApiProperty({ type: [PollResponseDto] })
+  polls!: PollResponseDto[];
+}
+
 export class MatchScheduleResponseDto {
   @ApiProperty({ type: String, example: "2026-08-03" })
   date!: string;
