@@ -1,5 +1,4 @@
 import type { CurrentWeather } from "./types.js";
-import { MINSK_TIMEZONE } from "./time.js";
 
 export const MINSK_LATITUDE = 53.9006;
 export const MINSK_LONGITUDE = 27.559;
@@ -96,6 +95,5 @@ export function formatCurrentWeatherMessage(weather: CurrentWeather): string {
     `🌧 Осадки: ${formatNumber(weather.precipitationMillimetres)} мм`,
     `🍃 Ветер: ${formatNumber(weather.windSpeedMetresPerSecond)} м/с`,
     `🌪 Порывы: ${formatNumber(weather.windGustsMetresPerSecond)} м/с`,
-    `<i>Обновлено: ${weather.observedAt} (${MINSK_TIMEZONE})</i>`,
   ].join("\n");
 }

@@ -41,7 +41,11 @@ describe("information card domain", () => {
       },
     });
 
-    expect(formatCurrentWeatherMessage(weather)).toContain("Погода сейчас в Минске")
+    const message = formatCurrentWeatherMessage(weather)
+
+    expect(message).toContain("Погода сейчас в Минске")
+    expect(message).not.toContain("Обновлено:")
+    expect(message).not.toContain(weather.observedAt)
     expect(weather.temperatureCelsius).toBe(21.2)
   });
 });
