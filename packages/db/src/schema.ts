@@ -31,7 +31,6 @@ export const outboxEventTypes = [
   "publish_public_card",
   "refresh_public_card",
   "delete_public_card",
-  "reconcile_public_card",
 ] as const;
 export type OutboxEventType = (typeof outboxEventTypes)[number];
 

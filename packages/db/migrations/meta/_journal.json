@@ -78,6 +78,13 @@
       "when": 1786358400000,
       "tag": "0010_information_cards",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786444800000,
+      "tag": "0011_remove_legacy_reconciliation",
+      "breakpoints": true
     }
   ]
 }

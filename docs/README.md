@@ -14,6 +14,4 @@ This index describes the maintained Telegram Mini App platform. The current impl
 - [Vercel and Railway production runbook](railway.md) — deployment topology, test-group validation, clean database cutover, verification checklist, and authorization gates.
 - [Linear workflow](linear.md) — the canonical tracker, team and project links, and status rules for contributors and coding agents.
 
-The [Mini App implementation plan](mini-app-implementation-plan.md) is the preserved migration plan and is not the operational runbook. The [migration work log](../work-log.md) records phase status and authorization state. The [orchestrator prompt](../prompt.md) contains implementation-agent instructions.
-
 Production deployment is not asserted by these documents. Production deployment, migration, disabling a legacy webhook, Mini App URL changes, and BotFather changes require explicit owner authorization.

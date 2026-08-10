@@ -89,9 +89,9 @@ export class OutboxDispatcher {
     try {
       switch (event.eventType) {
         case "publish_public_card": return this.dispatchPublish(event, now);
-        case "refresh_public_card":
-        case "reconcile_public_card": return this.dispatchRefresh(event, now);
+        case "refresh_public_card": return this.dispatchRefresh(event, now);
         case "delete_public_card": return this.dispatchDelete(event, now);
+        default: throw new Error(`Unsupported outbox event type: ${event.eventType}`);
       }
     } catch (error) {
       const reason = errorText(error);

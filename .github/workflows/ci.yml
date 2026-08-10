@@ -28,7 +28,6 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/football
       TELEGRAM_BOT_TOKEN: 123456:ci-test-token
-      TELEGRAM_WEBHOOK_SECRET: ci-test-secret
       TELEGRAM_OWNER_USER_ID: 987654321
       TELEGRAM_CHAT_ID: -1001234567890
       TELEGRAM_GENERAL_TOPIC_ID: 1
