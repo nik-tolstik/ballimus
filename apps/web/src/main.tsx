@@ -10,6 +10,12 @@ import './styles.css'
 
 document.title = applicationBrand.name
 
+const favicon = document.createElement('link')
+favicon.rel = 'icon'
+favicon.type = 'image/webp'
+favicon.href = applicationBrand.logo
+document.head.append(favicon)
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

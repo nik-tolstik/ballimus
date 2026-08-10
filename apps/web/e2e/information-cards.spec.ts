@@ -41,6 +41,8 @@ test('shows static information cards without roster or voting controls', async (
   await mockOwnerApp(page)
   await page.goto('/')
 
+  await expect(page).toHaveTitle('Ballimus Dev')
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', /ballimus-dev.*\.webp$/u)
   await expect(page.getByRole('heading', { name: 'Матчи', exact: true })).toBeVisible()
   await expect(page.getByText('Среда, 12 августа · 20:00-21:30', { exact: true })).toBeVisible()
   const mapLink = page.getByRole('link', { name: 'BOX365 Пушкинская · В помещении', exact: true })
