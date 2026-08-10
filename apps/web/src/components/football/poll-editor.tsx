@@ -248,10 +248,12 @@ export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollE
           </Reorder.Group>
           <Button type="button" variant="ghost" className="self-start" disabled={options.length >= 12} onClick={addOption}><Plus data-icon="inline-start" />Добавить вариант</Button>
         </div>
-        <FieldSet className="gap-2 rounded-xl bg-card p-3 shadow-sm"><FieldLegend variant="label">Настройки</FieldLegend>
-          <NotificationSetting threshold={notificationThreshold} onThresholdChange={updateThreshold} />
-          <PollSetting id="poll-multiple-answers" label="Несколько ответов" icon={ListChecks} tone="multiple" checked={allowsMultipleAnswers} onCheckedChange={setAllowsMultipleAnswers} />
-          <RevotingCapability />
+        <FieldSet className="gap-0"><FieldLegend variant="label" className="mb-0 px-3">Настройки</FieldLegend>
+          <FieldGroup className="mt-2 gap-2 rounded-xl bg-card p-3 shadow-sm">
+            <NotificationSetting threshold={notificationThreshold} onThresholdChange={updateThreshold} />
+            <PollSetting id="poll-multiple-answers" label="Несколько ответов" icon={ListChecks} tone="multiple" checked={allowsMultipleAnswers} onCheckedChange={setAllowsMultipleAnswers} />
+            <RevotingCapability />
+          </FieldGroup>
         </FieldSet>
         <FieldError>{validation}</FieldError>
       </FieldGroup>
