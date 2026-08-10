@@ -138,7 +138,10 @@ test('creates a native poll with an option threshold notification', async ({ pag
   await page.getByLabel('Вопрос', { exact: true }).fill('Кто играет в воскресенье?')
   await page.getByLabel('Вариант 1', { exact: true }).fill('Буду')
   await page.getByLabel('Вариант 2', { exact: true }).fill('Не буду')
-  await page.getByRole('radiogroup', { name: 'Тип варианта 2', exact: true }).getByRole('radio', { name: 'Инфо', exact: true }).click()
+  const secondOptionNotification = page.getByRole('button', { name: 'Оповещение для варианта 2', exact: true })
+  await expect(secondOptionNotification).toHaveAttribute('aria-pressed', 'true')
+  await secondOptionNotification.click()
+  await expect(secondOptionNotification).toHaveAttribute('aria-pressed', 'false')
   const notification = page.getByRole('switch', { name: 'Оповестить о количестве', exact: true })
   await expect(notification).not.toBeChecked()
   await notification.click()
@@ -155,8 +158,8 @@ test('creates a native poll with an option threshold notification', async ({ pag
   await expect.poll(() => mocked.pollRequests).toEqual([{
     question: 'Кто играет в воскресенье?',
     options: [
-      { text: 'Буду', kind: 'decision' },
-      { text: 'Не буду', kind: 'informational' },
+      { text: 'Буду', notificationEnabled: true },
+      { text: 'Не буду', notificationEnabled: false },
     ],
     notificationThreshold: 10,
     allowsMultipleAnswers: true,

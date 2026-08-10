@@ -77,8 +77,8 @@ export class PollOptionResponseDto {
   @ApiProperty({ type: String })
   text!: string;
 
-  @ApiProperty({ enum: ["decision", "informational"] })
-  kind!: "decision" | "informational";
+  @ApiProperty({ type: Boolean })
+  notificationEnabled!: boolean;
 
   @ApiProperty({ type: Number, minimum: 0 })
   voterCount!: number;

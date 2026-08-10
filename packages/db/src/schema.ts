@@ -28,9 +28,6 @@ export type PublicationState = (typeof publicationStates)[number];
 export const pollPublicationStates = ["pending", "published", "uncertain", "failed"] as const;
 export type PollPublicationState = (typeof pollPublicationStates)[number];
 
-export const telegramPollOptionKinds = ["decision", "informational"] as const;
-export type TelegramPollOptionKind = (typeof telegramPollOptionKinds)[number];
-
 export const httpIdempotencyStatuses = ["processing", "succeeded", "failed"] as const;
 export type HttpIdempotencyStatus = (typeof httpIdempotencyStatuses)[number];
 
@@ -48,7 +45,7 @@ export type OutboxDeliveryState = (typeof outboxDeliveryStates)[number];
 
 export interface TelegramPollOptionState {
   readonly text: string;
-  readonly kind: TelegramPollOptionKind;
+  readonly notificationEnabled: boolean;
   readonly voterCount: number;
   readonly notificationQueuedAt: string | null;
 }

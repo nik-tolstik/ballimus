@@ -3,7 +3,6 @@ import { and, desc, eq } from "drizzle-orm";
 import {
   telegramPolls,
   type TelegramPoll,
-  type TelegramPollOptionKind,
   type TelegramPollOptionState,
 } from "../schema.js";
 import {
@@ -22,7 +21,7 @@ import {
 
 export interface CreateTelegramPollOptionInput {
   readonly text: string;
-  readonly kind: TelegramPollOptionKind;
+  readonly notificationEnabled: boolean;
 }
 
 export interface CreateTelegramPollInput {
@@ -78,9 +77,9 @@ function threshold(value: number | null | undefined): number | null {
   return value;
 }
 
-function optionKind(value: TelegramPollOptionKind, fieldName: string): TelegramPollOptionKind {
-  if (value !== "decision" && value !== "informational") {
-    throw new ValidationRepositoryError(`${fieldName} must be decision or informational`);
+function notificationEnabled(value: boolean, fieldName: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new ValidationRepositoryError(`${fieldName} must be a boolean`);
   }
   return value;
 }
@@ -91,7 +90,7 @@ function initialOptions(options: readonly CreateTelegramPollOptionInput[]): Tele
   }
   return options.map((option, index) => ({
     text: nonEmpty(option.text, `options[${index}].text`, 100),
-    kind: optionKind(option.kind, `options[${index}].kind`),
+    notificationEnabled: notificationEnabled(option.notificationEnabled, `options[${index}].notificationEnabled`),
     voterCount: 0,
     notificationQueuedAt: null,
   }));
@@ -235,7 +234,7 @@ export class TelegramPollsRepository {
       const voterCount = count(next.voterCount, `options[${index}].voterCount`);
       const reached = queuedAt !== undefined
         && notificationThreshold !== null
-        && option.kind === "decision"
+        && option.notificationEnabled
         && option.notificationQueuedAt === null
         && voterCount >= notificationThreshold;
       if (reached && notificationThreshold !== null) {

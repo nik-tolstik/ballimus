@@ -19,7 +19,6 @@ import {
 } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
-import { telegramPollOptionKinds } from "@football/db";
 import { venueTypes } from "@football/domain";
 
 const DECIMAL_ID_PATTERN = /^[1-9]\d*$/u;
@@ -34,9 +33,9 @@ export class PollOptionCreateDto {
   @MaxLength(100)
   text!: string;
 
-  @ApiProperty({ enum: telegramPollOptionKinds, example: "decision" })
-  @IsIn(telegramPollOptionKinds)
-  kind!: (typeof telegramPollOptionKinds)[number];
+  @ApiProperty({ type: Boolean, default: true })
+  @IsBoolean()
+  notificationEnabled!: boolean;
 }
 
 export class PollCreateDto {

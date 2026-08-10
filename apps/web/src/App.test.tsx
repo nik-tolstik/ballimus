@@ -28,8 +28,8 @@ describe('information-card Mini App', () => {
     const valid = {
       question: 'Кто играет?',
       options: [
-        { key: '1', text: 'Буду', kind: 'decision' as const },
-        { key: '2', text: 'Не буду', kind: 'informational' as const },
+        { key: '1', text: 'Буду', notificationEnabled: true },
+        { key: '2', text: 'Не буду', notificationEnabled: false },
       ],
       notificationThreshold: '10',
       allowsMultipleAnswers: false,

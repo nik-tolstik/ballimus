@@ -118,7 +118,7 @@ export function App({ telegramSession }: AppProps = {}) {
   const handleCreatePoll = (values: PollEditorValues) => createPollMutation.mutate({
     data: {
       question: values.question.trim(),
-      options: values.options.map((option) => ({ text: option.text.trim(), kind: option.kind })),
+      options: values.options.map((option) => ({ text: option.text.trim(), notificationEnabled: option.notificationEnabled })),
       notificationThreshold: values.notificationThreshold === null ? null : Number(values.notificationThreshold),
       allowsMultipleAnswers: values.allowsMultipleAnswers,
     },

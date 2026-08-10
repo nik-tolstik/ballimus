@@ -12,10 +12,8 @@ const toggleVariants = cva(
     variants: {
       variant: {
         default: "bg-transparent",
-        "option-decision":
-          "bg-transparent text-muted-foreground hover:bg-background/70 hover:text-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-sm",
-        "option-informational":
-          "bg-transparent text-muted-foreground hover:bg-background/70 hover:text-foreground data-[state=on]:bg-secondary-foreground data-[state=on]:text-background data-[state=on]:shadow-sm",
+        notification:
+          "border border-border bg-muted/55 text-muted-foreground hover:bg-warning/10 hover:text-warning data-[state=on]:border-warning/20 data-[state=on]:bg-warning/10 data-[state=on]:text-warning data-[state=on]:shadow-sm",
         segment:
           "bg-transparent text-muted-foreground hover:bg-background/70 hover:text-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-sm",
       },
@@ -25,6 +23,7 @@ const toggleVariants = cva(
         sm: "h-7 min-w-7 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
         lg: "h-9 min-w-9 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
         form: "h-10 min-w-10 px-3 text-base md:text-sm has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5",
+        "icon-form": "size-10 text-base md:text-sm",
       },
     },
     defaultVariants: {

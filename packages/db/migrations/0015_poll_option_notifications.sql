@@ -18,10 +18,7 @@ FROM (
       SELECT jsonb_agg(
         jsonb_build_object(
           'text', "entry"."value"->>'text',
-          'kind', CASE
-            WHEN "entry"."value"->>'notificationThreshold' IS NULL THEN 'informational'
-            ELSE 'decision'
-          END,
+          'notificationEnabled', "entry"."value"->>'notificationThreshold' IS NOT NULL,
           'voterCount', COALESCE(("entry"."value"->>'voterCount')::integer, 0),
           'notificationQueuedAt', "entry"."value"->'notificationQueuedAt'
         )

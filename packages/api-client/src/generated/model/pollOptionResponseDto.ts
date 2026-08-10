@@ -5,11 +5,10 @@
  * Owner-facing REST API for the Football Telegram Mini App.
  * OpenAPI spec version: 1.0.0
  */
-import type { PollOptionResponseDtoKind } from './pollOptionResponseDtoKind.js';
 
 export interface PollOptionResponseDto {
   text: string;
-  kind: PollOptionResponseDtoKind;
+  notificationEnabled: boolean;
   /** @minimum 0 */
   voterCount: number;
   /** @nullable */

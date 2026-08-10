@@ -89,15 +89,15 @@ describe("information-card PostgreSQL schema", () => {
     expect((await outbox.findByDeduplicationKey(`match:${match.id.toString(10)}:delete`))?.eventType).toBe("delete_public_card");
   });
 
-  it("emits a poll threshold once for decision options and ignores informational options", async () => {
+  it("emits a poll threshold once for enabled options and ignores disabled options", async () => {
     const polls = new TelegramPollsRepository(database.db);
     const poll = await polls.create({
       telegramChatId: CHAT_ID,
       telegramTopicId: 2n,
       question: "Кто играет?",
       options: [
-        { text: "Буду", kind: "decision" },
-        { text: "Не буду", kind: "informational" },
+        { text: "Буду", notificationEnabled: true },
+        { text: "Не буду", notificationEnabled: false },
       ],
       notificationThreshold: 10,
       isAnonymous: true,

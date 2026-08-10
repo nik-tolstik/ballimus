@@ -1040,12 +1040,8 @@
           "text": {
             "type": "string"
           },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "decision",
-              "informational"
-            ]
+          "notificationEnabled": {
+            "type": "boolean"
           },
           "voterCount": {
             "type": "number",
@@ -1059,7 +1055,7 @@
         },
         "required": [
           "text",
-          "kind",
+          "notificationEnabled",
           "voterCount",
           "notificationQueuedAt"
         ]
@@ -1159,18 +1155,14 @@
             "minLength": 1,
             "maxLength": 100
           },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "decision",
-              "informational"
-            ],
-            "example": "decision"
+          "notificationEnabled": {
+            "type": "boolean",
+            "default": true
           }
         },
         "required": [
           "text",
-          "kind"
+          "notificationEnabled"
         ]
       },
       "PollCreateDto": {

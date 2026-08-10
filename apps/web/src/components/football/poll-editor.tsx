@@ -1,19 +1,17 @@
 import { useState } from 'react'
-import { Check, Info, ListChecks, Plus, RotateCcw, Send, Trash2, UsersRound, type LucideIcon } from 'lucide-react'
+import { Bell, Check, ListChecks, Plus, RotateCcw, Send, Trash2, UsersRound, type LucideIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Field, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Toggle } from '@/components/ui/toggle'
 import { cn } from '@/lib/utils'
-
-export type PollOptionKind = 'decision' | 'informational'
 
 export interface PollEditorOptionValues {
   readonly key: string
   readonly text: string
-  readonly kind: PollOptionKind
+  readonly notificationEnabled: boolean
 }
 
 export interface PollEditorValues {
@@ -24,7 +22,7 @@ export interface PollEditorValues {
 }
 
 function option(key: number): PollEditorOptionValues {
-  return { key: String(key), text: '', kind: 'decision' }
+  return { key: String(key), text: '', notificationEnabled: true }
 }
 
 const settingTone = {
@@ -98,19 +96,25 @@ function RevotingCapability() {
   </Field>
 }
 
-function OptionKindSelector({
+function OptionNotificationToggle({
   optionNumber,
-  value,
-  onValueChange,
+  enabled,
+  onEnabledChange,
 }: {
   readonly optionNumber: string
-  readonly value: PollOptionKind
-  readonly onValueChange: (value: PollOptionKind) => void
+  readonly enabled: boolean
+  readonly onEnabledChange: (enabled: boolean) => void
 }) {
-  return <ToggleGroup type="single" size="sm" spacing={0} className="w-full bg-muted/70 p-0.5" aria-label={`Тип варианта ${optionNumber}`} value={value} onValueChange={(next) => { if (next === 'decision' || next === 'informational') onValueChange(next) }}>
-    <ToggleGroupItem className="flex-1" variant="option-decision" value="decision"><UsersRound data-icon="inline-start" />Учитывать</ToggleGroupItem>
-    <ToggleGroupItem className="flex-1" variant="option-informational" value="informational"><Info data-icon="inline-start" />Инфо</ToggleGroupItem>
-  </ToggleGroup>
+  return <Toggle
+    type="button"
+    variant="notification"
+    size="icon-form"
+    pressed={enabled}
+    aria-label={`Оповещение для варианта ${optionNumber}`}
+    onPressedChange={onEnabledChange}
+  >
+    <Bell />
+  </Toggle>
 }
 
 export function validatePollEditorValues(values: PollEditorValues): string | undefined {
@@ -120,7 +124,7 @@ export function validatePollEditorValues(values: PollEditorValues): string | und
   for (const item of values.options) {
     const text = item.text.trim()
     if (text.length < 1 || text.length > 100) return 'Заполните каждый вариант ответа (до 100 символов).'
-    if (item.kind !== 'decision' && item.kind !== 'informational') return 'Выберите тип для каждого варианта.'
+    if (typeof item.notificationEnabled !== 'boolean') return 'Проверьте настройки оповещений для вариантов.'
   }
   if (values.notificationThreshold !== null) {
     const threshold = Number(values.notificationThreshold)
@@ -171,9 +175,9 @@ export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollE
             return <Field key={item.key} className="rounded-xl bg-card p-3 shadow-sm">
               <div className="flex items-center gap-2">
                 <Input aria-label={`Вариант ${optionNumber}`} maxLength={100} value={item.text} onChange={(event) => updateOption(item.key, { text: event.target.value })} placeholder={`Вариант ${optionNumber}`} />
+                <OptionNotificationToggle optionNumber={optionNumber} enabled={item.notificationEnabled} onEnabledChange={(notificationEnabled) => updateOption(item.key, { notificationEnabled })} />
                 {options.length > 2 ? <Button type="button" variant="ghost" size="icon" aria-label={`Удалить вариант ${optionNumber}`} onClick={() => setOptions((current) => current.filter((candidate) => candidate.key !== item.key))}><Trash2 /></Button> : null}
               </div>
-              <OptionKindSelector optionNumber={optionNumber} value={item.kind} onValueChange={(kind) => updateOption(item.key, { kind })} />
             </Field>
           })}
           <Button type="button" variant="ghost" className="self-start" disabled={options.length >= 12} onClick={addOption}><Plus data-icon="inline-start" />Добавить вариант</Button>
