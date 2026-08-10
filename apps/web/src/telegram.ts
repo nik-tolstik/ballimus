@@ -54,6 +54,11 @@ interface TelegramWindow {
   readonly Telegram?: { readonly WebApp?: TelegramWebAppApi }
 }
 
+interface ViteEnvironment {
+  readonly DEV?: unknown
+  readonly VITE_LOCAL_OWNER_INIT_DATA?: unknown
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -94,6 +99,11 @@ function webAppFromWindow(): TelegramWebAppApi | undefined {
   return (window as unknown as TelegramWindow).Telegram?.WebApp
 }
 
+export function localBrowserInitData(environment: ViteEnvironment = import.meta.env): string | undefined {
+  if (environment.DEV !== true) return undefined
+  return stringValue(environment.VITE_LOCAL_OWNER_INIT_DATA)
+}
+
 function setCssVariable(name: string, value: string | number | undefined): void {
   if (typeof document === 'undefined' || value === undefined) return
   document.documentElement.style.setProperty(name, String(value))
@@ -115,21 +125,21 @@ export function applyTelegramTheme(theme: TelegramTheme, safeArea: TelegramInset
 
 export function initializeTelegramWebApp(): TelegramSession {
   const webApp = webAppFromWindow()
-  if (webApp === undefined) {
+  const initData = stringValue(webApp?.initData) ?? localBrowserInitData()
+  if (webApp === undefined && initData === undefined) {
     return { status: 'outside-telegram', initData: undefined, theme: EMPTY_THEME, safeArea: EMPTY_INSETS, reason: 'Откройте мини-приложение из Telegram.' }
   }
 
-  const initData = stringValue(webApp.initData)
-  const theme = readTheme(webApp.themeParams)
-  const safeArea = readInsets(webApp.safeAreaInset)
+  const theme = readTheme(webApp?.themeParams)
+  const safeArea = readInsets(webApp?.safeAreaInset)
   applyTelegramTheme(theme, safeArea)
   if (initData === undefined) {
     return { status: 'unauthorized', initData: undefined, theme, safeArea, reason: 'Telegram не передал подписанную сессию мини-приложения.' }
   }
 
   try {
-    webApp.ready()
-    webApp.expand?.()
+    webApp?.ready()
+    webApp?.expand?.()
     configureApiClient({ telegramInitData: initData })
     return { status: 'ready', initData, theme, safeArea }
   } catch {

@@ -33,6 +33,8 @@ pnpm db:check
 
 `pnpm dev` opens the configured ngrok tunnels and starts the API and Vite app. It does not register a Telegram webhook. The optional `pnpm dev -- --set-menu-button` command sets the menu button for the local test bot only.
 
+For browser-only work, run `pnpm dev:browser` and open `http://127.0.0.1:6173`. It creates a real signed local-owner session from `.env.local`, binds the Vite app to loopback, and does not start ngrok. This command is for local development only; it must not be exposed through a tunnel or used in production.
+
 ## Useful commands
 
 ```bash
