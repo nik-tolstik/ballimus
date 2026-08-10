@@ -4,9 +4,9 @@ import { Save, Send, TriangleAlert } from 'lucide-react'
 import type { NormalizedMatch, NormalizedVenue } from '@/normalize'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { DatePicker, TimePicker } from './date-time-picker'
 import { VenueAutocomplete } from './venue-autocomplete'
 import { VenueForm, type VenueFormValues } from './venue-form'
@@ -66,13 +66,13 @@ export function MatchEditor({ match, onSave, conflict, onClearConflict, saving, 
         <FieldGroup className="gap-4">
           <Field data-invalid={validation !== '' && date === ''}><FieldLabel>Дата</FieldLabel><DatePicker value={date} onChange={(value) => { setDate(value); setValidation('') }} invalid={validation !== '' && date === ''} /></Field>
           <Field data-invalid={validation !== '' && time === ''}><FieldLabel>Точное время</FieldLabel><TimePicker ariaLabel="Время матча" value={time} onChange={(value) => { setTime(value); setValidation('') }} invalid={validation !== '' && time === ''} /></Field>
-          <Field data-invalid={validation !== '' && venueId === null}><FieldLabel>Площадка</FieldLabel><VenueAutocomplete venues={venues} value={venueId} onValueChange={(value) => { setVenueId(value); setValidation('') }} onCreate={() => setVenueCreateOpen(true)} /><FieldDescription>Площадка обязательна: в Telegram-карточке будет ссылка на карту.</FieldDescription></Field>
+          <Field data-invalid={validation !== '' && venueId === null}><FieldLabel>Площадка</FieldLabel><VenueAutocomplete venues={venues} value={venueId} onValueChange={(value) => { setVenueId(value); setValidation('') }} onCreate={() => setVenueCreateOpen(true)} /></Field>
           <Field><FieldLabel htmlFor="field-price">Стоимость поля · руб.</FieldLabel><Input id="field-price" aria-label="Стоимость поля в белорусских рублях" type="number" min="0" step="1" inputMode="numeric" value={fieldPriceByn} onChange={(event) => { setFieldPriceByn(event.target.value); setValidation('') }} placeholder="Необязательно" /></Field>
           <FieldError>{validation}</FieldError>
         </FieldGroup>
       </div>
       <div className="sheet-actions bg-muted/60 px-4 pt-3 pb-[max(1rem,calc(1rem+var(--tg-safe-bottom)))]"><Button type="submit" className="h-10 w-full" disabled={saving}>{match ? <Save data-icon="inline-start" /> : <Send data-icon="inline-start" />}{saving ? 'Сохранение…' : match ? 'Сохранить карточку' : 'Опубликовать матч'}</Button></div>
     </form>
-    <Sheet open={venueCreateOpen} onOpenChange={setVenueCreateOpen}><SheetContent side="bottom" className="mx-auto max-h-[92svh] w-full max-w-[480px] gap-0 rounded-t-2xl p-0"><div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/35" /><SheetHeader className="px-4 pt-3 pb-4"><SheetTitle className="text-lg">Новое место</SheetTitle><SheetDescription>После сохранения оно сразу выберется для матча.</SheetDescription></SheetHeader><VenueForm saving={saving} onSave={async (values) => { const venue = await onCreateVenue(values); setVenueId(venue.id); setVenueCreateOpen(false) }} /></SheetContent></Sheet>
+    <Sheet open={venueCreateOpen} onOpenChange={setVenueCreateOpen}><SheetContent side="bottom" className="mx-auto max-h-[92svh] w-full max-w-[480px] gap-0 rounded-t-2xl p-0"><div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/35" /><SheetHeader className="px-4 pt-3 pb-4"><SheetTitle className="text-lg">Новое место</SheetTitle></SheetHeader><VenueForm saving={saving} onSave={async (values) => { const venue = await onCreateVenue(values); setVenueId(venue.id); setVenueCreateOpen(false) }} /></SheetContent></Sheet>
   </>
 }

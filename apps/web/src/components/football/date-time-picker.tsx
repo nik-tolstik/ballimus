@@ -45,6 +45,11 @@ function NativeTemporalInput({
   )
 }
 
+export function normalizeTimeInput(value: string): string {
+  const digits = value.replace(/\D/gu, '').slice(0, 4)
+  return digits.length <= 2 ? digits : `${digits.slice(0, 2)}:${digits.slice(2)}`
+}
+
 export function DatePicker({ value, onChange, invalid = false }: { readonly value: string; readonly onChange: (value: string) => void; readonly invalid?: boolean }) {
   const [open, setOpen] = useState(false)
   const date = calendarDateFromValue(value)
@@ -62,7 +67,7 @@ export function DatePicker({ value, onChange, invalid = false }: { readonly valu
       <div className="desktop-custom-date-picker">
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
-            <Button type="button" variant="secondary" size="form" className="w-full justify-start" data-empty={date === undefined} aria-label="Дата матча" aria-invalid={invalid}>
+            <Button type="button" variant="outline" size="form" className="w-full justify-start border-transparent bg-input/70 shadow-inner hover:bg-input/70 aria-expanded:bg-input/70" data-empty={date === undefined} aria-label="Дата матча" aria-invalid={invalid}>
               <CalendarDays data-icon="inline-start" />
               <span className={cn('truncate', date === undefined && 'text-muted-foreground')}>{formatCalendarValue(value)}</span>
             </Button>
@@ -89,13 +94,19 @@ export function DatePicker({ value, onChange, invalid = false }: { readonly valu
 
 export function TimePicker({ value, onChange, invalid = false, ariaLabel = 'Время матча' }: { readonly value: string; readonly onChange: (value: string) => void; readonly invalid?: boolean; readonly ariaLabel?: string }) {
   return (
-    <NativeTemporalInput
-      type="time"
-      step={900}
+    <Input
+      type="text"
+      inputMode="numeric"
+      pattern="[0-2][0-9]:[0-5][0-9]"
+      maxLength={5}
       value={value}
-      ariaLabel={ariaLabel}
-      invalid={invalid}
-      onChange={onChange}
+      aria-label={ariaLabel}
+      aria-invalid={invalid || undefined}
+      placeholder="18:00"
+      onChange={(event) => onChange(normalizeTimeInput(event.target.value))}
+      onBlur={() => {
+        if (/^\d{1,2}$/u.test(value)) onChange(`${value.padStart(2, '0')}:00`)
+      }}
     />
   )
 }

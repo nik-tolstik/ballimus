@@ -34,3 +34,7 @@
 - [Architecture](docs/architecture.md)
 - [Project structure](docs/project-structure.md)
 - [Development guide](docs/development.md)
+
+## UI copy
+
+- Do not add explanatory subtitles, helper text, update timestamps, or duplicated descriptions by default. Keep labels concise and add guidance only when it prevents a likely error or explains an irreversible consequence.
