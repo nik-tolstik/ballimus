@@ -18,12 +18,13 @@ function venueTypeLabel(type: Venue["venueType"]): string {
   return type === "outdoor" ? "На улице" : "В здании";
 }
 
-function durationLabel(durationMinutes: number): string {
-  const hours = Math.floor(durationMinutes / 60);
-  const minutes = durationMinutes % 60;
-  if (hours === 0) return `${String(minutes)} мин`;
-  if (minutes === 0) return `${String(hours)} ч`;
-  return `${String(hours)} ч ${String(minutes)} мин`;
+function timeRange(match: Match, timezone: string): string {
+  const startsAt = formatTimeInTimeZone(match.scheduledAt, timezone);
+  const endsAt = formatTimeInTimeZone(
+    new Date(match.scheduledAt.getTime() + match.durationMinutes * 60_000),
+    timezone,
+  );
+  return `${startsAt}-${endsAt}`;
 }
 
 /** Renders the read-only Telegram card for one scheduled match. */
@@ -33,11 +34,11 @@ export function renderInformationMatchCard(
 ): string {
   const { match, venue } = data;
   const date = formatWeekdayDateInTimeZone(match.scheduledAt, timezone);
-  const time = formatTimeInTimeZone(match.scheduledAt, timezone);
+  const time = timeRange(match, timezone);
   const name = escapeHtml(truncatePlainText(venue.name, 512));
   const mapUrl = escapeHtml(venue.mapUrl);
   const lines = [
-    `${date} · ${time} · ${durationLabel(match.durationMinutes)}`,
+    `${date} · ${time}`,
     "",
     `📍 ${name}, <i><a href="${mapUrl}">Точка на карте</a></i>`,
     `🏠 ${venueTypeLabel(venue.venueType)}`,

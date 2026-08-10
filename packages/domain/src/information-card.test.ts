@@ -19,7 +19,8 @@ describe("information card domain", () => {
       venue: { id: 2n, name: "BOX365 <main>", mapUrl: "https://maps.example.test/field?a=1&b=2", venueType: "indoor" },
     });
 
-    expect(card).toContain("1 ч 30 мин");
+    expect(card).toContain("Понедельник, 10 августа · 20:00-21:30");
+    expect(card).not.toMatch(/\d+ ч|\d+ мин/u);
     expect(card).toContain("Точка на карте");
     expect(card).toContain("В здании");
     expect(card).toContain("120 рублей");
