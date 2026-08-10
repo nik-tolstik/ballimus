@@ -132,6 +132,22 @@ export class MatchesController {
   ): Promise<Record<string, unknown>> {
     return this.service.deleteMatch(ownerTelegramUserId, idempotencyKey, ifMatch, matchId);
   }
+
+  @Post(":id/republish")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ operationId: "republishOwnerMatch", summary: "Republish an information card" })
+  @ApiParam({ name: "id", type: String })
+  @ApiHeader({ name: "Idempotency-Key", required: true })
+  @ApiHeader({ name: "If-Match", required: true })
+  @ApiOkResponse({ type: MatchEnvelopeResponseDto })
+  public republish(
+    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Headers("if-match") ifMatch: string | undefined,
+    @Param("id", PositiveBigIntPipe) matchId: bigint,
+  ): Promise<Record<string, unknown>> {
+    return this.service.republishMatch(ownerTelegramUserId, idempotencyKey, ifMatch, matchId);
+  }
 }
 
 @ApiTags("weather")

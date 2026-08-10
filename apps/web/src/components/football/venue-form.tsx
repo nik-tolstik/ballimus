@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Archive, ArchiveRestore, Plus, Save, Trash2 } from 'lucide-react'
+import { Ellipsis, Plus, Save, Trash2 } from 'lucide-react'
 
 import type { VenueCreateDto } from '@football/api-client'
 import type { NormalizedVenue } from '@/normalize'
@@ -18,7 +18,7 @@ interface BookingContactValues {
 interface VenueFormProps {
   readonly venue?: NormalizedVenue
   readonly onSave: (values: VenueFormValues) => Promise<void>
-  readonly onArchiveStateChange?: () => Promise<void>
+  readonly onOpenActions?: () => void
   readonly saving: boolean
 }
 
@@ -31,7 +31,7 @@ function validUrl(value: string): boolean {
   } catch { return false }
 }
 
-export function VenueForm({ venue, onSave, onArchiveStateChange, saving }: VenueFormProps) {
+export function VenueForm({ venue, onSave, onOpenActions, saving }: VenueFormProps) {
   const [name, setName] = useState(venue?.name ?? '')
   const [mapUrl, setMapUrl] = useState(venue?.mapUrl ?? '')
   const [venueType, setVenueType] = useState<'outdoor' | 'indoor'>(venue?.venueType ?? 'outdoor')
@@ -66,6 +66,6 @@ export function VenueForm({ venue, onSave, onArchiveStateChange, saving }: Venue
       <Field><FieldLabel htmlFor="venue-website">Сайт</FieldLabel><Input id="venue-website" type="url" inputMode="url" value={websiteUrl} onChange={(event) => setWebsiteUrl(event.target.value)} placeholder="Необязательно" /></Field>
       <FieldError>{error}</FieldError>
     </FieldGroup>
-    <div className="sheet-actions bg-muted/60 px-4 pt-3 pb-[max(1rem,calc(1rem+var(--tg-safe-bottom)))]"><div className="flex gap-2">{venue !== undefined && onArchiveStateChange !== undefined ? <Button type="button" variant="ghost" className="h-10 text-muted-foreground" disabled={saving} onClick={() => { void onArchiveStateChange() }}>{venue.archivedAt === undefined ? <Archive data-icon="inline-start" /> : <ArchiveRestore data-icon="inline-start" />}{venue.archivedAt === undefined ? 'В архив' : 'Восстановить'}</Button> : null}<Button type="submit" className={venue !== undefined && onArchiveStateChange !== undefined ? 'h-10 flex-1' : 'h-10 w-full'} disabled={saving}><Save data-icon="inline-start" />{saving ? 'Сохранение…' : venue === undefined ? 'Добавить' : 'Сохранить'}</Button></div></div>
+    <div className="sheet-actions bg-muted/60 px-4 pt-3 pb-[max(1rem,calc(1rem+var(--tg-safe-bottom)))]"><div className="flex gap-2"><Button type="submit" className="h-10 flex-1" disabled={saving}><Save data-icon="inline-start" />{saving ? 'Сохранение…' : venue === undefined ? 'Добавить' : 'Сохранить'}</Button>{venue !== undefined && onOpenActions !== undefined ? <Button type="button" variant="ghost" size="icon-lg" className="size-10" aria-label="Действия места" disabled={saving} onClick={onOpenActions}><Ellipsis /></Button> : null}</div></div>
   </form>
 }

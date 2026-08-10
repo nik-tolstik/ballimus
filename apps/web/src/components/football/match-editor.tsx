@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Save, Send, Trash2, TriangleAlert } from 'lucide-react'
+import { Ellipsis, Save, Send, TriangleAlert } from 'lucide-react'
 
 import type { NormalizedMatch, NormalizedVenue } from '@/normalize'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -22,7 +22,7 @@ export interface EditorValues {
 interface MatchEditorProps {
   readonly match?: NormalizedMatch
   readonly onSave: (values: EditorValues) => void
-  readonly onDelete?: () => Promise<void>
+  readonly onOpenActions?: () => void
   readonly conflict: string
   readonly onClearConflict: () => void
   readonly saving: boolean
@@ -46,7 +46,7 @@ export function currentHourTime(now = new Date()): string {
   return `${String(now.getHours()).padStart(2, '0')}:00`
 }
 
-export function MatchEditor({ match, onSave, onDelete, conflict, onClearConflict, saving, venues, onCreateVenue }: MatchEditorProps) {
+export function MatchEditor({ match, onSave, onOpenActions, conflict, onClearConflict, saving, venues, onCreateVenue }: MatchEditorProps) {
   const [date, setDate] = useState(match?.date ?? '')
   const [time, setTime] = useState(match?.time ?? currentHourTime())
   const [durationMinutes, setDurationMinutes] = useState(String(match?.durationMinutes ?? 90))
@@ -76,7 +76,7 @@ export function MatchEditor({ match, onSave, onDelete, conflict, onClearConflict
           <FieldError>{validation}</FieldError>
         </FieldGroup>
       </div>
-      <div className="sheet-actions bg-muted/60 px-4 pt-3 pb-[max(1rem,calc(1rem+var(--tg-safe-bottom)))]"><div className="flex gap-2">{match !== undefined && onDelete !== undefined ? <Button type="button" variant="ghost" className="h-10 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={saving} onClick={() => { void onDelete() }}><Trash2 data-icon="inline-start" />Удалить</Button> : null}<Button type="submit" className="h-10 flex-1" disabled={saving}>{match ? <Save data-icon="inline-start" /> : <Send data-icon="inline-start" />}{saving ? 'Сохранение…' : match ? 'Сохранить' : 'Опубликовать матч'}</Button></div></div>
+      <div className="sheet-actions bg-muted/60 px-4 pt-3 pb-[max(1rem,calc(1rem+var(--tg-safe-bottom)))]"><div className="flex gap-2"><Button type="submit" className="h-10 flex-1" disabled={saving}>{match ? <Save data-icon="inline-start" /> : <Send data-icon="inline-start" />}{saving ? 'Сохранение…' : match ? 'Сохранить' : 'Опубликовать матч'}</Button>{match !== undefined && onOpenActions !== undefined ? <Button type="button" variant="ghost" size="icon-lg" className="size-10" aria-label="Действия матча" disabled={saving} onClick={onOpenActions}><Ellipsis /></Button> : null}</div></div>
     </form>
     <Sheet open={venueCreateOpen} onOpenChange={setVenueCreateOpen}><SheetContent side="bottom" className="mx-auto max-h-[92svh] w-full max-w-[480px] gap-0 rounded-t-2xl p-0"><div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/35" /><SheetHeader className="px-4 pt-3 pb-4"><SheetTitle className="text-lg">Новое место</SheetTitle></SheetHeader><VenueForm saving={saving} onSave={async (values) => { const venue = await onCreateVenue(values); setVenueId(venue.id); setVenueCreateOpen(false) }} /></SheetContent></Sheet>
   </>

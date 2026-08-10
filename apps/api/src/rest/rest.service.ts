@@ -228,6 +228,41 @@ export class OwnerRestService {
     return body;
   }
 
+  public async republishMatch(
+    ownerTelegramUserId: bigint,
+    idempotencyKey: string | undefined,
+    ifMatch: string | undefined,
+    matchId: bigint,
+  ): Promise<Record<string, unknown>> {
+    this.assertOwner(ownerTelegramUserId);
+    const expectedVersion = parseIfMatch(ifMatch, true);
+    if (expectedVersion === undefined) throw new Error("If-Match was required but not provided");
+    const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "republish-match", matchId, expectedVersion }, 200, async (repositories) => {
+      try {
+        const current = await repositories.matches.getForUpdate(matchId);
+        this.assertCurrentMatch(current);
+        const match = await repositories.matches.update(matchId, { expectedVersion });
+        const reference = await repositories.matchMessages.findByMatchId(match.id);
+        if (reference?.publicationState === "published") {
+          await this.enqueueRefresh(repositories, match);
+        } else if (reference?.publicationState === "failed" || reference?.publicationState === "uncertain") {
+          await repositories.matchMessages.resetForRetry(match.id);
+          await this.enqueuePublicationRetry(repositories, match);
+        } else if (reference === undefined) {
+          await repositories.matchMessages.createPending(match.id, this.config.telegramGroupChatId, this.config.telegramGeneralTopicId);
+          await this.enqueuePublicationRetry(repositories, match);
+        } else {
+          throw toRestHttpException(restRequestError(409, "MATCH_PUBLICATION_PENDING", "The match card is already queued for publication."));
+        }
+        return serializeRestObject({ match: await this.matchBody(match, repositories) });
+      } catch (error) {
+        throw toRestHttpException(error);
+      }
+    });
+    await this.tryDeliverOutbox();
+    return body;
+  }
+
   public async listVenues(ownerTelegramUserId: bigint, query: VenueListQueryDto): Promise<Record<string, unknown>> {
     this.assertOwner(ownerTelegramUserId);
     try {
@@ -394,6 +429,16 @@ export class OwnerRestService {
     await repositories.outbox.insertInTransaction({
       eventType: "refresh_public_card",
       deduplicationKey: `match:${match.id.toString(10)}:refresh:${match.version}`,
+      matchId: match.id,
+      telegramChatId: match.telegramChatId,
+      telegramTopicId: this.config.telegramGeneralTopicId,
+    });
+  }
+
+  private async enqueuePublicationRetry(repositories: Pick<TransactionRepositories, "outbox">, match: DbMatch): Promise<void> {
+    await repositories.outbox.insertInTransaction({
+      eventType: "publish_public_card",
+      deduplicationKey: `match:${match.id.toString(10)}:publish:${String(match.version)}`,
       matchId: match.id,
       telegramChatId: match.telegramChatId,
       telegramTopicId: this.config.telegramGeneralTopicId,

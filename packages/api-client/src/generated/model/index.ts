@@ -23,6 +23,7 @@ export * from './ownerIdentityResponseDto.js';
 export * from './patchMatchDto.js';
 export * from './publicCardResponseDto.js';
 export * from './publicCardResponseDtoPublicationState.js';
+export * from './republishOwnerMatchHeaders.js';
 export * from './restoreOwnerVenueHeaders.js';
 export * from './updateOwnerMatchHeaders.js';
 export * from './updateOwnerVenueHeaders.js';

@@ -13,6 +13,7 @@ import {
   useDeleteOwnerMatch,
   useListOwnerMatches,
   useListOwnerVenues,
+  useRepublishOwnerMatch,
   useRestoreOwnerVenue,
   useSendCurrentWeather,
   useUpdateOwnerMatch,
@@ -90,6 +91,7 @@ export function App({ telegramSession }: AppProps = {}) {
   const createMatchMutation = useCreateOwnerMatch(mutationOptions)
   const updateMatchMutation = useUpdateOwnerMatch(mutationOptions)
   const deleteMatchMutation = useDeleteOwnerMatch(mutationOptions)
+  const republishMatchMutation = useRepublishOwnerMatch(mutationOptions)
   const weatherMutation = useSendCurrentWeather({ mutation: { onError: handleMutationError } })
   const createVenueMutation = useCreateOwnerVenue(mutationOptions)
   const updateVenueMutation = useUpdateOwnerVenue(mutationOptions)
@@ -112,6 +114,16 @@ export function App({ telegramSession }: AppProps = {}) {
       await deleteMatchMutation.mutateAsync({ id: match.id, headers: { 'Idempotency-Key': requestKey(), 'If-Match': String(match.version) } })
       invalidateMatches()
       toast.success('Карточка матча удаляется из Telegram.')
+      return true
+    } catch {
+      return false
+    }
+  }
+  const handleRepublishMatch = async (match: NormalizedMatch): Promise<boolean> => {
+    try {
+      await republishMatchMutation.mutateAsync({ id: match.id, headers: { 'Idempotency-Key': requestKey(), 'If-Match': String(match.version) } })
+      invalidateMatches()
+      toast.success('Карточка матча переопубликовывается.')
       return true
     } catch {
       return false
@@ -144,7 +156,7 @@ export function App({ telegramSession }: AppProps = {}) {
       return false
     }
   }
-  const matchSaving = [createMatchMutation, updateMatchMutation, deleteMatchMutation].some((mutation) => mutation.isPending)
+  const matchSaving = [createMatchMutation, updateMatchMutation, deleteMatchMutation, republishMatchMutation].some((mutation) => mutation.isPending)
   const venueSaving = [createVenueMutation, updateVenueMutation, archiveVenueMutation, restoreVenueMutation].some((mutation) => mutation.isPending)
   const loading = matchesQuery.isLoading || venuesQuery.isLoading
   const failure = [matchesQuery.error, venuesQuery.error].find((error) => error !== null && error !== undefined)
@@ -153,7 +165,7 @@ export function App({ telegramSession }: AppProps = {}) {
     <header className="flex h-14 items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur-sm"><div className="flex items-center gap-2.5"><img src={applicationBrand.logo} alt="" width="36" height="36" className="size-9 rounded-full object-cover" /><p className="text-base font-semibold leading-none">{applicationBrand.name}</p></div><div className="flex items-center gap-1"><Button variant="ghost" size="sm" onClick={() => weatherMutation.mutate()} disabled={weatherMutation.isPending}><CloudSun data-icon="inline-start" />Погода</Button><ThemeToggle /></div></header>
     <main className="min-h-0 flex-1 overflow-y-auto px-4 pt-4 pb-5">
       {failure !== undefined ? <Alert variant="destructive" className="mb-4"><TriangleAlert /><AlertTitle>Не удалось загрузить данные</AlertTitle><AlertDescription>{errorMessage(failure)}</AlertDescription></Alert> : null}
-      {loading ? <StateScreen kind="loading" title="Загружаем данные" copy="Синхронизируем карточки и места…" /> : tab === 'matches' ? <MatchesPanel matches={matches} venues={venues} saving={matchSaving} conflict={conflict} onClearConflict={() => setConflict('')} onCreate={handleCreateMatch} onUpdate={handleUpdateMatch} onDelete={handleDeleteMatch} onCreateVenue={handleCreateVenue} /> : <VenuesPanel venues={venues} saving={venueSaving} onCreate={handleCreateVenue} onUpdate={handleUpdateVenue} onArchive={handleArchiveVenue} onRestore={handleRestoreVenue} />}
+      {loading ? <StateScreen kind="loading" title="Загружаем данные" copy="Синхронизируем карточки и места…" /> : tab === 'matches' ? <MatchesPanel matches={matches} venues={venues} saving={matchSaving} conflict={conflict} onClearConflict={() => setConflict('')} onCreate={handleCreateMatch} onUpdate={handleUpdateMatch} onDelete={handleDeleteMatch} onRepublish={handleRepublishMatch} onCreateVenue={handleCreateVenue} /> : <VenuesPanel venues={venues} saving={venueSaving} onCreate={handleCreateVenue} onUpdate={handleUpdateVenue} onArchive={handleArchiveVenue} onRestore={handleRestoreVenue} />}
     </main>
     <TabBar value={tab} onChange={setTab} />
   </div>

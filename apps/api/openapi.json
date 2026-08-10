@@ -257,6 +257,58 @@
         ]
       }
     },
+    "/v1/matches/{id}/republish": {
+      "post": {
+        "operationId": "republishOwnerMatch",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchEnvelopeResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "Republish an information card",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
     "/v1/weather/current": {
       "post": {
         "operationId": "sendCurrentWeather",

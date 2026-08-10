@@ -14,8 +14,9 @@ const match = {
   publicCard: { publicationState: 'pending', telegramMessageId: '10', publicationAttemptedAt: '2026-08-01T12:00:01.000Z', lastError: null },
 }
 
-async function mockOwnerApp(page: Page): Promise<{ readonly weatherRequests: string[] }> {
+async function mockOwnerApp(page: Page): Promise<{ readonly weatherRequests: string[]; readonly republishRequests: string[] }> {
   const weatherRequests: string[] = []
+  const republishRequests: string[] = []
   await page.route('https://telegram.org/js/telegram-web-app.js', (route) => route.fulfill({ contentType: 'application/javascript', body: '' }))
   await page.addInitScript(() => {
     Object.defineProperty(window, '__FOOTBALL_API_BASE_URL__', { configurable: true, value: 'http://127.0.0.1:6174' })
@@ -32,9 +33,10 @@ async function mockOwnerApp(page: Page): Promise<{ readonly weatherRequests: str
     ] })
     if (request.method() === 'GET' && pathname === '/v1/venues') return json({ venues: [venue] })
     if (request.method() === 'POST' && pathname === '/v1/weather/current') { weatherRequests.push(pathname); return json({ sent: true, observedAt: '2026-08-10T12:00' }) }
+    if (request.method() === 'POST' && pathname === '/v1/matches/1/republish') { republishRequests.push(pathname); return json({ match: { ...match, version: 2 } }) }
     return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ code: 'NOT_FOUND' }) })
   })
-  return { weatherRequests }
+  return { weatherRequests, republishRequests }
 }
 
 async function faviconCornerAlpha(page: Page): Promise<number> {
@@ -53,7 +55,7 @@ async function faviconCornerAlpha(page: Page): Promise<number> {
 }
 
 test('shows static information cards without roster or voting controls', async ({ page }) => {
-  await mockOwnerApp(page)
+  const mocked = await mockOwnerApp(page)
   await page.goto('/')
 
   await expect(page).toHaveTitle('Ballimus Dev')
@@ -77,8 +79,15 @@ test('shows static information cards without roster or voting controls', async (
   await expect(page.getByRole('button', { name: 'Удалить', exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: 'Открыть матч Среда, 12 августа · 20:00-21:30', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Редактировать матч', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Удалить', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Сохранить', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Удалить', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Действия матча', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Действия с матчем', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Переопубликовать матч', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Удалить', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Переопубликовать матч', exact: true }).click()
+  await expect.poll(() => mocked.republishRequests).toEqual(['/v1/matches/1/republish'])
+  await expect(page.getByRole('heading', { name: 'Действия с матчем', exact: true })).toHaveCount(0)
   await expect(page.getByText(/Игроки|Голосования|Состав/u)).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Игроки', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'История', exact: true })).toHaveCount(0)
@@ -105,6 +114,9 @@ test('sends current weather globally and keeps the venue catalog available', asy
   await expect(page.getByRole('button', { name: /В архив BOX365/u })).toHaveCount(0)
   await page.getByRole('button', { name: 'Открыть место BOX365 Пушкинская', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Редактировать место', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'В архив', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Сохранить', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'В архив', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Действия места', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Действия с местом', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'В архив', exact: true })).toBeVisible()
 })
