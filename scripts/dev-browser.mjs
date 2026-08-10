@@ -8,6 +8,7 @@ import { resolve } from "node:path";
 const projectRoot = resolve(import.meta.dirname, "..");
 const localEnvFile = resolve(projectRoot, ".env.local");
 const fixtureScript = resolve(projectRoot, "scripts/generate-init-data.mjs");
+const tsxRunner = resolve(projectRoot, "scripts/run-tsx.mjs");
 const packageManager = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const localWebUrl = "http://127.0.0.1:6173";
 const childEnvironment = { ...process.env };
@@ -131,7 +132,7 @@ async function main() {
     VITE_LOCAL_OWNER_INIT_DATA: localOwnerFixture,
   };
 
-  startChild(packageManager, ["--filter", "@football/api", "exec", "tsx", "src/main.ts"], apiEnvironment);
+  startChild(process.execPath, [tsxRunner, "--tsconfig", "apps/api/tsconfig.json", "apps/api/src/main.ts"], apiEnvironment);
   startChild(packageManager, ["--filter", "@football/web", "dev", "--host", "127.0.0.1"], webEnvironment);
 
   await Promise.all([
