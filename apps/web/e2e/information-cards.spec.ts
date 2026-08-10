@@ -37,12 +37,28 @@ async function mockOwnerApp(page: Page): Promise<{ readonly weatherRequests: str
   return { weatherRequests }
 }
 
+async function faviconCornerAlpha(page: Page): Promise<number> {
+  return page.locator('link[rel="icon"]').evaluate(async (element) => {
+    const image = new Image()
+    image.src = (element as HTMLLinkElement).href
+    await image.decode()
+    const canvas = document.createElement('canvas')
+    canvas.width = image.naturalWidth
+    canvas.height = image.naturalHeight
+    const context = canvas.getContext('2d')
+    if (context === null) throw new Error('Canvas is unavailable')
+    context.drawImage(image, 0, 0)
+    return context.getImageData(0, 0, 1, 1).data[3]
+  })
+}
+
 test('shows static information cards without roster or voting controls', async ({ page }) => {
   await mockOwnerApp(page)
   await page.goto('/')
 
   await expect(page).toHaveTitle('Ballimus Dev')
-  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', /ballimus-dev.*\.webp$/u)
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', /^data:image\/png;base64,/u)
+  await expect.poll(() => faviconCornerAlpha(page)).toBe(0)
   await expect(page.getByRole('heading', { name: 'Матчи', exact: true })).toBeVisible()
   await expect(page.getByText('Среда, 12 августа · 20:00-21:30', { exact: true })).toBeVisible()
   const mapLink = page.getByRole('link', { name: 'BOX365 Пушкинская · В помещении', exact: true })
