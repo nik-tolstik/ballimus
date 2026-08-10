@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Reorder, useDragControls } from 'framer-motion'
-import { Bell, Check, GripVertical, ListChecks, RotateCcw, Send, Trash2, UsersRound, type LucideIcon } from 'lucide-react'
+import { Bell, Check, GripVertical, ListChecks, Plus, RotateCcw, Send, Trash2, UsersRound, type LucideIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Field, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
@@ -22,8 +22,12 @@ export interface PollEditorValues {
   readonly allowsMultipleAnswers: boolean
 }
 
-function option(key: number): PollEditorOptionValues {
-  return { key: String(key), text: '', notificationEnabled: true }
+interface PollEditorOptionItem extends PollEditorOptionValues {
+  readonly isDraft: boolean
+}
+
+function option(key: number, isDraft: boolean): PollEditorOptionItem {
+  return { key: String(key), text: '', notificationEnabled: true, isDraft }
 }
 
 const settingTone = {
@@ -121,7 +125,6 @@ function OptionNotificationToggle({
 function PollOptionRow({
   item,
   index,
-  total,
   notificationsEnabled,
   inputRef,
   onTextChange,
@@ -129,9 +132,8 @@ function PollOptionRow({
   onDelete,
   onMove,
 }: {
-  readonly item: PollEditorOptionValues
+  readonly item: PollEditorOptionItem
   readonly index: number
-  readonly total: number
   readonly notificationsEnabled: boolean
   readonly inputRef: (node: HTMLInputElement | null) => void
   readonly onTextChange: (key: string, text: string) => void
@@ -154,7 +156,7 @@ function PollOptionRow({
   >
     <Field className="rounded-xl bg-card p-3 shadow-sm transition-shadow">
       <div className="flex items-center gap-2">
-        <Button
+        {item.isDraft ? <span className="flex size-8 shrink-0 items-center justify-center text-muted-foreground" aria-hidden="true"><Plus className="size-4" /></span> : <Button
           type="button"
           variant="ghost"
           size="icon"
@@ -168,10 +170,22 @@ function PollOptionRow({
           }}
         >
           <GripVertical />
-        </Button>
-        <Input ref={inputRef} aria-label={`Вариант ${optionNumber}`} maxLength={100} value={item.text} onChange={(event) => onTextChange(item.key, event.target.value)} placeholder={`Вариант ${optionNumber}`} />
-        {notificationsEnabled ? <OptionNotificationToggle optionNumber={optionNumber} enabled={item.notificationEnabled} onEnabledChange={(notificationEnabled) => onUpdate(item.key, { notificationEnabled })} /> : null}
-        <Button type="button" variant="ghost" size="icon" aria-label={`Удалить вариант ${optionNumber}`} disabled={total <= 1} onClick={() => onDelete(item.key)}><Trash2 /></Button>
+        </Button>}
+        <Input
+          ref={inputRef}
+          aria-label={item.isDraft ? 'Новый вариант' : `Вариант ${optionNumber}`}
+          maxLength={100}
+          value={item.text}
+          onChange={(event) => onTextChange(item.key, event.target.value)}
+          onKeyDown={(event) => {
+            if (item.isDraft || item.text !== '' || (event.key !== 'Backspace' && event.key !== 'Delete')) return
+            event.preventDefault()
+            onDelete(item.key)
+          }}
+          placeholder={item.isDraft ? 'Новый вариант' : `Вариант ${optionNumber}`}
+        />
+        {!item.isDraft && notificationsEnabled ? <OptionNotificationToggle optionNumber={optionNumber} enabled={item.notificationEnabled} onEnabledChange={(notificationEnabled) => onUpdate(item.key, { notificationEnabled })} /> : null}
+        {item.isDraft ? null : <Button type="button" variant="ghost" size="icon" aria-label={`Удалить вариант ${optionNumber}`} onClick={() => onDelete(item.key)}><Trash2 /></Button>}
       </div>
     </Field>
   </Reorder.Item>
@@ -197,7 +211,7 @@ export function validatePollEditorValues(values: PollEditorValues): string | und
 
 export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollEditorValues) => void; readonly saving: boolean }) {
   const [question, setQuestion] = useState('')
-  const [options, setOptions] = useState<PollEditorOptionValues[]>([option(1)])
+  const [options, setOptions] = useState<PollEditorOptionItem[]>([option(1, true)])
   const [notificationThreshold, setNotificationThreshold] = useState<string | null>('10')
   const [allowsMultipleAnswers, setAllowsMultipleAnswers] = useState(false)
   const [validation, setValidation] = useState('')
@@ -223,14 +237,10 @@ export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollE
 
       const currentOption = current[index]
       if (currentOption === undefined) return current
-      if (text === '' && currentOption.text !== '' && current.length > 1) {
-        pendingFocusKeyRef.current = current[index + 1]?.key ?? current[index - 1]?.key ?? null
-        return current.filter((item) => item.key !== key)
-      }
-
-      const updated = current.map((item) => item.key === key ? { ...item, text } : item)
-      if (index === current.length - 1 && text.trim().length > 0 && current.length < 12) {
-        return [...updated, option(nextKeyRef.current++)]
+      const createsOption = currentOption.isDraft && text.trim().length > 0
+      const updated = current.map((item) => item.key === key ? { ...item, text, isDraft: createsOption ? false : item.isDraft } : item)
+      if (createsOption && current.length < 12) {
+        return [...updated, option(nextKeyRef.current++, true)]
       }
       return updated
     })
@@ -242,7 +252,8 @@ export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollE
       const index = current.findIndex((item) => item.key === key)
       if (index < 0) return current
       pendingFocusKeyRef.current = current[index + 1]?.key ?? current[index - 1]?.key ?? null
-      return current.filter((candidate) => candidate.key !== key)
+      const remaining = current.filter((candidate) => candidate.key !== key)
+      return remaining.some((candidate) => candidate.isDraft) || remaining.length >= 12 ? remaining : [...remaining, option(nextKeyRef.current++, true)]
     })
     setValidation('')
   }
@@ -251,6 +262,7 @@ export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollE
       const from = current.findIndex((item) => item.key === key)
       const to = from + direction
       if (from < 0 || to < 0 || to >= current.length) return current
+      if (current[from]?.isDraft === true || current[to]?.isDraft === true) return current
       const next = [...current]
       const [moved] = next.splice(from, 1)
       if (moved === undefined) return current
@@ -264,7 +276,9 @@ export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollE
     setValidation('')
   }
   const submit = () => {
-    const completedOptions = options.filter((item) => item.text.trim().length > 0)
+    const completedOptions = options
+      .filter((item) => !item.isDraft && item.text.trim().length > 0)
+      .map(({ key, text, notificationEnabled }) => ({ key, text, notificationEnabled }))
     const values = { question, options: completedOptions, notificationThreshold, allowsMultipleAnswers }
     const error = validatePollEditorValues(values)
     if (error !== undefined) { setValidation(error); return }
@@ -272,7 +286,7 @@ export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollE
     onSave(values)
   }
 
-  const completedOptionsCount = options.filter((item) => item.text.trim().length > 0).length
+  const completedOptionsCount = options.filter((item) => !item.isDraft && item.text.trim().length > 0).length
 
   return <form aria-label="Форма создания опроса" className="flex min-h-0 flex-1 flex-col" onSubmit={(event) => { event.preventDefault(); submit() }}>
     <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
@@ -280,8 +294,8 @@ export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollE
         <Field data-invalid={validation.startsWith('Введите вопрос')}><FieldLabel htmlFor="poll-question">Вопрос</FieldLabel><Input id="poll-question" maxLength={300} value={question} onChange={(event) => { setQuestion(event.target.value); setValidation('') }} /></Field>
         <div className="flex flex-col gap-3">
           <FieldLabel>Варианты ответа</FieldLabel>
-          <Reorder.Group axis="y" values={options} onReorder={(next) => { setOptions(next); setValidation('') }} className="flex flex-col gap-3" layoutScroll>
-            {options.map((item, index) => <PollOptionRow key={item.key} item={item} index={index} total={options.length} notificationsEnabled={notificationThreshold !== null} inputRef={(node) => { if (node === null) optionInputRefs.current.delete(item.key); else optionInputRefs.current.set(item.key, node) }} onTextChange={updateOptionText} onUpdate={updateOption} onDelete={deleteOption} onMove={moveOption} />)}
+          <Reorder.Group axis="y" values={options} onReorder={(next) => { setOptions([...next.filter((item) => !item.isDraft), ...next.filter((item) => item.isDraft)]); setValidation('') }} className="flex flex-col gap-3" layoutScroll>
+            {options.map((item, index) => <PollOptionRow key={item.key} item={item} index={index} notificationsEnabled={notificationThreshold !== null} inputRef={(node) => { if (node === null) optionInputRefs.current.delete(item.key); else optionInputRefs.current.set(item.key, node) }} onTextChange={updateOptionText} onUpdate={updateOption} onDelete={deleteOption} onMove={moveOption} />)}
           </Reorder.Group>
         </div>
         <FieldSet className="gap-0"><FieldLegend variant="label" className="mb-0 px-3">Настройки</FieldLegend>
