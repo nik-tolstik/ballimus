@@ -106,9 +106,16 @@ export function App({ telegramSession }: AppProps = {}) {
 
   const handleCreateMatch = (values: EditorValues) => createMatchMutation.mutate({ data: matchRequest(values), headers: { 'Idempotency-Key': requestKey() } }, { onSuccess: () => { invalidateMatches(); toast.success('Карточка матча отправлена в Telegram.') } })
   const handleUpdateMatch = (match: NormalizedMatch, values: EditorValues) => updateMatchMutation.mutate({ id: match.id, data: matchRequest(values), headers: { 'Idempotency-Key': requestKey(), 'If-Match': String(match.version) } }, { onSuccess: () => { setConflict(''); invalidateMatches(); toast.success('Карточка матча обновлена.') } })
-  const handleDeleteMatch = (match: NormalizedMatch) => {
-    if (!window.confirm(`Удалить карточку матча ${match.dateLabel}?`)) return
-    deleteMatchMutation.mutate({ id: match.id, headers: { 'Idempotency-Key': requestKey(), 'If-Match': String(match.version) } }, { onSuccess: () => { invalidateMatches(); toast.success('Карточка матча удаляется из Telegram.') } })
+  const handleDeleteMatch = async (match: NormalizedMatch): Promise<boolean> => {
+    if (!window.confirm(`Удалить карточку матча ${match.dateLabel}?`)) return false
+    try {
+      await deleteMatchMutation.mutateAsync({ id: match.id, headers: { 'Idempotency-Key': requestKey(), 'If-Match': String(match.version) } })
+      invalidateMatches()
+      toast.success('Карточка матча удаляется из Telegram.')
+      return true
+    } catch {
+      return false
+    }
   }
   const handleCreateVenue = async (values: VenueFormValues) => {
     const response = await createVenueMutation.mutateAsync({ data: values, headers: { 'Idempotency-Key': requestKey() } })
