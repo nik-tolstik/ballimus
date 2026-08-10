@@ -71,6 +71,13 @@
       "when": 1786099200000,
       "tag": "0009_booking_contacts",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786358400000,
+      "tag": "0010_information_cards",
+      "breakpoints": true
     }
   ]
 }

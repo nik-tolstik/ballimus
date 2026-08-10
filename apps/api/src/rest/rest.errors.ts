@@ -1,9 +1,5 @@
 import { HttpException, type HttpStatus } from "@nestjs/common";
 import {
-  DomainValidationError,
-  LifecycleConflictError,
-} from "@football/domain";
-import {
   IdempotencyConflictError,
   isPersistenceError,
   OptimisticConcurrencyError,
@@ -128,26 +124,6 @@ export function mapRestError(error: unknown): RestErrorMapping {
       body: {
         code: "IDEMPOTENCY_KEY_CONFLICT",
         message: "The idempotency key was already used for a different request.",
-      },
-    };
-  }
-  if (error instanceof DomainValidationError) {
-    return {
-      status: 400,
-      body: {
-        code: "VALIDATION_ERROR",
-        message: "The request contains invalid values.",
-        details: { issues: error.issues },
-      },
-    };
-  }
-  if (error instanceof LifecycleConflictError) {
-    return {
-      status: 409,
-      body: {
-        code: "LIFECYCLE_CONFLICT",
-        message: "The requested match lifecycle transition is not allowed.",
-        details: { from: error.from, to: error.to },
       },
     };
   }

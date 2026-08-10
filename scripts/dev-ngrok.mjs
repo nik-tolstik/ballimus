@@ -12,7 +12,7 @@ const packageManager = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const ngrokExecutable = process.platform === "win32" ? "ngrok.exe" : "ngrok";
 const childEnvironment = { ...process.env };
 const requestedFlags = new Set(process.argv.slice(2).filter((argument) => argument !== "--"));
-const knownFlags = new Set(["--help", "-h", "--register-webhook", "--set-menu-button"]);
+const knownFlags = new Set(["--help", "-h", "--set-menu-button"]);
 
 for (const flag of requestedFlags) {
   if (!knownFlags.has(flag)) {
@@ -49,7 +49,6 @@ if (process.platform !== "win32") {
 const requiredEnvironment = [
   "DATABASE_URL",
   "TELEGRAM_BOT_TOKEN",
-  "TELEGRAM_WEBHOOK_SECRET",
   "TELEGRAM_OWNER_USER_ID",
   "TELEGRAM_CHAT_ID",
   "TELEGRAM_CHAT_TOPIC_ID",
@@ -70,9 +69,9 @@ function printUsage() {
   pnpm dev
   pnpm dev -- --set-menu-button
 
-The default command opens API and Web ngrok tunnels, starts the API and Vite
-processes with the public URLs, and registers the local webhook. Start local
-PostgreSQL and apply migrations separately before running this command.
+The default command opens API and Web ngrok tunnels and starts the API and Vite
+processes with the public URLs. Start local PostgreSQL and apply migrations
+separately before running this command.
 
 Options:
   --set-menu-button   Set the owner's Telegram menu button to the public Web URL.
@@ -265,24 +264,13 @@ async function main() {
     waitForHttp("http://127.0.0.1:6173/", "the local Web app"),
   ]);
 
-  const webhookUrl = `${apiUrl}/telegram/webhook`;
   console.info(`\nLocal Telegram development is ready.
   Mini App: ${webUrl}
   API:      ${apiUrl}
-  Webhook:  ${webhookUrl}
   ngrok UI: http://127.0.0.1:4040
 
 Open the Mini App from the local bot using the Mini App URL above.
 `);
-
-  if (requestedFlags.has("--register-webhook")) {
-    await telegramApi("setWebhook", {
-      url: webhookUrl,
-      secret_token: process.env.TELEGRAM_WEBHOOK_SECRET,
-      allowed_updates: ["callback_query"],
-    });
-    console.info("Local webhook registered for the configured bot.");
-  }
 
   if (requestedFlags.has("--set-menu-button")) {
     await telegramApi("setChatMenuButton", {

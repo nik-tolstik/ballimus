@@ -14,17 +14,12 @@ const migrationsFolder = resolve(import.meta.dirname, "../../migrations");
 const applicationName = "football-bot-postgres-integration-tests";
 
 const applicationTables = [
-  "telegram_updates",
-  "players",
   "matches",
-  "player_usernames",
   "match_messages",
-  "votes",
-  "external_participants",
   "http_idempotency_keys",
-  "notifications",
   "outbox",
   "job_claims",
+  "venues",
 ] as const;
 
 export interface PostgresTestDatabase {

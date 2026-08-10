@@ -22,7 +22,7 @@ async function runJobs(): Promise<void> {
     } else {
       const { summary } = result;
       console.log(
-        `Jobs run completed: claimed=${summary.claimed} delivered=${summary.delivered} failed=${summary.failed} uncertain=${summary.uncertain} weatherSent=${summary.weather.sent} weatherFailed=${summary.weather.failed}`,
+        `Jobs run completed: claimed=${summary.claimed} delivered=${summary.delivered} failed=${summary.failed} uncertain=${summary.uncertain}`,
       );
     }
   } catch (error: unknown) {

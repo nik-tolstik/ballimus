@@ -48,7 +48,7 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 /**
- * @summary List owner venues
+ * @summary List venue catalog entries
  */
 export const listOwnerVenues = (
     params?: ListOwnerVenuesParams,
@@ -120,7 +120,7 @@ export function useListOwnerVenues<TData = Awaited<ReturnType<typeof listOwnerVe
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary List owner venues
+ * @summary List venue catalog entries
  */
 
 export function useListOwnerVenues<TData = Awaited<ReturnType<typeof listOwnerVenues>>, TError = unknown>(
@@ -141,7 +141,7 @@ export function useListOwnerVenues<TData = Awaited<ReturnType<typeof listOwnerVe
 
 
 /**
- * @summary Create an owner venue
+ * @summary Create a venue catalog entry
  */
 export const createOwnerVenue = (
     venueCreateDto: VenueCreateDto,
@@ -190,7 +190,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type CreateOwnerVenueMutationError = unknown
 
     /**
- * @summary Create an owner venue
+ * @summary Create a venue catalog entry
  */
 export const useCreateOwnerVenue = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOwnerVenue>>, TError,{data: VenueCreateDto;headers: CreateOwnerVenueHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
@@ -206,7 +206,7 @@ export const useCreateOwnerVenue = <TError = unknown,
       return useMutation(mutationOptions, queryClient);
     }
     /**
- * @summary Edit an owner venue
+ * @summary Update a venue catalog entry
  */
 export const updateOwnerVenue = (
     id: string,
@@ -255,7 +255,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type UpdateOwnerVenueMutationError = unknown
 
     /**
- * @summary Edit an owner venue
+ * @summary Update a venue catalog entry
  */
 export const useUpdateOwnerVenue = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOwnerVenue>>, TError,{id: string;data: VenueUpdateDto;headers: UpdateOwnerVenueHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
@@ -271,7 +271,7 @@ export const useUpdateOwnerVenue = <TError = unknown,
       return useMutation(mutationOptions, queryClient);
     }
     /**
- * @summary Archive an owner venue
+ * @summary Archive a venue catalog entry
  */
 export const archiveOwnerVenue = (
     id: string,
@@ -319,7 +319,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type ArchiveOwnerVenueMutationError = unknown
 
     /**
- * @summary Archive an owner venue
+ * @summary Archive a venue catalog entry
  */
 export const useArchiveOwnerVenue = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveOwnerVenue>>, TError,{id: string;headers: ArchiveOwnerVenueHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
@@ -335,7 +335,7 @@ export const useArchiveOwnerVenue = <TError = unknown,
       return useMutation(mutationOptions, queryClient);
     }
     /**
- * @summary Restore an owner venue
+ * @summary Restore a venue catalog entry
  */
 export const restoreOwnerVenue = (
     id: string,
@@ -383,7 +383,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type RestoreOwnerVenueMutationError = unknown
 
     /**
- * @summary Restore an owner venue
+ * @summary Restore a venue catalog entry
  */
 export const useRestoreOwnerVenue = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreOwnerVenue>>, TError,{id: string;headers: RestoreOwnerVenueHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}

@@ -9,7 +9,7 @@
     "node": ">=22.18.0"
   },
   "scripts": {
-    "dev": "node scripts/dev-ngrok.mjs --register-webhook",
+    "dev": "node scripts/dev-ngrok.mjs",
     "auth:fixture": "node scripts/generate-init-data.mjs",
     "pretest": "pnpm --filter @football/api-client --filter @football/db --filter @football/domain run build",
     "test": "pnpm --if-present --filter './apps/*' --filter './packages/*' -r run test && pnpm test:release-verifier",
@@ -21,6 +21,7 @@
     "db:check": "pnpm --filter @football/db run db:check",
     "db:generate": "pnpm --filter @football/db run db:generate",
     "db:migrate": "pnpm --filter @football/db run db:migrate",
+    "db:cleanup-legacy-cards": "pnpm --filter @football/db run db:cleanup-legacy-cards",
     "openapi:generate": "pnpm --filter @football/api run openapi:write",
     "api-client:generate": "pnpm --filter @football/api-client run generate",
     "api:contracts:check": "node scripts/check-api-contracts.mjs",

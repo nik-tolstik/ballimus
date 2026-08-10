@@ -7,7 +7,7 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "Owner configuration and grouped match summaries.",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -33,48 +33,17 @@
         "operationId": "listOwnerMatches",
         "parameters": [
           {
-            "name": "offset",
+            "name": "venueId",
             "required": false,
             "in": "query",
             "schema": {
-              "type": "number"
-            }
-          },
-          {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "number"
-            }
-          },
-          {
-            "name": "search",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "status",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "enum": [
-                "draft",
-                "active",
-                "confirmed",
-                "completed",
-                "cancelled"
-              ],
               "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Match summaries.",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -89,7 +58,7 @@
             "telegramMiniApp": []
           }
         ],
-        "summary": "List owner matches",
+        "summary": "List current information cards",
         "tags": [
           "matches"
         ]
@@ -118,44 +87,7 @@
         },
         "responses": {
           "201": {
-            "description": "Created active match with publication accepted into the durable outbox.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MatchMutationResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Create and publish a match",
-        "tags": [
-          "matches"
-        ]
-      }
-    },
-    "/v1/matches/{id}": {
-      "get": {
-        "operationId": "getOwnerMatch",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Decimal match identifier",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Match details, roster, and public-card state.",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -170,18 +102,53 @@
             "telegramMiniApp": []
           }
         ],
-        "summary": "Load an owner match and roster",
+        "summary": "Create and publish an information card",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
+    "/v1/matches/{id}": {
+      "get": {
+        "operationId": "getOwnerMatch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchEnvelopeResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "Load one information card",
         "tags": [
           "matches"
         ]
       },
       "patch": {
-        "operationId": "patchOwnerMatch",
+        "operationId": "updateOwnerMatch",
         "parameters": [
           {
             "name": "If-Match",
             "in": "header",
-            "description": "Current match version, such as 3 or \"3\".",
             "required": true,
             "schema": {
               "type": "string"
@@ -199,7 +166,6 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "description": "Decimal match identifier",
             "schema": {
               "type": "string"
             }
@@ -217,11 +183,11 @@
         },
         "responses": {
           "200": {
-            "description": "Updated match.",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MatchMutationResponseDto"
+                  "$ref": "#/components/schemas/MatchEnvelopeResponseDto"
                 }
               }
             }
@@ -232,719 +198,22 @@
             "telegramMiniApp": []
           }
         ],
-        "summary": "Edit a match with optimistic concurrency",
-        "tags": [
-          "matches"
-        ]
-      }
-    },
-    "/v1/matches/{id}/preview": {
-      "post": {
-        "operationId": "previewOwnerMatchCard",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Decimal match identifier",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Preview rendered by the domain card formatter.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CardPreviewResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Render the public match card preview",
-        "tags": [
-          "matches"
-        ]
-      }
-    },
-    "/v1/matches/{id}/publish": {
-      "post": {
-        "operationId": "publishOwnerMatch",
-        "parameters": [
-          {
-            "name": "If-Match",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Decimal match identifier",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Publication accepted into the durable outbox.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MatchMutationResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Publish a legacy unpublished match",
-        "tags": [
-          "matches"
-        ]
-      }
-    },
-    "/v1/matches/{id}/finalize": {
-      "post": {
-        "operationId": "finalizeOwnerMatch",
-        "parameters": [
-          {
-            "name": "If-Match",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Decimal match identifier",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FinalizeMatchDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Confirmed match with a queued card refresh and chat notification.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MatchMutationResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Set booked match details and confirm the match",
-        "tags": [
-          "matches"
-        ]
-      }
-    },
-    "/v1/matches/{id}/confirm": {
-      "post": {
-        "operationId": "confirmOwnerMatch",
-        "parameters": [
-          {
-            "name": "If-Match",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Decimal match identifier",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Confirmed match and queued card refresh.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MatchMutationResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Confirm an active match",
-        "tags": [
-          "matches"
-        ]
-      }
-    },
-    "/v1/matches/{id}/complete": {
-      "post": {
-        "operationId": "completeOwnerMatch",
-        "parameters": [
-          {
-            "name": "If-Match",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Decimal match identifier",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Completed match and queued public-card deletion.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MatchMutationResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Complete a confirmed match",
-        "tags": [
-          "matches"
-        ]
-      }
-    },
-    "/v1/matches/{id}/cancel": {
-      "post": {
-        "operationId": "cancelOwnerMatch",
-        "parameters": [
-          {
-            "name": "If-Match",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Decimal match identifier",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CancelMatchDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Cancelled match and queued public-card deletion.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MatchMutationResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Cancel a match with a reason",
-        "tags": [
-          "matches"
-        ]
-      }
-    },
-    "/v1/matches/{id}/refresh": {
-      "post": {
-        "operationId": "refreshOwnerMatchCard",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Decimal match identifier",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RefreshMatchDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Refresh queued.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MatchMutationResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Queue a public-card refresh",
-        "tags": [
-          "matches"
-        ]
-      }
-    },
-    "/v1/matches/{id}/weather": {
-      "post": {
-        "operationId": "sendOwnerMatchWeather",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Decimal match identifier",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Weather forecast sent to the configured chat topic.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WeatherSendResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Send the weather forecast immediately",
-        "tags": [
-          "matches"
-        ]
-      }
-    },
-    "/v1/matches/{id}/reconcile": {
-      "post": {
-        "operationId": "reconcileOwnerMatchCard",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Decimal match identifier",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReconcileMatchDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Existing card attached or a confirmed-safe publication retry queued.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MatchMutationResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Repair an uncertain public-card publication",
-        "tags": [
-          "matches"
-        ]
-      }
-    },
-    "/v1/matches/{id}/roster/votes": {
-      "post": {
-        "operationId": "correctOwnerMatchVote",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Decimal match identifier",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VoteCorrectionDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Corrected roster and queued card refresh.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MatchMutationResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Correct a known player's vote",
-        "tags": [
-          "matches"
-        ]
-      }
-    },
-    "/v1/matches/{id}/roster/votes/{playerId}": {
-      "delete": {
-        "operationId": "removeOwnerMatchVote",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "playerId",
-            "required": true,
-            "in": "path",
-            "description": "Decimal player identifier",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Decimal match identifier",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Removed roster vote and queued card refresh.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MatchMutationResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Remove a known player's vote",
-        "tags": [
-          "matches"
-        ]
-      }
-    },
-    "/v1/matches/{id}/roster/external-participants": {
-      "post": {
-        "operationId": "createOwnerExternalParticipant",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Decimal match identifier",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ExternalParticipantCreateDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Added external participants and queued card refresh.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MatchMutationResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Add individually editable external players",
-        "tags": [
-          "matches"
-        ]
-      }
-    },
-    "/v1/matches/{id}/roster/external-participants/{participantId}": {
-      "patch": {
-        "operationId": "updateOwnerExternalParticipant",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "participantId",
-            "required": true,
-            "in": "path",
-            "description": "Decimal external participant identifier",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Decimal match identifier",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ExternalParticipantUpdateDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Updated external participants and queued card refresh.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MatchMutationResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Rename an external player",
+        "summary": "Update an information card",
         "tags": [
           "matches"
         ]
       },
       "delete": {
-        "operationId": "removeOwnerExternalParticipant",
+        "operationId": "deleteOwnerMatch",
         "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "Idempotency-Key",
             "in": "header",
@@ -954,19 +223,9 @@
             }
           },
           {
-            "name": "participantId",
-            "required": true,
-            "in": "path",
-            "description": "Decimal external participant identifier",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "name": "id",
             "required": true,
             "in": "path",
-            "description": "Decimal match identifier",
             "schema": {
               "type": "string"
             }
@@ -974,11 +233,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Removed external participants and queued card refresh.",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MatchMutationResponseDto"
+                  "example": {
+                    "deleted": true,
+                    "matchId": "42"
+                  }
                 }
               }
             }
@@ -989,192 +251,23 @@
             "telegramMiniApp": []
           }
         ],
-        "summary": "Remove an external participant entry",
+        "summary": "Delete an information card",
         "tags": [
           "matches"
         ]
       }
     },
-    "/v1/players": {
-      "get": {
-        "operationId": "listOwnerPlayers",
-        "parameters": [
-          {
-            "name": "offset",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "number"
-            }
-          },
-          {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "number"
-            }
-          },
-          {
-            "name": "confirmed",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "boolean"
-            }
-          },
-          {
-            "name": "search",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Players with confirmed or unconfirmed state and aliases.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PlayerListResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Search owner players and aliases",
-        "tags": [
-          "players"
-        ]
-      }
-    },
-    "/v1/players/{id}": {
-      "get": {
-        "operationId": "getOwnerPlayer",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Decimal player identifier",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Player profile and aliases.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PlayerEnvelopeResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Load one player and aliases",
-        "tags": [
-          "players"
-        ]
-      },
-      "patch": {
-        "operationId": "updateOwnerPlayerReadableName",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Decimal player identifier",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdatePlayerDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Updated readable name and affected card snapshots.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PlayerEnvelopeResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Edit a player's readable name",
-        "tags": [
-          "players"
-        ]
-      }
-    },
-    "/v1/players/aliases": {
+    "/v1/weather/current": {
       "post": {
-        "operationId": "createOwnerPlayerAlias",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateAliasDto"
-              }
-            }
-          }
-        },
+        "operationId": "sendCurrentWeather",
+        "parameters": [],
         "responses": {
           "200": {
-            "description": "Created or updated alias and readable name.",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AliasMutationResponseDto"
+                  "$ref": "#/components/schemas/WeatherCurrentResponseDto"
                 }
               }
             }
@@ -1185,107 +278,9 @@
             "telegramMiniApp": []
           }
         ],
-        "summary": "Create an owner-managed username alias",
+        "summary": "Send current Minsk weather to Telegram",
         "tags": [
-          "players"
-        ]
-      }
-    },
-    "/v1/players/aliases/{username}": {
-      "patch": {
-        "operationId": "updateOwnerPlayerAlias",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "username",
-            "required": true,
-            "in": "path",
-            "description": "Telegram username, with or without @",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateAliasDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Updated alias readable name.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AliasMutationResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Edit an alias readable name",
-        "tags": [
-          "players"
-        ]
-      },
-      "delete": {
-        "operationId": "removeOwnerPlayerAlias",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "username",
-            "required": true,
-            "in": "path",
-            "description": "Telegram username, with or without @",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Removed alias.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AliasRemovalResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Remove an unconfirmed username alias",
-        "tags": [
-          "players"
+          "weather"
         ]
       }
     },
@@ -1319,7 +314,7 @@
             "telegramMiniApp": []
           }
         ],
-        "summary": "List owner venues",
+        "summary": "List venue catalog entries",
         "tags": [
           "venues"
         ]
@@ -1363,7 +358,7 @@
             "telegramMiniApp": []
           }
         ],
-        "summary": "Create an owner venue",
+        "summary": "Create a venue catalog entry",
         "tags": [
           "venues"
         ]
@@ -1393,7 +388,6 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "description": "Decimal venue identifier",
             "schema": {
               "type": "string"
             }
@@ -1426,7 +420,7 @@
             "telegramMiniApp": []
           }
         ],
-        "summary": "Edit an owner venue",
+        "summary": "Update a venue catalog entry",
         "tags": [
           "venues"
         ]
@@ -1456,7 +450,6 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "description": "Decimal venue identifier",
             "schema": {
               "type": "string"
             }
@@ -1479,7 +472,7 @@
             "telegramMiniApp": []
           }
         ],
-        "summary": "Archive an owner venue",
+        "summary": "Archive a venue catalog entry",
         "tags": [
           "venues"
         ]
@@ -1509,7 +502,6 @@
             "name": "id",
             "required": true,
             "in": "path",
-            "description": "Decimal venue identifier",
             "schema": {
               "type": "string"
             }
@@ -1532,7 +524,7 @@
             "telegramMiniApp": []
           }
         ],
-        "summary": "Restore an owner venue",
+        "summary": "Restore a venue catalog entry",
         "tags": [
           "venues"
         ]
@@ -1580,15 +572,20 @@
             "type": "string",
             "example": "1"
           },
-          "chatTopicId": {
+          "weatherTopicId": {
             "type": "string",
             "example": "42"
+          },
+          "timezone": {
+            "type": "string",
+            "example": "Europe/Minsk"
           }
         },
         "required": [
           "telegramChatId",
           "generalTopicId",
-          "chatTopicId"
+          "weatherTopicId",
+          "timezone"
         ]
       },
       "MatchScheduleResponseDto": {
@@ -1596,12 +593,10 @@
         "properties": {
           "date": {
             "type": "string",
-            "nullable": true,
             "example": "2026-08-03"
           },
           "time": {
             "type": "string",
-            "nullable": true,
             "example": "20:00"
           },
           "timezone": {
@@ -1637,8 +632,7 @@
             "example": "15"
           },
           "name": {
-            "type": "string",
-            "example": "BOX365 Октябрьская"
+            "type": "string"
           },
           "mapUrl": {
             "type": "string",
@@ -1693,188 +687,6 @@
           "updatedAt"
         ]
       },
-      "RosterCountsResponseDto": {
-        "type": "object",
-        "properties": {
-          "goingVotes": {
-            "type": "number"
-          },
-          "externalParticipants": {
-            "type": "number"
-          },
-          "goingCount": {
-            "type": "number"
-          },
-          "requiredPlayers": {
-            "type": "number"
-          },
-          "thresholdReached": {
-            "type": "boolean"
-          },
-          "remainingToThreshold": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "goingVotes",
-          "externalParticipants",
-          "goingCount",
-          "requiredPlayers",
-          "thresholdReached",
-          "remainingToThreshold"
-        ]
-      },
-      "MatchVoteResponseDto": {
-        "type": "object",
-        "properties": {
-          "playerId": {
-            "type": "string",
-            "example": "12"
-          },
-          "telegramUserId": {
-            "type": "string",
-            "example": "123456789"
-          },
-          "username": {
-            "type": "string",
-            "nullable": true,
-            "example": "footballer"
-          },
-          "readableName": {
-            "type": "string",
-            "nullable": true,
-            "example": "Алексей"
-          },
-          "avatarUrl": {
-            "type": "string",
-            "nullable": true,
-            "example": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ..."
-          },
-          "option": {
-            "type": "string",
-            "enum": [
-              "going",
-              "not_going",
-              "maybe"
-            ]
-          },
-          "availableAfter": {
-            "type": "string",
-            "nullable": true,
-            "example": "19:00"
-          },
-          "exactTimes": {
-            "example": [
-              "19:00",
-              "20:00"
-            ],
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "source": {
-            "type": "string",
-            "enum": [
-              "telegram_callback",
-              "owner_correction"
-            ]
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          }
-        },
-        "required": [
-          "playerId",
-          "telegramUserId",
-          "username",
-          "readableName",
-          "avatarUrl",
-          "option",
-          "availableAfter",
-          "exactTimes",
-          "source",
-          "updatedAt"
-        ]
-      },
-      "ExternalParticipantResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "example": "8"
-          },
-          "displayName": {
-            "type": "string",
-            "nullable": true,
-            "example": "Команда Никиты"
-          },
-          "availableAfter": {
-            "type": "string",
-            "nullable": true,
-            "example": "19:00"
-          },
-          "quantity": {
-            "type": "number",
-            "minimum": 1
-          },
-          "createdByTelegramUserId": {
-            "type": "string",
-            "example": "123456789"
-          },
-          "sourceUpdateId": {
-            "type": "string",
-            "nullable": true
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          }
-        },
-        "required": [
-          "id",
-          "displayName",
-          "availableAfter",
-          "quantity",
-          "createdByTelegramUserId",
-          "sourceUpdateId",
-          "createdAt",
-          "updatedAt"
-        ]
-      },
-      "MatchRosterResponseDto": {
-        "type": "object",
-        "properties": {
-          "counts": {
-            "$ref": "#/components/schemas/RosterCountsResponseDto"
-          },
-          "votes": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MatchVoteResponseDto"
-            }
-          },
-          "externalParticipants": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ExternalParticipantResponseDto"
-            }
-          }
-        },
-        "required": [
-          "counts",
-          "votes",
-          "externalParticipants"
-        ]
-      },
       "PublicCardResponseDto": {
         "type": "object",
         "properties": {
@@ -1889,50 +701,25 @@
               "deleted"
             ]
           },
-          "reconciliationState": {
-            "type": "string",
-            "enum": [
-              "none",
-              "pending",
-              "uncertain",
-              "failed"
-            ]
-          },
-          "reconciliationRequired": {
-            "type": "boolean"
-          },
-          "telegramChatId": {
-            "type": "string",
-            "nullable": true
-          },
-          "telegramTopicId": {
-            "type": "string",
-            "nullable": true
-          },
           "telegramMessageId": {
             "type": "string",
             "nullable": true
           },
           "publicationAttemptedAt": {
             "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "nullable": true,
+            "format": "date-time"
           },
-          "publicationUncertainAt": {
+          "lastError": {
             "type": "string",
-            "format": "date-time",
             "nullable": true
           }
         },
         "required": [
           "publicationState",
-          "reconciliationState",
-          "reconciliationRequired",
-          "telegramChatId",
-          "telegramTopicId",
           "telegramMessageId",
           "publicationAttemptedAt",
-          "publicationUncertainAt"
+          "lastError"
         ]
       },
       "MatchResponseDto": {
@@ -1948,114 +735,39 @@
           },
           "scheduledAt": {
             "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "timeMode": {
-            "type": "string",
-            "enum": [
-              "exact",
-              "exact_options",
-              "availability"
-            ]
-          },
-          "timeOptions": {
-            "example": [
-              "19:00",
-              "20:00"
-            ],
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "selectedTime": {
-            "type": "string",
-            "nullable": true,
-            "example": "20:00"
+            "format": "date-time"
           },
           "schedule": {
             "$ref": "#/components/schemas/MatchScheduleResponseDto"
           },
-          "location": {
-            "type": "string",
-            "nullable": true
-          },
-          "venueType": {
-            "type": "string",
-            "enum": [
-              "outdoor",
-              "indoor"
-            ],
-            "nullable": true
-          },
           "venue": {
-            "nullable": true,
-            "type": "object",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/VenueResponseDto"
-              }
-            ]
+            "$ref": "#/components/schemas/VenueResponseDto"
           },
           "fieldPriceRubles": {
             "type": "number",
             "nullable": true,
             "minimum": 0
           },
-          "title": {
-            "type": "string",
-            "nullable": true
-          },
-          "displayTitle": {
-            "type": "string"
-          },
-          "requiredPlayers": {
-            "type": "number",
-            "minimum": 1
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "draft",
-              "active",
-              "confirmed",
-              "completed",
-              "cancelled"
-            ]
-          },
-          "planningStage": {
-            "type": "string",
-            "enum": [
-              "recruiting_players",
-              "finalizing_details",
-              "ready_to_confirm"
-            ],
-            "nullable": true
-          },
           "version": {
             "type": "number",
             "minimum": 1
           },
-          "cancellationReason": {
-            "type": "string",
-            "nullable": true
-          },
           "creatorTelegramUserId": {
-            "type": "string"
+            "type": "string",
+            "example": "123456789"
+          },
+          "deletionRequestedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
           },
           "createdAt": {
             "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "format": "date-time"
           },
           "updatedAt": {
             "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "roster": {
-            "$ref": "#/components/schemas/MatchRosterResponseDto"
+            "format": "date-time"
           },
           "publicCard": {
             "$ref": "#/components/schemas/PublicCardResponseDto"
@@ -2065,61 +777,15 @@
           "id",
           "chatId",
           "scheduledAt",
-          "timeMode",
-          "timeOptions",
-          "selectedTime",
           "schedule",
-          "location",
-          "venueType",
           "venue",
           "fieldPriceRubles",
-          "title",
-          "displayTitle",
-          "requiredPlayers",
-          "status",
-          "planningStage",
           "version",
-          "cancellationReason",
           "creatorTelegramUserId",
+          "deletionRequestedAt",
           "createdAt",
           "updatedAt",
-          "roster",
           "publicCard"
-        ]
-      },
-      "GroupedMatchesResponseDto": {
-        "type": "object",
-        "properties": {
-          "drafts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MatchResponseDto"
-            }
-          },
-          "active": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MatchResponseDto"
-            }
-          },
-          "confirmed": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MatchResponseDto"
-            }
-          },
-          "history": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MatchResponseDto"
-            }
-          }
-        },
-        "required": [
-          "drafts",
-          "active",
-          "confirmed",
-          "history"
         ]
       },
       "BootstrapResponseDto": {
@@ -2131,17 +797,16 @@
           "group": {
             "$ref": "#/components/schemas/GroupConfigurationResponseDto"
           },
-          "timezone": {
-            "type": "string"
-          },
           "matches": {
-            "$ref": "#/components/schemas/GroupedMatchesResponseDto"
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MatchResponseDto"
+            }
           }
         },
         "required": [
           "owner",
           "group",
-          "timezone",
           "matches"
         ]
       },
@@ -2180,111 +845,25 @@
           },
           "time": {
             "type": "string",
-            "nullable": true,
             "example": "20:00",
             "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
           },
-          "timeMode": {
-            "type": "string",
-            "enum": [
-              "exact",
-              "exact_options",
-              "availability"
-            ],
-            "default": "exact"
-          },
-          "timeOptions": {
-            "example": [
-              "19:00",
-              "20:00"
-            ],
-            "minItems": 1,
-            "maxItems": 6,
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
           "venueId": {
             "type": "string",
-            "nullable": true,
             "example": "15",
             "pattern": "^[1-9]\\d*$"
-          },
-          "location": {
-            "type": "string",
-            "nullable": true,
-            "example": "BOX365 <main>"
-          },
-          "venueType": {
-            "type": "string",
-            "enum": [
-              "outdoor",
-              "indoor"
-            ],
-            "nullable": true,
-            "example": "outdoor"
-          },
-          "requiredPlayers": {
-            "type": "number",
-            "example": 10,
-            "minimum": 1,
-            "maximum": 100
           },
           "fieldPriceRubles": {
             "type": "number",
             "nullable": true,
             "example": 25,
             "minimum": 0
-          },
-          "dateLabel": {
-            "type": "string",
-            "example": "Пн"
-          },
-          "timeLabel": {
-            "type": "string",
-            "example": "вечер"
           }
         },
         "required": [
           "date",
           "time",
-          "requiredPlayers"
-        ]
-      },
-      "MutationActionResponseDto": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string"
-          },
-          "outboxState": {
-            "type": "string",
-            "enum": [
-              "none",
-              "pending"
-            ]
-          },
-          "eventType": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "type"
-        ]
-      },
-      "MatchMutationResponseDto": {
-        "type": "object",
-        "properties": {
-          "match": {
-            "$ref": "#/components/schemas/MatchResponseDto"
-          },
-          "action": {
-            "$ref": "#/components/schemas/MutationActionResponseDto"
-          }
-        },
-        "required": [
-          "match"
+          "venueId"
         ]
       },
       "PatchMatchDto": {
@@ -2292,105 +871,12 @@
         "properties": {
           "date": {
             "type": "string",
-            "nullable": true,
-            "example": "2026-08-03"
+            "example": "2026-08-03",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           },
           "time": {
             "type": "string",
-            "nullable": true,
-            "example": "20:00"
-          },
-          "timeMode": {
-            "type": "string",
-            "enum": [
-              "exact",
-              "exact_options",
-              "availability"
-            ]
-          },
-          "timeOptions": {
-            "minItems": 1,
-            "maxItems": 6,
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "venueId": {
-            "type": "string",
-            "nullable": true,
-            "example": "15",
-            "pattern": "^[1-9]\\d*$"
-          },
-          "location": {
-            "type": "string",
-            "nullable": true,
-            "example": "BOX365 <main>"
-          },
-          "venueType": {
-            "type": "string",
-            "enum": [
-              "outdoor",
-              "indoor"
-            ],
-            "nullable": true
-          },
-          "requiredPlayers": {
-            "type": "number",
-            "minimum": 1,
-            "maximum": 100
-          },
-          "fieldPriceRubles": {
-            "type": "number",
-            "nullable": true,
-            "minimum": 0
-          }
-        }
-      },
-      "CardPreviewBodyResponseDto": {
-        "type": "object",
-        "properties": {
-          "text": {
-            "type": "string"
-          },
-          "isActive": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "text",
-          "isActive"
-        ]
-      },
-      "CardPreviewResponseDto": {
-        "type": "object",
-        "properties": {
-          "matchId": {
-            "type": "string"
-          },
-          "version": {
-            "type": "number"
-          },
-          "title": {
-            "type": "string"
-          },
-          "card": {
-            "$ref": "#/components/schemas/CardPreviewBodyResponseDto"
-          }
-        },
-        "required": [
-          "matchId",
-          "version",
-          "title",
-          "card"
-        ]
-      },
-      "FinalizeMatchDto": {
-        "type": "object",
-        "properties": {
-          "time": {
-            "type": "string",
-            "example": "20:30",
+            "example": "20:00",
             "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
           },
           "venueId": {
@@ -2400,382 +886,27 @@
           },
           "fieldPriceRubles": {
             "type": "number",
-            "example": 120,
+            "nullable": true,
+            "example": 25,
             "minimum": 0
           }
-        },
-        "required": [
-          "time",
-          "venueId",
-          "fieldPriceRubles"
-        ]
-      },
-      "CancelMatchDto": {
-        "type": "object",
-        "properties": {
-          "cancellationReason": {
-            "type": "string",
-            "example": "Плохая погода",
-            "minLength": 1,
-            "maxLength": 500
-          }
-        },
-        "required": [
-          "cancellationReason"
-        ]
-      },
-      "RefreshMatchDto": {
-        "type": "object",
-        "properties": {
-          "refresh": {
-            "type": "boolean",
-            "default": true,
-            "description": "Reserved for forward-compatible refresh options."
-          }
         }
       },
-      "WeatherSendResponseDto": {
+      "WeatherCurrentResponseDto": {
         "type": "object",
         "properties": {
-          "matchId": {
-            "type": "string"
-          },
-          "weatherDay": {
-            "type": "string",
-            "format": "date"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "sent"
-            ]
-          }
-        },
-        "required": [
-          "matchId",
-          "weatherDay",
-          "status"
-        ]
-      },
-      "ReconcileMatchDto": {
-        "type": "object",
-        "properties": {
-          "action": {
-            "type": "string",
-            "enum": [
-              "attach",
-              "retry"
-            ],
-            "example": "attach"
-          },
-          "telegramMessageId": {
-            "type": "string",
-            "example": "1234",
-            "pattern": "^[1-9]\\d*$"
-          }
-        },
-        "required": [
-          "action"
-        ]
-      },
-      "VoteCorrectionDto": {
-        "type": "object",
-        "properties": {
-          "playerId": {
-            "type": "string",
-            "example": "42",
-            "pattern": "^[1-9]\\d*$"
-          },
-          "telegramUserId": {
-            "type": "string",
-            "example": "987654321",
-            "pattern": "^[1-9]\\d*$"
-          },
-          "option": {
-            "type": "string",
-            "enum": [
-              "going",
-              "not_going",
-              "maybe"
-            ],
-            "example": "going"
-          },
-          "availableAfter": {
-            "type": "string",
-            "nullable": true,
-            "example": "19:00"
-          },
-          "exactTimes": {
-            "minItems": 1,
-            "maxItems": 6,
-            "example": [
-              "19:00",
-              "20:00"
-            ],
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "option"
-        ]
-      },
-      "ExternalParticipantCreateDto": {
-        "type": "object",
-        "properties": {
-          "displayName": {
-            "type": "string",
-            "nullable": true,
-            "example": "Команда Никиты",
-            "maxLength": 200
-          },
-          "availableAfter": {
-            "type": "string",
-            "nullable": true,
-            "example": "19:00",
-            "description": "Earliest time the player can attend in an availability poll."
-          },
-          "quantity": {
-            "type": "number",
-            "example": 3,
-            "minimum": 1,
-            "maximum": 50
-          }
-        },
-        "required": [
-          "quantity"
-        ]
-      },
-      "ExternalParticipantUpdateDto": {
-        "type": "object",
-        "properties": {
-          "displayName": {
-            "type": "string",
-            "nullable": true,
-            "example": "Команда Никиты",
-            "maxLength": 200
-          },
-          "availableAfter": {
-            "type": "string",
-            "nullable": true,
-            "example": "19:00",
-            "description": "Earliest time the player can attend in an availability poll."
-          }
-        }
-      },
-      "PlayerUsernameResponseDto": {
-        "type": "object",
-        "properties": {
-          "normalizedUsername": {
-            "type": "string"
-          },
-          "username": {
-            "type": "string",
-            "example": "@footballer"
-          },
-          "playerId": {
-            "type": "string"
-          },
-          "lastSeenAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          }
-        },
-        "required": [
-          "normalizedUsername",
-          "username",
-          "playerId",
-          "lastSeenAt",
-          "createdAt",
-          "updatedAt"
-        ]
-      },
-      "PlayerResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "telegramUserId": {
-            "type": "string",
-            "nullable": true
-          },
-          "displayName": {
-            "type": "string",
-            "nullable": true
-          },
-          "avatarUrl": {
-            "type": "string",
-            "nullable": true,
-            "example": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ..."
-          },
-          "confirmed": {
-            "type": "boolean"
-          },
-          "confirmationState": {
-            "type": "string",
-            "enum": [
-              "confirmed",
-              "unconfirmed"
-            ]
-          },
-          "telegramUsernameSnapshot": {
-            "type": "string",
-            "nullable": true
-          },
-          "telegramFirstNameSnapshot": {
-            "type": "string",
-            "nullable": true
-          },
-          "telegramLastNameSnapshot": {
-            "type": "string",
-            "nullable": true
-          },
-          "telegramLanguageCode": {
-            "type": "string",
-            "nullable": true
-          },
-          "usernames": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PlayerUsernameResponseDto"
-            }
-          }
-        },
-        "required": [
-          "id",
-          "telegramUserId",
-          "displayName",
-          "avatarUrl",
-          "confirmed",
-          "confirmationState",
-          "telegramUsernameSnapshot",
-          "telegramFirstNameSnapshot",
-          "telegramLastNameSnapshot",
-          "telegramLanguageCode",
-          "usernames"
-        ]
-      },
-      "PlayerListResponseDto": {
-        "type": "object",
-        "properties": {
-          "players": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PlayerResponseDto"
-            }
-          }
-        },
-        "required": [
-          "players"
-        ]
-      },
-      "PlayerEnvelopeResponseDto": {
-        "type": "object",
-        "properties": {
-          "player": {
-            "$ref": "#/components/schemas/PlayerResponseDto"
-          }
-        },
-        "required": [
-          "player"
-        ]
-      },
-      "CreateAliasDto": {
-        "type": "object",
-        "properties": {
-          "username": {
-            "type": "string",
-            "example": "@nikita_player"
-          },
-          "displayName": {
-            "type": "string",
-            "example": "Никита"
-          },
-          "playerId": {
-            "type": "string",
-            "example": "42",
-            "pattern": "^[1-9]\\d*$"
-          }
-        },
-        "required": [
-          "username",
-          "displayName"
-        ]
-      },
-      "AliasMutationResponseDto": {
-        "type": "object",
-        "properties": {
-          "player": {
-            "$ref": "#/components/schemas/PlayerResponseDto"
-          },
-          "alias": {
-            "$ref": "#/components/schemas/PlayerUsernameResponseDto"
-          }
-        },
-        "required": [
-          "player",
-          "alias"
-        ]
-      },
-      "UpdateAliasDto": {
-        "type": "object",
-        "properties": {
-          "displayName": {
-            "type": "string",
-            "example": "Никита С."
-          }
-        },
-        "required": [
-          "displayName"
-        ]
-      },
-      "AliasRemovalResponseDto": {
-        "type": "object",
-        "properties": {
-          "username": {
-            "type": "string"
-          },
-          "removed": {
+          "sent": {
             "type": "boolean",
             "example": true
           },
-          "confirmationState": {
+          "observedAt": {
             "type": "string",
-            "enum": [
-              "unconfirmed"
-            ]
+            "example": "2026-08-10T11:00"
           }
         },
         "required": [
-          "username",
-          "removed",
-          "confirmationState"
-        ]
-      },
-      "UpdatePlayerDto": {
-        "type": "object",
-        "properties": {
-          "displayName": {
-            "type": "string",
-            "example": "Никита С."
-          }
-        },
-        "required": [
-          "displayName"
+          "sent",
+          "observedAt"
         ]
       },
       "VenueListResponseDto": {
@@ -2797,8 +928,7 @@
         "properties": {
           "name": {
             "type": "string",
-            "example": "Администратор",
-            "maxLength": 100
+            "example": "Администратор"
           },
           "phone": {
             "type": "string",
@@ -2814,14 +944,12 @@
         "properties": {
           "name": {
             "type": "string",
-            "example": "BOX365 Октябрьская",
-            "minLength": 2,
-            "maxLength": 200
+            "example": "BOX365 Октябрьская"
           },
           "mapUrl": {
             "type": "string",
-            "example": "https://maps.example.com/box365",
-            "format": "uri"
+            "format": "uri",
+            "example": "https://maps.google.com/?q=53.9,27.56"
           },
           "venueType": {
             "type": "string",
@@ -2832,12 +960,6 @@
             "example": "indoor"
           },
           "bookingContacts": {
-            "example": [
-              {
-                "name": "Администратор",
-                "phone": "+375 29 123-45-67"
-              }
-            ],
             "maxItems": 5,
             "type": "array",
             "items": {
@@ -2847,7 +969,6 @@
           "websiteUrl": {
             "type": "string",
             "nullable": true,
-            "example": "https://box365.by",
             "format": "uri"
           }
         },
@@ -2873,8 +994,7 @@
         "properties": {
           "name": {
             "type": "string",
-            "minLength": 2,
-            "maxLength": 200
+            "example": "BOX365 Октябрьская"
           },
           "mapUrl": {
             "type": "string",

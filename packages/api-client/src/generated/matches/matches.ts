@@ -25,36 +25,14 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
-  CancelMatchDto,
-  CancelOwnerMatchHeaders,
-  CardPreviewResponseDto,
-  CompleteOwnerMatchHeaders,
-  ConfirmOwnerMatchHeaders,
-  CorrectOwnerMatchVoteHeaders,
-  CreateOwnerExternalParticipantHeaders,
   CreateOwnerMatchHeaders,
-  ExternalParticipantCreateDto,
-  ExternalParticipantUpdateDto,
-  FinalizeMatchDto,
-  FinalizeOwnerMatchHeaders,
+  DeleteOwnerMatchHeaders,
   ListOwnerMatchesParams,
   MatchCreateDto,
   MatchEnvelopeResponseDto,
   MatchListResponseDto,
-  MatchMutationResponseDto,
   PatchMatchDto,
-  PatchOwnerMatchHeaders,
-  PreviewOwnerMatchCardHeaders,
-  PublishOwnerMatchHeaders,
-  ReconcileMatchDto,
-  ReconcileOwnerMatchCardHeaders,
-  RefreshMatchDto,
-  RefreshOwnerMatchCardHeaders,
-  RemoveOwnerExternalParticipantHeaders,
-  RemoveOwnerMatchVoteHeaders,
-  UpdateOwnerExternalParticipantHeaders,
-  VoteCorrectionDto,
-  WeatherSendResponseDto
+  UpdateOwnerMatchHeaders
 } from '.././model/index.js';
 
 import { customInstance } from '../../mutator.js';
@@ -69,7 +47,7 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 /**
- * @summary List owner matches
+ * @summary List current information cards
  */
 export const listOwnerMatches = (
     params?: ListOwnerMatchesParams,
@@ -141,7 +119,7 @@ export function useListOwnerMatches<TData = Awaited<ReturnType<typeof listOwnerM
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary List owner matches
+ * @summary List current information cards
  */
 
 export function useListOwnerMatches<TData = Awaited<ReturnType<typeof listOwnerMatches>>, TError = unknown>(
@@ -162,7 +140,7 @@ export function useListOwnerMatches<TData = Awaited<ReturnType<typeof listOwnerM
 
 
 /**
- * @summary Create and publish a match
+ * @summary Create and publish an information card
  */
 export const createOwnerMatch = (
     matchCreateDto: MatchCreateDto,
@@ -171,7 +149,7 @@ export const createOwnerMatch = (
 ) => {
 
 
-      return customInstance<MatchMutationResponseDto>(
+      return customInstance<MatchEnvelopeResponseDto>(
       {url: `/v1/matches`, method: 'POST',
       headers: {'Content-Type': 'application/json', ...headers},
       data: matchCreateDto, ...(signal ? { signal }: {})
@@ -211,7 +189,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type CreateOwnerMatchMutationError = unknown
 
     /**
- * @summary Create and publish a match
+ * @summary Create and publish an information card
  */
 export const useCreateOwnerMatch = <TError = unknown,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOwnerMatch>>, TError,{data: MatchCreateDto;headers: CreateOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
@@ -227,7 +205,7 @@ export const useCreateOwnerMatch = <TError = unknown,
       return useMutation(mutationOptions, queryClient);
     }
     /**
- * @summary Load an owner match and roster
+ * @summary Load one information card
  */
 export const getOwnerMatch = (
     id: string,
@@ -298,7 +276,7 @@ export function useGetOwnerMatch<TData = Awaited<ReturnType<typeof getOwnerMatch
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary Load an owner match and roster
+ * @summary Load one information card
  */
 
 export function useGetOwnerMatch<TData = Awaited<ReturnType<typeof getOwnerMatch>>, TError = unknown>(
@@ -319,16 +297,16 @@ export function useGetOwnerMatch<TData = Awaited<ReturnType<typeof getOwnerMatch
 
 
 /**
- * @summary Edit a match with optimistic concurrency
+ * @summary Update an information card
  */
-export const patchOwnerMatch = (
+export const updateOwnerMatch = (
     id: string,
     patchMatchDto: PatchMatchDto,
-    headers: PatchOwnerMatchHeaders,
+    headers: UpdateOwnerMatchHeaders,
  options?: SecondParameter<typeof customInstance>,) => {
 
 
-      return customInstance<MatchMutationResponseDto>(
+      return customInstance<MatchEnvelopeResponseDto>(
       {url: `/v1/matches/${id}`, method: 'PATCH',
       headers: {'Content-Type': 'application/json', ...headers},
       data: patchMatchDto
@@ -338,11 +316,11 @@ export const patchOwnerMatch = (
 
 
 
-export const getPatchOwnerMatchMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchOwnerMatch>>, TError,{id: string;data: PatchMatchDto;headers: PatchOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof patchOwnerMatch>>, TError,{id: string;data: PatchMatchDto;headers: PatchOwnerMatchHeaders}, TContext> => {
+export const getUpdateOwnerMatchMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOwnerMatch>>, TError,{id: string;data: PatchMatchDto;headers: UpdateOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateOwnerMatch>>, TError,{id: string;data: PatchMatchDto;headers: UpdateOwnerMatchHeaders}, TContext> => {
 
-const mutationKey = ['patchOwnerMatch'];
+const mutationKey = ['updateOwnerMatch'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -352,10 +330,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchOwnerMatch>>, {id: string;data: PatchMatchDto;headers: PatchOwnerMatchHeaders}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateOwnerMatch>>, {id: string;data: PatchMatchDto;headers: UpdateOwnerMatchHeaders}> = (props) => {
           const {id,data,headers} = props ?? {};
 
-          return  patchOwnerMatch(id,data,headers,requestOptions)
+          return  updateOwnerMatch(id,data,headers,requestOptions)
         }
 
 
@@ -363,686 +341,37 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type PatchOwnerMatchMutationResult = NonNullable<Awaited<ReturnType<typeof patchOwnerMatch>>>
-    export type PatchOwnerMatchMutationBody = PatchMatchDto
-    export type PatchOwnerMatchMutationError = unknown
+    export type UpdateOwnerMatchMutationResult = NonNullable<Awaited<ReturnType<typeof updateOwnerMatch>>>
+    export type UpdateOwnerMatchMutationBody = PatchMatchDto
+    export type UpdateOwnerMatchMutationError = unknown
 
     /**
- * @summary Edit a match with optimistic concurrency
+ * @summary Update an information card
  */
-export const usePatchOwnerMatch = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchOwnerMatch>>, TError,{id: string;data: PatchMatchDto;headers: PatchOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
+export const useUpdateOwnerMatch = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOwnerMatch>>, TError,{id: string;data: PatchMatchDto;headers: UpdateOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
  , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof patchOwnerMatch>>,
+        Awaited<ReturnType<typeof updateOwnerMatch>>,
         TError,
-        {id: string;data: PatchMatchDto;headers: PatchOwnerMatchHeaders},
+        {id: string;data: PatchMatchDto;headers: UpdateOwnerMatchHeaders},
         TContext
       > => {
 
-      const mutationOptions = getPatchOwnerMatchMutationOptions(options);
+      const mutationOptions = getUpdateOwnerMatchMutationOptions(options);
 
       return useMutation(mutationOptions, queryClient);
     }
     /**
- * @summary Render the public match card preview
+ * @summary Delete an information card
  */
-export const previewOwnerMatchCard = (
+export const deleteOwnerMatch = (
     id: string,
-    headers: PreviewOwnerMatchCardHeaders,
- options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
-) => {
-
-
-      return customInstance<CardPreviewResponseDto>(
-      {url: `/v1/matches/${id}/preview`, method: 'POST',
-      headers, ...(signal ? { signal }: {})
-    },
-      options);
-    }
-
-
-
-export const getPreviewOwnerMatchCardMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewOwnerMatchCard>>, TError,{id: string;headers: PreviewOwnerMatchCardHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof previewOwnerMatchCard>>, TError,{id: string;headers: PreviewOwnerMatchCardHeaders}, TContext> => {
-
-const mutationKey = ['previewOwnerMatchCard'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewOwnerMatchCard>>, {id: string;headers: PreviewOwnerMatchCardHeaders}> = (props) => {
-          const {id,headers} = props ?? {};
-
-          return  previewOwnerMatchCard(id,headers,requestOptions)
-        }
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type PreviewOwnerMatchCardMutationResult = NonNullable<Awaited<ReturnType<typeof previewOwnerMatchCard>>>
-
-    export type PreviewOwnerMatchCardMutationError = unknown
-
-    /**
- * @summary Render the public match card preview
- */
-export const usePreviewOwnerMatchCard = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewOwnerMatchCard>>, TError,{id: string;headers: PreviewOwnerMatchCardHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof previewOwnerMatchCard>>,
-        TError,
-        {id: string;headers: PreviewOwnerMatchCardHeaders},
-        TContext
-      > => {
-
-      const mutationOptions = getPreviewOwnerMatchCardMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    /**
- * @summary Publish a legacy unpublished match
- */
-export const publishOwnerMatch = (
-    id: string,
-    headers: PublishOwnerMatchHeaders,
- options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
-) => {
-
-
-      return customInstance<MatchMutationResponseDto>(
-      {url: `/v1/matches/${id}/publish`, method: 'POST',
-      headers, ...(signal ? { signal }: {})
-    },
-      options);
-    }
-
-
-
-export const getPublishOwnerMatchMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishOwnerMatch>>, TError,{id: string;headers: PublishOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof publishOwnerMatch>>, TError,{id: string;headers: PublishOwnerMatchHeaders}, TContext> => {
-
-const mutationKey = ['publishOwnerMatch'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof publishOwnerMatch>>, {id: string;headers: PublishOwnerMatchHeaders}> = (props) => {
-          const {id,headers} = props ?? {};
-
-          return  publishOwnerMatch(id,headers,requestOptions)
-        }
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type PublishOwnerMatchMutationResult = NonNullable<Awaited<ReturnType<typeof publishOwnerMatch>>>
-
-    export type PublishOwnerMatchMutationError = unknown
-
-    /**
- * @summary Publish a legacy unpublished match
- */
-export const usePublishOwnerMatch = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishOwnerMatch>>, TError,{id: string;headers: PublishOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof publishOwnerMatch>>,
-        TError,
-        {id: string;headers: PublishOwnerMatchHeaders},
-        TContext
-      > => {
-
-      const mutationOptions = getPublishOwnerMatchMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    /**
- * @summary Set booked match details and confirm the match
- */
-export const finalizeOwnerMatch = (
-    id: string,
-    finalizeMatchDto: FinalizeMatchDto,
-    headers: FinalizeOwnerMatchHeaders,
- options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
-) => {
-
-
-      return customInstance<MatchMutationResponseDto>(
-      {url: `/v1/matches/${id}/finalize`, method: 'POST',
-      headers: {'Content-Type': 'application/json', ...headers},
-      data: finalizeMatchDto, ...(signal ? { signal }: {})
-    },
-      options);
-    }
-
-
-
-export const getFinalizeOwnerMatchMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof finalizeOwnerMatch>>, TError,{id: string;data: FinalizeMatchDto;headers: FinalizeOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof finalizeOwnerMatch>>, TError,{id: string;data: FinalizeMatchDto;headers: FinalizeOwnerMatchHeaders}, TContext> => {
-
-const mutationKey = ['finalizeOwnerMatch'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof finalizeOwnerMatch>>, {id: string;data: FinalizeMatchDto;headers: FinalizeOwnerMatchHeaders}> = (props) => {
-          const {id,data,headers} = props ?? {};
-
-          return  finalizeOwnerMatch(id,data,headers,requestOptions)
-        }
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type FinalizeOwnerMatchMutationResult = NonNullable<Awaited<ReturnType<typeof finalizeOwnerMatch>>>
-    export type FinalizeOwnerMatchMutationBody = FinalizeMatchDto
-    export type FinalizeOwnerMatchMutationError = unknown
-
-    /**
- * @summary Set booked match details and confirm the match
- */
-export const useFinalizeOwnerMatch = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof finalizeOwnerMatch>>, TError,{id: string;data: FinalizeMatchDto;headers: FinalizeOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof finalizeOwnerMatch>>,
-        TError,
-        {id: string;data: FinalizeMatchDto;headers: FinalizeOwnerMatchHeaders},
-        TContext
-      > => {
-
-      const mutationOptions = getFinalizeOwnerMatchMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    /**
- * @summary Confirm an active match
- */
-export const confirmOwnerMatch = (
-    id: string,
-    headers: ConfirmOwnerMatchHeaders,
- options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
-) => {
-
-
-      return customInstance<MatchMutationResponseDto>(
-      {url: `/v1/matches/${id}/confirm`, method: 'POST',
-      headers, ...(signal ? { signal }: {})
-    },
-      options);
-    }
-
-
-
-export const getConfirmOwnerMatchMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmOwnerMatch>>, TError,{id: string;headers: ConfirmOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof confirmOwnerMatch>>, TError,{id: string;headers: ConfirmOwnerMatchHeaders}, TContext> => {
-
-const mutationKey = ['confirmOwnerMatch'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmOwnerMatch>>, {id: string;headers: ConfirmOwnerMatchHeaders}> = (props) => {
-          const {id,headers} = props ?? {};
-
-          return  confirmOwnerMatch(id,headers,requestOptions)
-        }
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type ConfirmOwnerMatchMutationResult = NonNullable<Awaited<ReturnType<typeof confirmOwnerMatch>>>
-
-    export type ConfirmOwnerMatchMutationError = unknown
-
-    /**
- * @summary Confirm an active match
- */
-export const useConfirmOwnerMatch = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmOwnerMatch>>, TError,{id: string;headers: ConfirmOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof confirmOwnerMatch>>,
-        TError,
-        {id: string;headers: ConfirmOwnerMatchHeaders},
-        TContext
-      > => {
-
-      const mutationOptions = getConfirmOwnerMatchMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    /**
- * @summary Complete a confirmed match
- */
-export const completeOwnerMatch = (
-    id: string,
-    headers: CompleteOwnerMatchHeaders,
- options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
-) => {
-
-
-      return customInstance<MatchMutationResponseDto>(
-      {url: `/v1/matches/${id}/complete`, method: 'POST',
-      headers, ...(signal ? { signal }: {})
-    },
-      options);
-    }
-
-
-
-export const getCompleteOwnerMatchMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeOwnerMatch>>, TError,{id: string;headers: CompleteOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof completeOwnerMatch>>, TError,{id: string;headers: CompleteOwnerMatchHeaders}, TContext> => {
-
-const mutationKey = ['completeOwnerMatch'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeOwnerMatch>>, {id: string;headers: CompleteOwnerMatchHeaders}> = (props) => {
-          const {id,headers} = props ?? {};
-
-          return  completeOwnerMatch(id,headers,requestOptions)
-        }
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type CompleteOwnerMatchMutationResult = NonNullable<Awaited<ReturnType<typeof completeOwnerMatch>>>
-
-    export type CompleteOwnerMatchMutationError = unknown
-
-    /**
- * @summary Complete a confirmed match
- */
-export const useCompleteOwnerMatch = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeOwnerMatch>>, TError,{id: string;headers: CompleteOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof completeOwnerMatch>>,
-        TError,
-        {id: string;headers: CompleteOwnerMatchHeaders},
-        TContext
-      > => {
-
-      const mutationOptions = getCompleteOwnerMatchMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    /**
- * @summary Cancel a match with a reason
- */
-export const cancelOwnerMatch = (
-    id: string,
-    cancelMatchDto: CancelMatchDto,
-    headers: CancelOwnerMatchHeaders,
- options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
-) => {
-
-
-      return customInstance<MatchMutationResponseDto>(
-      {url: `/v1/matches/${id}/cancel`, method: 'POST',
-      headers: {'Content-Type': 'application/json', ...headers},
-      data: cancelMatchDto, ...(signal ? { signal }: {})
-    },
-      options);
-    }
-
-
-
-export const getCancelOwnerMatchMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelOwnerMatch>>, TError,{id: string;data: CancelMatchDto;headers: CancelOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof cancelOwnerMatch>>, TError,{id: string;data: CancelMatchDto;headers: CancelOwnerMatchHeaders}, TContext> => {
-
-const mutationKey = ['cancelOwnerMatch'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelOwnerMatch>>, {id: string;data: CancelMatchDto;headers: CancelOwnerMatchHeaders}> = (props) => {
-          const {id,data,headers} = props ?? {};
-
-          return  cancelOwnerMatch(id,data,headers,requestOptions)
-        }
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type CancelOwnerMatchMutationResult = NonNullable<Awaited<ReturnType<typeof cancelOwnerMatch>>>
-    export type CancelOwnerMatchMutationBody = CancelMatchDto
-    export type CancelOwnerMatchMutationError = unknown
-
-    /**
- * @summary Cancel a match with a reason
- */
-export const useCancelOwnerMatch = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelOwnerMatch>>, TError,{id: string;data: CancelMatchDto;headers: CancelOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof cancelOwnerMatch>>,
-        TError,
-        {id: string;data: CancelMatchDto;headers: CancelOwnerMatchHeaders},
-        TContext
-      > => {
-
-      const mutationOptions = getCancelOwnerMatchMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    /**
- * @summary Queue a public-card refresh
- */
-export const refreshOwnerMatchCard = (
-    id: string,
-    headers: RefreshOwnerMatchCardHeaders,
-    refreshMatchDto?: RefreshMatchDto,
- options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
-) => {
-
-
-      return customInstance<MatchMutationResponseDto>(
-      {url: `/v1/matches/${id}/refresh`, method: 'POST',
-      headers: {'Content-Type': 'application/json', ...headers},
-      data: refreshMatchDto, ...(signal ? { signal }: {})
-    },
-      options);
-    }
-
-
-
-export const getRefreshOwnerMatchCardMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refreshOwnerMatchCard>>, TError,{id: string;headers: RefreshOwnerMatchCardHeaders;data: RefreshMatchDto}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof refreshOwnerMatchCard>>, TError,{id: string;headers: RefreshOwnerMatchCardHeaders;data: RefreshMatchDto}, TContext> => {
-
-const mutationKey = ['refreshOwnerMatchCard'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof refreshOwnerMatchCard>>, {id: string;headers: RefreshOwnerMatchCardHeaders;data: RefreshMatchDto}> = (props) => {
-          const {id,headers,data} = props ?? {};
-
-          return  refreshOwnerMatchCard(id,headers,data,requestOptions)
-        }
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type RefreshOwnerMatchCardMutationResult = NonNullable<Awaited<ReturnType<typeof refreshOwnerMatchCard>>>
-    export type RefreshOwnerMatchCardMutationBody = RefreshMatchDto
-    export type RefreshOwnerMatchCardMutationError = unknown
-
-    /**
- * @summary Queue a public-card refresh
- */
-export const useRefreshOwnerMatchCard = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refreshOwnerMatchCard>>, TError,{id: string;headers: RefreshOwnerMatchCardHeaders;data: RefreshMatchDto}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof refreshOwnerMatchCard>>,
-        TError,
-        {id: string;headers: RefreshOwnerMatchCardHeaders;data: RefreshMatchDto},
-        TContext
-      > => {
-
-      const mutationOptions = getRefreshOwnerMatchCardMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    /**
- * @summary Send the weather forecast immediately
- */
-export const sendOwnerMatchWeather = (
-    id: string,
- options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
-) => {
-
-
-      return customInstance<WeatherSendResponseDto>(
-      {url: `/v1/matches/${id}/weather`, method: 'POST', ...(signal ? { signal }: {})
-    },
-      options);
-    }
-
-
-
-export const getSendOwnerMatchWeatherMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendOwnerMatchWeather>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof sendOwnerMatchWeather>>, TError,{id: string}, TContext> => {
-
-const mutationKey = ['sendOwnerMatchWeather'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendOwnerMatchWeather>>, {id: string}> = (props) => {
-          const {id} = props ?? {};
-
-          return  sendOwnerMatchWeather(id,requestOptions)
-        }
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type SendOwnerMatchWeatherMutationResult = NonNullable<Awaited<ReturnType<typeof sendOwnerMatchWeather>>>
-
-    export type SendOwnerMatchWeatherMutationError = unknown
-
-    /**
- * @summary Send the weather forecast immediately
- */
-export const useSendOwnerMatchWeather = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendOwnerMatchWeather>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof sendOwnerMatchWeather>>,
-        TError,
-        {id: string},
-        TContext
-      > => {
-
-      const mutationOptions = getSendOwnerMatchWeatherMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    /**
- * @summary Repair an uncertain public-card publication
- */
-export const reconcileOwnerMatchCard = (
-    id: string,
-    reconcileMatchDto: ReconcileMatchDto,
-    headers: ReconcileOwnerMatchCardHeaders,
- options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
-) => {
-
-
-      return customInstance<MatchMutationResponseDto>(
-      {url: `/v1/matches/${id}/reconcile`, method: 'POST',
-      headers: {'Content-Type': 'application/json', ...headers},
-      data: reconcileMatchDto, ...(signal ? { signal }: {})
-    },
-      options);
-    }
-
-
-
-export const getReconcileOwnerMatchCardMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reconcileOwnerMatchCard>>, TError,{id: string;data: ReconcileMatchDto;headers: ReconcileOwnerMatchCardHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof reconcileOwnerMatchCard>>, TError,{id: string;data: ReconcileMatchDto;headers: ReconcileOwnerMatchCardHeaders}, TContext> => {
-
-const mutationKey = ['reconcileOwnerMatchCard'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reconcileOwnerMatchCard>>, {id: string;data: ReconcileMatchDto;headers: ReconcileOwnerMatchCardHeaders}> = (props) => {
-          const {id,data,headers} = props ?? {};
-
-          return  reconcileOwnerMatchCard(id,data,headers,requestOptions)
-        }
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type ReconcileOwnerMatchCardMutationResult = NonNullable<Awaited<ReturnType<typeof reconcileOwnerMatchCard>>>
-    export type ReconcileOwnerMatchCardMutationBody = ReconcileMatchDto
-    export type ReconcileOwnerMatchCardMutationError = unknown
-
-    /**
- * @summary Repair an uncertain public-card publication
- */
-export const useReconcileOwnerMatchCard = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reconcileOwnerMatchCard>>, TError,{id: string;data: ReconcileMatchDto;headers: ReconcileOwnerMatchCardHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof reconcileOwnerMatchCard>>,
-        TError,
-        {id: string;data: ReconcileMatchDto;headers: ReconcileOwnerMatchCardHeaders},
-        TContext
-      > => {
-
-      const mutationOptions = getReconcileOwnerMatchCardMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    /**
- * @summary Correct a known player's vote
- */
-export const correctOwnerMatchVote = (
-    id: string,
-    voteCorrectionDto: VoteCorrectionDto,
-    headers: CorrectOwnerMatchVoteHeaders,
- options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
-) => {
-
-
-      return customInstance<MatchMutationResponseDto>(
-      {url: `/v1/matches/${id}/roster/votes`, method: 'POST',
-      headers: {'Content-Type': 'application/json', ...headers},
-      data: voteCorrectionDto, ...(signal ? { signal }: {})
-    },
-      options);
-    }
-
-
-
-export const getCorrectOwnerMatchVoteMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof correctOwnerMatchVote>>, TError,{id: string;data: VoteCorrectionDto;headers: CorrectOwnerMatchVoteHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof correctOwnerMatchVote>>, TError,{id: string;data: VoteCorrectionDto;headers: CorrectOwnerMatchVoteHeaders}, TContext> => {
-
-const mutationKey = ['correctOwnerMatchVote'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof correctOwnerMatchVote>>, {id: string;data: VoteCorrectionDto;headers: CorrectOwnerMatchVoteHeaders}> = (props) => {
-          const {id,data,headers} = props ?? {};
-
-          return  correctOwnerMatchVote(id,data,headers,requestOptions)
-        }
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type CorrectOwnerMatchVoteMutationResult = NonNullable<Awaited<ReturnType<typeof correctOwnerMatchVote>>>
-    export type CorrectOwnerMatchVoteMutationBody = VoteCorrectionDto
-    export type CorrectOwnerMatchVoteMutationError = unknown
-
-    /**
- * @summary Correct a known player's vote
- */
-export const useCorrectOwnerMatchVote = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof correctOwnerMatchVote>>, TError,{id: string;data: VoteCorrectionDto;headers: CorrectOwnerMatchVoteHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof correctOwnerMatchVote>>,
-        TError,
-        {id: string;data: VoteCorrectionDto;headers: CorrectOwnerMatchVoteHeaders},
-        TContext
-      > => {
-
-      const mutationOptions = getCorrectOwnerMatchVoteMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    /**
- * @summary Remove a known player's vote
- */
-export const removeOwnerMatchVote = (
-    id: string,
-    playerId: string,
-    headers: RemoveOwnerMatchVoteHeaders,
+    headers: DeleteOwnerMatchHeaders,
  options?: SecondParameter<typeof customInstance>,) => {
 
 
-      return customInstance<MatchMutationResponseDto>(
-      {url: `/v1/matches/${id}/roster/votes/${playerId}`, method: 'DELETE',
+      return customInstance<unknown>(
+      {url: `/v1/matches/${id}`, method: 'DELETE',
       headers
     },
       options);
@@ -1050,11 +379,11 @@ export const removeOwnerMatchVote = (
 
 
 
-export const getRemoveOwnerMatchVoteMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeOwnerMatchVote>>, TError,{id: string;playerId: string;headers: RemoveOwnerMatchVoteHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof removeOwnerMatchVote>>, TError,{id: string;playerId: string;headers: RemoveOwnerMatchVoteHeaders}, TContext> => {
+export const getDeleteOwnerMatchMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteOwnerMatch>>, TError,{id: string;headers: DeleteOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteOwnerMatch>>, TError,{id: string;headers: DeleteOwnerMatchHeaders}, TContext> => {
 
-const mutationKey = ['removeOwnerMatchVote'];
+const mutationKey = ['deleteOwnerMatch'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -1064,10 +393,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof removeOwnerMatchVote>>, {id: string;playerId: string;headers: RemoveOwnerMatchVoteHeaders}> = (props) => {
-          const {id,playerId,headers} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteOwnerMatch>>, {id: string;headers: DeleteOwnerMatchHeaders}> = (props) => {
+          const {id,headers} = props ?? {};
 
-          return  removeOwnerMatchVote(id,playerId,headers,requestOptions)
+          return  deleteOwnerMatch(id,headers,requestOptions)
         }
 
 
@@ -1075,219 +404,23 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type RemoveOwnerMatchVoteMutationResult = NonNullable<Awaited<ReturnType<typeof removeOwnerMatchVote>>>
+    export type DeleteOwnerMatchMutationResult = NonNullable<Awaited<ReturnType<typeof deleteOwnerMatch>>>
 
-    export type RemoveOwnerMatchVoteMutationError = unknown
+    export type DeleteOwnerMatchMutationError = unknown
 
     /**
- * @summary Remove a known player's vote
+ * @summary Delete an information card
  */
-export const useRemoveOwnerMatchVote = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeOwnerMatchVote>>, TError,{id: string;playerId: string;headers: RemoveOwnerMatchVoteHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
+export const useDeleteOwnerMatch = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteOwnerMatch>>, TError,{id: string;headers: DeleteOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
  , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof removeOwnerMatchVote>>,
+        Awaited<ReturnType<typeof deleteOwnerMatch>>,
         TError,
-        {id: string;playerId: string;headers: RemoveOwnerMatchVoteHeaders},
+        {id: string;headers: DeleteOwnerMatchHeaders},
         TContext
       > => {
 
-      const mutationOptions = getRemoveOwnerMatchVoteMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    /**
- * @summary Add individually editable external players
- */
-export const createOwnerExternalParticipant = (
-    id: string,
-    externalParticipantCreateDto: ExternalParticipantCreateDto,
-    headers: CreateOwnerExternalParticipantHeaders,
- options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
-) => {
-
-
-      return customInstance<MatchMutationResponseDto>(
-      {url: `/v1/matches/${id}/roster/external-participants`, method: 'POST',
-      headers: {'Content-Type': 'application/json', ...headers},
-      data: externalParticipantCreateDto, ...(signal ? { signal }: {})
-    },
-      options);
-    }
-
-
-
-export const getCreateOwnerExternalParticipantMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOwnerExternalParticipant>>, TError,{id: string;data: ExternalParticipantCreateDto;headers: CreateOwnerExternalParticipantHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof createOwnerExternalParticipant>>, TError,{id: string;data: ExternalParticipantCreateDto;headers: CreateOwnerExternalParticipantHeaders}, TContext> => {
-
-const mutationKey = ['createOwnerExternalParticipant'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createOwnerExternalParticipant>>, {id: string;data: ExternalParticipantCreateDto;headers: CreateOwnerExternalParticipantHeaders}> = (props) => {
-          const {id,data,headers} = props ?? {};
-
-          return  createOwnerExternalParticipant(id,data,headers,requestOptions)
-        }
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type CreateOwnerExternalParticipantMutationResult = NonNullable<Awaited<ReturnType<typeof createOwnerExternalParticipant>>>
-    export type CreateOwnerExternalParticipantMutationBody = ExternalParticipantCreateDto
-    export type CreateOwnerExternalParticipantMutationError = unknown
-
-    /**
- * @summary Add individually editable external players
- */
-export const useCreateOwnerExternalParticipant = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOwnerExternalParticipant>>, TError,{id: string;data: ExternalParticipantCreateDto;headers: CreateOwnerExternalParticipantHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof createOwnerExternalParticipant>>,
-        TError,
-        {id: string;data: ExternalParticipantCreateDto;headers: CreateOwnerExternalParticipantHeaders},
-        TContext
-      > => {
-
-      const mutationOptions = getCreateOwnerExternalParticipantMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    /**
- * @summary Rename an external player
- */
-export const updateOwnerExternalParticipant = (
-    id: string,
-    participantId: string,
-    externalParticipantUpdateDto: ExternalParticipantUpdateDto,
-    headers: UpdateOwnerExternalParticipantHeaders,
- options?: SecondParameter<typeof customInstance>,) => {
-
-
-      return customInstance<MatchMutationResponseDto>(
-      {url: `/v1/matches/${id}/roster/external-participants/${participantId}`, method: 'PATCH',
-      headers: {'Content-Type': 'application/json', ...headers},
-      data: externalParticipantUpdateDto
-    },
-      options);
-    }
-
-
-
-export const getUpdateOwnerExternalParticipantMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOwnerExternalParticipant>>, TError,{id: string;participantId: string;data: ExternalParticipantUpdateDto;headers: UpdateOwnerExternalParticipantHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof updateOwnerExternalParticipant>>, TError,{id: string;participantId: string;data: ExternalParticipantUpdateDto;headers: UpdateOwnerExternalParticipantHeaders}, TContext> => {
-
-const mutationKey = ['updateOwnerExternalParticipant'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateOwnerExternalParticipant>>, {id: string;participantId: string;data: ExternalParticipantUpdateDto;headers: UpdateOwnerExternalParticipantHeaders}> = (props) => {
-          const {id,participantId,data,headers} = props ?? {};
-
-          return  updateOwnerExternalParticipant(id,participantId,data,headers,requestOptions)
-        }
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type UpdateOwnerExternalParticipantMutationResult = NonNullable<Awaited<ReturnType<typeof updateOwnerExternalParticipant>>>
-    export type UpdateOwnerExternalParticipantMutationBody = ExternalParticipantUpdateDto
-    export type UpdateOwnerExternalParticipantMutationError = unknown
-
-    /**
- * @summary Rename an external player
- */
-export const useUpdateOwnerExternalParticipant = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOwnerExternalParticipant>>, TError,{id: string;participantId: string;data: ExternalParticipantUpdateDto;headers: UpdateOwnerExternalParticipantHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof updateOwnerExternalParticipant>>,
-        TError,
-        {id: string;participantId: string;data: ExternalParticipantUpdateDto;headers: UpdateOwnerExternalParticipantHeaders},
-        TContext
-      > => {
-
-      const mutationOptions = getUpdateOwnerExternalParticipantMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    /**
- * @summary Remove an external participant entry
- */
-export const removeOwnerExternalParticipant = (
-    id: string,
-    participantId: string,
-    headers: RemoveOwnerExternalParticipantHeaders,
- options?: SecondParameter<typeof customInstance>,) => {
-
-
-      return customInstance<MatchMutationResponseDto>(
-      {url: `/v1/matches/${id}/roster/external-participants/${participantId}`, method: 'DELETE',
-      headers
-    },
-      options);
-    }
-
-
-
-export const getRemoveOwnerExternalParticipantMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeOwnerExternalParticipant>>, TError,{id: string;participantId: string;headers: RemoveOwnerExternalParticipantHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof removeOwnerExternalParticipant>>, TError,{id: string;participantId: string;headers: RemoveOwnerExternalParticipantHeaders}, TContext> => {
-
-const mutationKey = ['removeOwnerExternalParticipant'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof removeOwnerExternalParticipant>>, {id: string;participantId: string;headers: RemoveOwnerExternalParticipantHeaders}> = (props) => {
-          const {id,participantId,headers} = props ?? {};
-
-          return  removeOwnerExternalParticipant(id,participantId,headers,requestOptions)
-        }
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type RemoveOwnerExternalParticipantMutationResult = NonNullable<Awaited<ReturnType<typeof removeOwnerExternalParticipant>>>
-
-    export type RemoveOwnerExternalParticipantMutationError = unknown
-
-    /**
- * @summary Remove an external participant entry
- */
-export const useRemoveOwnerExternalParticipant = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeOwnerExternalParticipant>>, TError,{id: string;participantId: string;headers: RemoveOwnerExternalParticipantHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof removeOwnerExternalParticipant>>,
-        TError,
-        {id: string;participantId: string;headers: RemoveOwnerExternalParticipantHeaders},
-        TContext
-      > => {
-
-      const mutationOptions = getRemoveOwnerExternalParticipantMutationOptions(options);
+      const mutationOptions = getDeleteOwnerMatchMutationOptions(options);
 
       return useMutation(mutationOptions, queryClient);
     }

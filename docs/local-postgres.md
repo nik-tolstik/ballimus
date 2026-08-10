@@ -12,7 +12,7 @@ The Compose service:
 - stores data in the named volume `football-bot-local-postgres-data`;
 - has no connection to Railway or any production resource.
 
-Use `.env.local` for these settings. Keep production URLs, passwords, bot tokens, IDs, and webhook values out of the file:
+Use `.env.local` for these settings. Keep production URLs, passwords, bot tokens, and IDs out of the file:
 
 ```text
 POSTGRES_DB=football_local
@@ -68,7 +68,7 @@ The same `DATABASE_URL` must be available when starting the API or running the P
 - local API and jobs use `.env.local`, the loopback database, the local/test Telegram bot, and the test group;
 - production uses Railway services and separately managed variables;
 - there is no local-to-production database promotion or SQLite data migration;
-- a local tunnel, if used for a manual test, must terminate at the local API and local Telegram webhook only;
-- local commands must never register or replace the production webhook.
+- a local tunnel, if used for a manual Mini App check, must terminate at the local API only;
+- local commands must never modify a production Telegram configuration.
 
 Production database migrations are release operations and require explicit owner authorization. See [the Railway runbook](railway.md).

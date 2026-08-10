@@ -16,13 +16,6 @@ const publicConfigNames = [
   "RAILWAY_JOBS_SERVICE",
 ];
 
-const requiredWebhookStatus = [
-  "telegramApiAccepted",
-  "webhookMatchesExpectedUrl",
-  "callbackQueryAllowed",
-  "onlyCallbackQueriesAllowed",
-];
-
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -167,17 +160,6 @@ export function evaluateMigrationStatus(status, expectedMigrationCount) {
   return { ok: true, summary: `Production database has ${expectedMigrationCount} committed migrations` };
 }
 
-export function evaluateWebhookStatus(status) {
-  if (!isRecord(status)) return { ok: false, summary: "Telegram webhook status response was invalid" };
-  if (requiredWebhookStatus.some((name) => status[name] !== true)) {
-    return { ok: false, summary: "Telegram webhook configuration is unhealthy" };
-  }
-  if (status.pendingUpdateCount !== 0 || status.hasLastError !== false) {
-    return { ok: false, summary: "Telegram webhook has pending updates or a delivery error" };
-  }
-  return { ok: true, summary: "Telegram webhook passed" };
-}
-
 export function parseJsonOutput(output, label) {
   try {
     return JSON.parse(output.trim());
@@ -301,15 +283,6 @@ async function main() {
     ]), "Migration status");
     return evaluateMigrationStatus(status, await committedMigrationCount());
   }));
-  checks.push(await result("Telegram webhook", async () => {
-    const status = parseJsonOutput(await runCommand("railway", [
-      "ssh", "--project", config.railwayProjectId, "--environment", config.railwayEnvironment,
-      "--service", config.railwayApiService, "--", "node", "apps/api/dist/telegram/webhook-status-cli.js",
-      `--expected-url=${config.apiUrl}/telegram/webhook`,
-    ]), "Telegram webhook status");
-    return evaluateWebhookStatus(status);
-  }));
-
   for (const check of checks) {
     console.info(`${check.ok ? "PASS" : "FAIL"} ${check.name}: ${check.summary}`);
   }

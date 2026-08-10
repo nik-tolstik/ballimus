@@ -6,20 +6,13 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { PublicCardResponseDtoPublicationState } from './publicCardResponseDtoPublicationState.js';
-import type { PublicCardResponseDtoReconciliationState } from './publicCardResponseDtoReconciliationState.js';
 
 export interface PublicCardResponseDto {
   publicationState: PublicCardResponseDtoPublicationState;
-  reconciliationState: PublicCardResponseDtoReconciliationState;
-  reconciliationRequired: boolean;
-  /** @nullable */
-  telegramChatId: string | null;
-  /** @nullable */
-  telegramTopicId: string | null;
   /** @nullable */
   telegramMessageId: string | null;
   /** @nullable */
   publicationAttemptedAt: string | null;
   /** @nullable */
-  publicationUncertainAt: string | null;
+  lastError: string | null;
 }

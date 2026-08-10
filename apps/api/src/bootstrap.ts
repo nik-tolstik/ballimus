@@ -19,7 +19,7 @@ export async function createApiApplication(): Promise<INestApplication> {
   const apiConfig = app.get<ApiConfig>(API_CONFIG);
 
   app.setGlobalPrefix("v1", {
-    exclude: ["health", "telegram/webhook", "cron"],
+    exclude: ["health", "cron"],
   });
   app.enableCors({
     allowedHeaders: [...API_CORS_ALLOWED_HEADERS],
@@ -51,7 +51,6 @@ function safeStartupMessage(error: unknown): string {
   for (const name of [
     "DATABASE_URL",
     "TELEGRAM_BOT_TOKEN",
-    "TELEGRAM_WEBHOOK_SECRET",
     "TELEGRAM_OWNER_USER_ID",
     "TELEGRAM_CHAT_ID",
     "TELEGRAM_GENERAL_TOPIC_ID",

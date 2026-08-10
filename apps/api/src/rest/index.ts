@@ -1,4 +1,3 @@
-export * from "./players.controller.js";
 export * from "./rest.canonical.js";
 export * from "./rest.controller.js";
 export * from "./rest.decorator.js";

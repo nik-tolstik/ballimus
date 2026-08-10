@@ -27,7 +27,6 @@ export interface InsertOutboxEventInput {
   readonly eventType: OutboxEventType;
   readonly deduplicationKey: string;
   readonly matchId?: DatabaseIdentifier | null;
-  readonly notificationId?: DatabaseIdentifier | null;
   readonly telegramChatId: DatabaseIdentifier;
   readonly telegramTopicId?: DatabaseIdentifier | null;
   readonly payload?: Record<string, unknown>;
@@ -100,11 +99,7 @@ export class OutboxRepository {
     validateEventType(input.eventType);
     const deduplicationKey = nonEmpty(input.deduplicationKey, "deduplicationKey", 500);
     const matchId = input.matchId === undefined || input.matchId === null ? null : positiveBigInt(input.matchId, "matchId");
-    const notificationId = input.notificationId === undefined || input.notificationId === null ? null : positiveBigInt(input.notificationId, "notificationId");
-    if (input.eventType === "send_notification" && notificationId === null) {
-      throw new ValidationRepositoryError("send_notification events require notificationId");
-    }
-    if (input.eventType !== "send_notification" && matchId === null) {
+    if (input.eventType !== "delete_public_card" && matchId === null) {
       throw new ValidationRepositoryError(`${input.eventType} events require matchId`);
     }
     const now = effectiveNow(input.createdAt);
@@ -115,7 +110,6 @@ export class OutboxRepository {
         eventType: input.eventType,
         deduplicationKey,
         matchId,
-        notificationId,
         telegramChatId: chatId(input.telegramChatId),
         telegramTopicId: topicId(input.telegramTopicId),
         payload: payload(input.payload),

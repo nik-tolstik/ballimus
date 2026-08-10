@@ -1,5 +1,3 @@
-import { isValidLocalTime } from "./validation.js";
-
 export const MINSK_TIMEZONE = "Europe/Minsk";
 
 export interface ZonedDateParts {
@@ -14,6 +12,10 @@ function assertValidDate(value: Date, field: string): void {
   if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
     throw new Error(`${field} must be a valid Date`);
   }
+}
+
+function isValidLocalTime(value: string): boolean {
+  return /^(?:[01]\d|2[0-3]):[0-5]\d$/u.test(value);
 }
 
 function formatter(timezone: string): Intl.DateTimeFormat {

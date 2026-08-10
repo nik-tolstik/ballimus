@@ -7,7 +7,6 @@
  */
 
 export interface VenueBookingContactDto {
-  /** @maxLength 100 */
   name?: string;
   phone: string;
 }

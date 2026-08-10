@@ -12,14 +12,13 @@ export const TELEGRAM_MINI_APP_SECURITY_SCHEME = "telegramMiniApp" as const;
 export const PUBLIC_OPENAPI_PATH = "docs" as const;
 export const PUBLIC_OPENAPI_JSON_PATH = "docs-json" as const;
 
-const EXCLUDED_PUBLIC_PATHS = new Set(["/health", "/telegram/webhook", "/cron"]);
+const EXCLUDED_PUBLIC_PATHS = new Set(["/health", "/cron"]);
 
 function isExcludedPublicPath(path: string): boolean {
   const withoutVersionPrefix = path.replace(/^\/v1(?=\/|$)/, "");
   return (
     EXCLUDED_PUBLIC_PATHS.has(withoutVersionPrefix) ||
-    withoutVersionPrefix.startsWith("/cron/") ||
-    withoutVersionPrefix.startsWith("/telegram/webhook/")
+    withoutVersionPrefix.startsWith("/cron/")
   );
 }
 
@@ -59,7 +58,6 @@ export function setupOpenApi(app: INestApplication): void {
 const OPENAPI_FIXTURE_ENVIRONMENT: Readonly<Record<string, string>> = {
   DATABASE_URL: "postgresql://openapi:openapi@localhost:5432/openapi",
   TELEGRAM_BOT_TOKEN: "123456:openapi-fixture-token",
-  TELEGRAM_WEBHOOK_SECRET: "openapi-fixture-secret",
   TELEGRAM_OWNER_USER_ID: "1",
   TELEGRAM_CHAT_ID: "-1001234567890",
   TELEGRAM_GENERAL_TOPIC_ID: "1",
