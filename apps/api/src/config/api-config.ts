@@ -13,7 +13,6 @@ export type ApiLogLevel = (typeof API_LOG_LEVELS)[number];
 export interface ApiConfig {
   readonly databaseUrl: string;
   readonly telegramBotToken: string;
-  readonly telegramWebhookSecret: string;
   readonly telegramOwnerUserId: bigint;
   readonly telegramGroupChatId: bigint;
   readonly telegramGeneralTopicId: bigint;
@@ -192,14 +191,6 @@ export function parseApiConfig(
     );
   }
 
-  const telegramWebhookSecret = requiredString(environment, "TELEGRAM_WEBHOOK_SECRET");
-  if (!/^[A-Za-z0-9_-]{1,256}$/.test(telegramWebhookSecret)) {
-    throw new ApiConfigurationError(
-      "TELEGRAM_WEBHOOK_SECRET must contain only letters, numbers, underscores, or hyphens",
-      ["TELEGRAM_WEBHOOK_SECRET"],
-    );
-  }
-
   const logLevel = requiredString(environment, "LOG_LEVEL");
   if (!API_LOG_LEVELS.includes(logLevel as ApiLogLevel)) {
     throw new ApiConfigurationError("LOG_LEVEL must be one of debug, info, warn, or error", ["LOG_LEVEL"]);
@@ -208,7 +199,6 @@ export function parseApiConfig(
   return {
     databaseUrl,
     telegramBotToken: requiredString(environment, "TELEGRAM_BOT_TOKEN"),
-    telegramWebhookSecret,
     telegramOwnerUserId: requiredInteger(environment, "TELEGRAM_OWNER_USER_ID", "positive"),
     telegramGroupChatId: requiredInteger(environment, "TELEGRAM_CHAT_ID", "nonZero"),
     telegramGeneralTopicId: requiredInteger(environment, "TELEGRAM_GENERAL_TOPIC_ID", "positive"),

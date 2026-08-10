@@ -7,11 +7,10 @@
  */
 import type { OwnerIdentityResponseDto } from './ownerIdentityResponseDto.js';
 import type { GroupConfigurationResponseDto } from './groupConfigurationResponseDto.js';
-import type { GroupedMatchesResponseDto } from './groupedMatchesResponseDto.js';
+import type { MatchResponseDto } from './matchResponseDto.js';
 
 export interface BootstrapResponseDto {
   owner: OwnerIdentityResponseDto;
   group: GroupConfigurationResponseDto;
-  timezone: string;
-  matches: GroupedMatchesResponseDto;
+  matches: MatchResponseDto[];
 }

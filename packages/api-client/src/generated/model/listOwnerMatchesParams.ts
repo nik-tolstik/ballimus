@@ -5,11 +5,7 @@
  * Owner-facing REST API for the Football Telegram Mini App.
  * OpenAPI spec version: 1.0.0
  */
-import type { ListOwnerMatchesStatus } from './listOwnerMatchesStatus.js';
 
 export type ListOwnerMatchesParams = {
-offset?: number;
-limit?: number;
-search?: string;
-status?: ListOwnerMatchesStatus;
+venueId?: string;
 };

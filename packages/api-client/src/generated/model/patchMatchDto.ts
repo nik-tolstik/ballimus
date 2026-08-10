@@ -5,34 +5,19 @@
  * Owner-facing REST API for the Football Telegram Mini App.
  * OpenAPI spec version: 1.0.0
  */
-import type { PatchMatchDtoTimeMode } from './patchMatchDtoTimeMode.js';
-import type { PatchMatchDtoVenueType } from './patchMatchDtoVenueType.js';
 
 export interface PatchMatchDto {
-  /** @nullable */
-  date?: string | null;
-  /** @nullable */
-  time?: string | null;
-  timeMode?: PatchMatchDtoTimeMode;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  date?: string;
+  /** @pattern ^(?:[01]\d|2[0-3]):[0-5]\d$ */
+  time?: string;
   /**
-   * @minItems 1
-   * @maxItems 6
+   * @minimum 15
+   * @maximum 480
    */
-  timeOptions?: string[];
-  /**
-   * @nullable
-   * @pattern ^[1-9]\d*$
-   */
-  venueId?: string | null;
-  /** @nullable */
-  location?: string | null;
-  /** @nullable */
-  venueType?: PatchMatchDtoVenueType;
-  /**
-   * @minimum 1
-   * @maximum 100
-   */
-  requiredPlayers?: number;
+  durationMinutes?: number;
+  /** @pattern ^[1-9]\d*$ */
+  venueId?: string;
   /**
    * @minimum 0
    * @nullable

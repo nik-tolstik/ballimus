@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatMatchDate } from './date-format'
+import { formatMatchDate, formatMatchTimeRange } from './date-format'
 
 describe('formatMatchDate', () => {
   it('uses the weekday and long date without a year', () => {
@@ -15,5 +15,10 @@ describe('formatMatchDate', () => {
 
   it('does not add a separator when the time is absent', () => {
     expect(formatMatchDate('2026-08-03', '')).toBe('Понедельник, 3 августа')
+  })
+
+  it('adds the duration to the end of a match time range', () => {
+    expect(formatMatchTimeRange('17:00', 90)).toBe('17:00-18:30')
+    expect(formatMatchTimeRange('23:30', 90)).toBe('23:30-01:00')
   })
 })

@@ -5,53 +5,32 @@
  * Owner-facing REST API for the Football Telegram Mini App.
  * OpenAPI spec version: 1.0.0
  */
-import type { MatchResponseDtoTimeMode } from './matchResponseDtoTimeMode.js';
 import type { MatchScheduleResponseDto } from './matchScheduleResponseDto.js';
-import type { MatchResponseDtoVenueType } from './matchResponseDtoVenueType.js';
-import type { MatchResponseDtoVenue } from './matchResponseDtoVenue.js';
-import type { MatchResponseDtoStatus } from './matchResponseDtoStatus.js';
-import type { MatchResponseDtoPlanningStage } from './matchResponseDtoPlanningStage.js';
-import type { MatchRosterResponseDto } from './matchRosterResponseDto.js';
+import type { VenueResponseDto } from './venueResponseDto.js';
 import type { PublicCardResponseDto } from './publicCardResponseDto.js';
 
 export interface MatchResponseDto {
   id: string;
   chatId: string;
-  /** @nullable */
-  scheduledAt: string | null;
-  timeMode: MatchResponseDtoTimeMode;
-  timeOptions: string[];
-  /** @nullable */
-  selectedTime: string | null;
+  scheduledAt: string;
   schedule: MatchScheduleResponseDto;
-  /** @nullable */
-  location: string | null;
-  /** @nullable */
-  venueType: MatchResponseDtoVenueType;
-  /** @nullable */
-  venue: MatchResponseDtoVenue;
+  /**
+   * @minimum 15
+   * @maximum 480
+   */
+  durationMinutes: number;
+  venue: VenueResponseDto;
   /**
    * @minimum 0
    * @nullable
    */
   fieldPriceRubles: number | null;
-  /** @nullable */
-  title: string | null;
-  displayTitle: string;
-  /** @minimum 1 */
-  requiredPlayers: number;
-  status: MatchResponseDtoStatus;
-  /** @nullable */
-  planningStage: MatchResponseDtoPlanningStage;
   /** @minimum 1 */
   version: number;
-  /** @nullable */
-  cancellationReason: string | null;
   creatorTelegramUserId: string;
   /** @nullable */
-  createdAt: string | null;
-  /** @nullable */
-  updatedAt: string | null;
-  roster: MatchRosterResponseDto;
+  deletionRequestedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
   publicCard: PublicCardResponseDto;
 }

@@ -1,13 +1,11 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { CalendarDays, History, MapPinned, Users } from 'lucide-react'
+import { CalendarDays, MapPinned } from 'lucide-react'
 
-export type Tab = 'matches' | 'venues' | 'players' | 'history'
+export type Tab = 'matches' | 'venues'
 
 const tabs: readonly { readonly value: Tab; readonly label: string; readonly icon: typeof CalendarDays }[] = [
   { value: 'matches', label: 'Матчи', icon: CalendarDays },
   { value: 'venues', label: 'Места', icon: MapPinned },
-  { value: 'players', label: 'Игроки', icon: Users },
-  { value: 'history', label: 'История', icon: History },
 ]
 
 export function TabBar({ value, onChange }: { readonly value: Tab; readonly onChange: (tab: Tab) => void }) {

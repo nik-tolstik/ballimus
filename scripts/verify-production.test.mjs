@@ -7,7 +7,6 @@ import {
   evaluateMigrationStatus,
   evaluateRailwayServices,
   evaluateVercelStatus,
-  evaluateWebhookStatus,
   parseJsonOutput,
   parsePublicProductionConfig,
 } from "./verify-production.mjs";
@@ -56,7 +55,7 @@ test("parses formatted JSON returned by Railway CLI", () => {
   ]);
 });
 
-test("accepts healthy Railway, CORS, migration, and webhook checks", () => {
+test("accepts healthy Railway, CORS, and migration checks", () => {
   assert.equal(evaluateGitHubCi([
     { workflowName: "CI", status: "completed", conclusion: "success", headSha: "current" },
   ], "current").ok, true);
@@ -79,17 +78,9 @@ test("accepts healthy Railway, CORS, migration, and webhook checks", () => {
     schemaPresent: true,
     appliedMigrationCount: 9,
   }, 9).ok, true);
-  assert.equal(evaluateWebhookStatus({
-    telegramApiAccepted: true,
-    webhookMatchesExpectedUrl: true,
-    callbackQueryAllowed: true,
-    onlyCallbackQueriesAllowed: true,
-    pendingUpdateCount: 0,
-    hasLastError: false,
-  }).ok, true);
 });
 
-test("rejects a wrong CORS origin, stale migration ledger, and unhealthy webhook", () => {
+test("rejects a wrong CORS origin and stale migration ledger", () => {
   assert.equal(evaluateRailwayServices([
     { name: "api", status: "FAILED", stopped: true },
     { name: "jobs", status: "SUCCESS", stopped: true },
@@ -106,12 +97,4 @@ test("rejects a wrong CORS origin, stale migration ledger, and unhealthy webhook
     schemaPresent: true,
     appliedMigrationCount: 8,
   }, 9).ok, false);
-  assert.equal(evaluateWebhookStatus({
-    telegramApiAccepted: true,
-    webhookMatchesExpectedUrl: false,
-    callbackQueryAllowed: true,
-    onlyCallbackQueriesAllowed: true,
-    pendingUpdateCount: 0,
-    hasLastError: false,
-  }).ok, false);
 });

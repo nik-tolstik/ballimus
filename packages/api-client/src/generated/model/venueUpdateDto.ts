@@ -9,10 +9,6 @@ import type { VenueUpdateDtoVenueType } from './venueUpdateDtoVenueType.js';
 import type { VenueBookingContactDto } from './venueBookingContactDto.js';
 
 export interface VenueUpdateDto {
-  /**
-   * @minLength 2
-   * @maxLength 200
-   */
   name?: string;
   mapUrl?: string;
   venueType?: VenueUpdateDtoVenueType;

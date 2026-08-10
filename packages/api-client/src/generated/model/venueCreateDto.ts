@@ -9,10 +9,6 @@ import type { VenueCreateDtoVenueType } from './venueCreateDtoVenueType.js';
 import type { VenueBookingContactDto } from './venueBookingContactDto.js';
 
 export interface VenueCreateDto {
-  /**
-   * @minLength 2
-   * @maxLength 200
-   */
   name: string;
   mapUrl: string;
   venueType: VenueCreateDtoVenueType;

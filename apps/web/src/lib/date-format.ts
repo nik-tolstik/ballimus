@@ -26,6 +26,17 @@ export function formatMatchDate(dateValue: string, timeValue: string): string {
   return timeValue === '' ? dateLabel : `${dateLabel} · ${timeValue}`
 }
 
+export function formatMatchTimeRange(timeValue: string, durationMinutes: number): string {
+  const match = /^(\d{2}):(\d{2})$/u.exec(timeValue)
+  if (match === null || !Number.isSafeInteger(durationMinutes) || durationMinutes <= 0) return timeValue
+
+  const startMinutes = Number(match[1]) * 60 + Number(match[2])
+  const endMinutes = (startMinutes + durationMinutes) % (24 * 60)
+  const endHours = String(Math.floor(endMinutes / 60)).padStart(2, '0')
+  const endMinutesPart = String(endMinutes % 60).padStart(2, '0')
+  return `${timeValue}-${endHours}:${endMinutesPart}`
+}
+
 export function formatCalendarValue(value: string): string {
   const date = parseCalendarDate(value)
   if (date === undefined) return 'Выберите дату'

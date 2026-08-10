@@ -5,42 +5,22 @@
  * Owner-facing REST API for the Football Telegram Mini App.
  * OpenAPI spec version: 1.0.0
  */
-import type { MatchCreateDtoTimeMode } from './matchCreateDtoTimeMode.js';
-import type { MatchCreateDtoVenueType } from './matchCreateDtoVenueType.js';
 
 export interface MatchCreateDto {
   /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   date: string;
+  /** @pattern ^(?:[01]\d|2[0-3]):[0-5]\d$ */
+  time: string;
   /**
-   * @nullable
-   * @pattern ^(?:[01]\d|2[0-3]):[0-5]\d$
+   * @minimum 15
+   * @maximum 480
    */
-  time: string | null;
-  timeMode?: MatchCreateDtoTimeMode;
-  /**
-   * @minItems 1
-   * @maxItems 6
-   */
-  timeOptions?: string[];
-  /**
-   * @nullable
-   * @pattern ^[1-9]\d*$
-   */
-  venueId?: string | null;
-  /** @nullable */
-  location?: string | null;
-  /** @nullable */
-  venueType?: MatchCreateDtoVenueType;
-  /**
-   * @minimum 1
-   * @maximum 100
-   */
-  requiredPlayers: number;
+  durationMinutes: number;
+  /** @pattern ^[1-9]\d*$ */
+  venueId: string;
   /**
    * @minimum 0
    * @nullable
    */
   fieldPriceRubles?: number | null;
-  dateLabel?: string;
-  timeLabel?: string;
 }

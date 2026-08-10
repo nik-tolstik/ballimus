@@ -9,5 +9,6 @@
 export interface GroupConfigurationResponseDto {
   telegramChatId: string;
   generalTopicId: string;
-  chatTopicId: string;
+  weatherTopicId: string;
+  timezone: string;
 }

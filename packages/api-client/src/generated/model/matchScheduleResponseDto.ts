@@ -7,9 +7,7 @@
  */
 
 export interface MatchScheduleResponseDto {
-  /** @nullable */
-  date: string | null;
-  /** @nullable */
-  time: string | null;
+  date: string;
+  time: string;
   timezone: string;
 }
