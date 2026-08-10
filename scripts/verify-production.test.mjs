@@ -6,6 +6,7 @@ import {
   evaluateGitHubCi,
   evaluateMigrationStatus,
   evaluateRailwayServices,
+  evaluateTelegramWebhookStatus,
   evaluateVercelStatus,
   parseJsonOutput,
   parsePublicProductionConfig,
@@ -97,4 +98,10 @@ test("rejects a wrong CORS origin and stale migration ledger", () => {
     schemaPresent: true,
     appliedMigrationCount: 8,
   }, 9).ok, false);
+});
+
+test("requires the legacy Telegram webhook to be disabled", () => {
+  assert.equal(evaluateTelegramWebhookStatus({ url: "", pendingUpdateCount: 0 }).ok, true);
+  assert.equal(evaluateTelegramWebhookStatus({ url: "https://example.test/hook", pendingUpdateCount: 0 }).ok, false);
+  assert.equal(evaluateTelegramWebhookStatus({ url: "", pendingUpdateCount: -1 }).ok, false);
 });
