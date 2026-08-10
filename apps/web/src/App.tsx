@@ -126,8 +126,24 @@ export function App({ telegramSession }: AppProps = {}) {
     await updateVenueMutation.mutateAsync({ id: venue.id, data: values, headers: { 'Idempotency-Key': requestKey(), 'If-Match': String(venue.version) } })
     invalidateVenues(); invalidateMatches()
   }
-  const handleArchiveVenue = (venue: NormalizedVenue) => archiveVenueMutation.mutate({ id: venue.id, headers: { 'Idempotency-Key': requestKey(), 'If-Match': String(venue.version) } }, { onSuccess: () => { invalidateVenues(); invalidateMatches() } })
-  const handleRestoreVenue = (venue: NormalizedVenue) => restoreVenueMutation.mutate({ id: venue.id, headers: { 'Idempotency-Key': requestKey(), 'If-Match': String(venue.version) } }, { onSuccess: () => { invalidateVenues(); invalidateMatches() } })
+  const handleArchiveVenue = async (venue: NormalizedVenue): Promise<boolean> => {
+    try {
+      await archiveVenueMutation.mutateAsync({ id: venue.id, headers: { 'Idempotency-Key': requestKey(), 'If-Match': String(venue.version) } })
+      invalidateVenues(); invalidateMatches()
+      return true
+    } catch {
+      return false
+    }
+  }
+  const handleRestoreVenue = async (venue: NormalizedVenue): Promise<boolean> => {
+    try {
+      await restoreVenueMutation.mutateAsync({ id: venue.id, headers: { 'Idempotency-Key': requestKey(), 'If-Match': String(venue.version) } })
+      invalidateVenues(); invalidateMatches()
+      return true
+    } catch {
+      return false
+    }
+  }
   const matchSaving = [createMatchMutation, updateMatchMutation, deleteMatchMutation].some((mutation) => mutation.isPending)
   const venueSaving = [createVenueMutation, updateVenueMutation, archiveVenueMutation, restoreVenueMutation].some((mutation) => mutation.isPending)
   const loading = matchesQuery.isLoading || venuesQuery.isLoading

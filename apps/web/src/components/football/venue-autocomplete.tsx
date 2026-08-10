@@ -47,7 +47,7 @@ export function VenueAutocomplete({ venues, value, onValueChange, onCreate, plac
         <div className="mt-2 max-h-56 overflow-y-auto" role="listbox" aria-label="Найденные места">
           {results.length === 0 ? <p className="px-2 py-5 text-center text-sm text-muted-foreground">Ничего не найдено</p> : results.map((venue) => <button key={venue.id} type="button" role="option" aria-selected={venue.id === value} className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent" onClick={() => choose(venue.id)}><span className="truncate">{venue.name}</span>{venue.id === value ? <Check className="size-4 shrink-0 text-primary" /> : null}</button>)}
         </div>
-        <div className="mt-2 border-t pt-2"><Button type="button" variant="ghost" className="w-full justify-start" onClick={() => { setOpen(false); setSearch(''); onCreate() }}><Plus data-icon="inline-start" />Добавить новое место</Button></div>
+        <div className="mt-2 border-t pt-2"><Button type="button" variant="ghost" className="w-full justify-start" onClick={() => { setOpen(false); setSearch(''); onCreate() }}><Plus data-icon="inline-start" />Добавить</Button></div>
       </PopoverContent>
     </Popover>
   )
