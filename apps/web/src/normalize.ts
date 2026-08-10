@@ -1,6 +1,6 @@
 import type { MatchResponseDto, VenueResponseDto } from '@football/api-client'
 
-import { formatMatchDate } from './lib/date-format'
+import { formatMatchDate, formatMatchTimeRange } from './lib/date-format'
 
 export interface NormalizedVenue {
   readonly id: string
@@ -42,12 +42,13 @@ export function normalizeVenue(venue: VenueResponseDto): NormalizedVenue {
 }
 
 export function normalizeMatch(match: MatchResponseDto): NormalizedMatch {
+  const durationMinutes = match.durationMinutes ?? 90
   return {
     id: match.id,
     date: match.schedule.date,
     time: match.schedule.time,
-    dateLabel: formatMatchDate(match.schedule.date, match.schedule.time),
-    durationMinutes: match.durationMinutes ?? 90,
+    dateLabel: formatMatchDate(match.schedule.date, formatMatchTimeRange(match.schedule.time, durationMinutes)),
+    durationMinutes,
     venue: normalizeVenue(match.venue),
     fieldPriceByn: match.fieldPriceRubles ?? undefined,
     version: match.version,

@@ -11,7 +11,7 @@ const match = {
   schedule: { date: '2026-08-12', time: '20:00', timezone: 'Europe/Minsk' }, durationMinutes: 90, venue,
   fieldPriceRubles: 120, version: 1, creatorTelegramUserId: '1', deletionRequestedAt: null,
   createdAt: '2026-08-01T12:00:00.000Z', updatedAt: '2026-08-01T12:00:00.000Z',
-  publicCard: { publicationState: 'published', telegramMessageId: '10', publicationAttemptedAt: '2026-08-01T12:00:01.000Z', lastError: null },
+  publicCard: { publicationState: 'pending', telegramMessageId: '10', publicationAttemptedAt: '2026-08-01T12:00:01.000Z', lastError: null },
 }
 
 async function mockOwnerApp(page: Page): Promise<{ readonly weatherRequests: string[] }> {
@@ -38,9 +38,17 @@ test('shows static information cards without roster or voting controls', async (
   await page.goto('/')
 
   await expect(page.getByRole('heading', { name: 'Матчи', exact: true })).toBeVisible()
-  await expect(page.getByText(/BOX365 Пушкинская/u)).toBeVisible()
-  await expect(page.getByText('1 ч 30 мин.', { exact: true })).toBeVisible()
-  await expect(page.getByText('Карточка опубликована', { exact: true })).toBeVisible()
+  await expect(page.getByText('Среда, 12 августа · 20:00-21:30', { exact: true })).toBeVisible()
+  const mapLink = page.getByRole('link', { name: 'BOX365 Пушкинская · В помещении', exact: true })
+  await expect(mapLink).toHaveAttribute('href', venue.mapUrl)
+  await page.context().route(`${venue.mapUrl}**`, (route) => route.fulfill({ contentType: 'text/html', body: '<title>Map</title>' }))
+  const mapPage = page.waitForEvent('popup')
+  await mapLink.click()
+  await expect(await mapPage).toHaveURL(venue.mapUrl)
+  await expect(page.getByText('120 руб.', { exact: true })).toBeVisible()
+  await expect(page.getByText('Публикуется', { exact: true })).toBeVisible()
+  await expect(page.getByRole('status', { name: 'Публикация карточки' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Карта', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /Редактировать матч/u })).toHaveCount(1)
   await expect(page.getByRole('button', { name: /Удалить матч/u })).toHaveCount(1)
   await expect(page.getByText(/Игроки|Голосования|Состав/u)).toHaveCount(0)
