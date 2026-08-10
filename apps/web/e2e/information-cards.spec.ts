@@ -138,9 +138,16 @@ test('creates a native poll with an option threshold notification', async ({ pag
   await page.getByLabel('Вопрос', { exact: true }).fill('Кто играет в воскресенье?')
   await page.getByLabel('Вариант 1', { exact: true }).fill('Буду')
   await page.getByLabel('Вариант 2', { exact: true }).fill('Не буду')
-  await page.getByRole('button', { name: 'Оповещение', exact: true }).first().click()
+  const firstNotification = page.getByRole('button', { name: 'Включить оповещение для варианта 1', exact: true })
+  await expect(firstNotification).toHaveAttribute('data-state', 'off')
+  await firstNotification.click()
+  await expect(page.getByRole('button', { name: 'Выключить оповещение для варианта 1', exact: true })).toHaveAttribute('data-state', 'on')
   await expect(page.getByLabel('Порог оповещения для варианта 1', { exact: true })).toHaveValue('10')
-  await page.getByLabel('Несколько ответов', { exact: true }).check()
+  await expect(page.getByRole('switch', { name: 'Анонимное голосование', exact: true })).toBeChecked()
+  const multipleAnswers = page.getByRole('switch', { name: 'Несколько ответов', exact: true })
+  await expect(multipleAnswers).not.toBeChecked()
+  await multipleAnswers.click()
+  await expect(multipleAnswers).toBeChecked()
   await page.getByRole('button', { name: 'Опубликовать опрос', exact: true }).click()
 
   await expect.poll(() => mocked.pollRequests).toEqual([{

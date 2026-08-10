@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { Bell, BellOff, Plus, Send, Trash2 } from 'lucide-react'
+import { Bell, BellRing, ListChecks, Plus, Send, ShieldCheck, Trash2, UsersRound, type LucideIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Field, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
+import { Toggle } from '@/components/ui/toggle'
+import { cn } from '@/lib/utils'
 
 export interface PollEditorOptionValues {
   readonly key: string
@@ -21,6 +23,35 @@ export interface PollEditorValues {
 
 function option(key: number): PollEditorOptionValues {
   return { key: String(key), text: '', notificationThreshold: null }
+}
+
+const settingTone = {
+  primary: 'bg-primary/10 text-primary',
+  multiple: 'bg-chart-4/10 text-chart-4',
+} as const
+
+function PollSetting({
+  id,
+  label,
+  icon: Icon,
+  tone,
+  checked,
+  onCheckedChange,
+}: {
+  readonly id: string
+  readonly label: string
+  readonly icon: LucideIcon
+  readonly tone: keyof typeof settingTone
+  readonly checked: boolean
+  readonly onCheckedChange: (checked: boolean) => void
+}) {
+  return <Field orientation="horizontal" className="rounded-lg bg-muted/55 p-2.5">
+    <FieldLabel htmlFor={id} className="min-w-0 flex-1 cursor-pointer items-center font-normal">
+      <span className={cn('flex size-9 shrink-0 items-center justify-center rounded-lg', settingTone[tone])}><Icon className="size-4.5" aria-hidden="true" /></span>
+      <span className="truncate">{label}</span>
+    </FieldLabel>
+    <Switch id={id} aria-label={label} checked={checked} onCheckedChange={onCheckedChange} />
+  </Field>
 }
 
 export function validatePollEditorValues(values: PollEditorValues): string | undefined {
@@ -71,16 +102,29 @@ export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollE
         <Field data-invalid={validation.startsWith('Введите вопрос')}><FieldLabel htmlFor="poll-question">Вопрос</FieldLabel><Input id="poll-question" maxLength={300} value={question} onChange={(event) => { setQuestion(event.target.value); setValidation('') }} /></Field>
         <div className="flex flex-col gap-3">
           <FieldLabel>Варианты ответа</FieldLabel>
-          {options.map((item, index) => <Card key={item.key} size="sm"><CardContent className="flex flex-col gap-3">
-            <div className="flex items-center gap-2"><Input aria-label={`Вариант ${String(index + 1)}`} maxLength={100} value={item.text} onChange={(event) => updateOption(item.key, { text: event.target.value })} placeholder={`Вариант ${String(index + 1)}`} />{options.length > 2 ? <Button type="button" variant="ghost" size="icon" aria-label={`Удалить вариант ${String(index + 1)}`} onClick={() => setOptions((current) => current.filter((candidate) => candidate.key !== item.key))}><Trash2 /></Button> : null}</div>
-            <div className="flex items-center gap-2"><Button type="button" variant="ghost" size="sm" aria-pressed={item.notificationThreshold !== null} onClick={() => updateOption(item.key, { notificationThreshold: item.notificationThreshold === null ? '10' : null })}>{item.notificationThreshold === null ? <BellOff data-icon="inline-start" /> : <Bell data-icon="inline-start" />}Оповещение</Button>{item.notificationThreshold === null ? null : <><Input className="w-24" aria-label={`Порог оповещения для варианта ${String(index + 1)}`} type="number" min="1" max="1000000" inputMode="numeric" value={item.notificationThreshold} onChange={(event) => updateOption(item.key, { notificationThreshold: event.target.value })} /><span className="text-sm text-muted-foreground">человек</span></>}</div>
-          </CardContent></Card>)}
+          {options.map((item, index) => {
+            const notificationEnabled = item.notificationThreshold !== null
+            const optionNumber = String(index + 1)
+            return <Field key={item.key} className="rounded-xl bg-card p-3 shadow-sm">
+              <div className="flex items-center gap-2">
+                <Input aria-label={`Вариант ${optionNumber}`} maxLength={100} value={item.text} onChange={(event) => updateOption(item.key, { text: event.target.value })} placeholder={`Вариант ${optionNumber}`} />
+                <Toggle type="button" variant="notification" size="icon-form" pressed={notificationEnabled} aria-label={`${notificationEnabled ? 'Выключить' : 'Включить'} оповещение для варианта ${optionNumber}`} title={notificationEnabled ? 'Оповещение включено' : 'Включить оповещение'} onPressedChange={(pressed) => updateOption(item.key, { notificationThreshold: pressed ? '10' : null })}>{notificationEnabled ? <BellRing /> : <Bell />}</Toggle>
+                {options.length > 2 ? <Button type="button" variant="ghost" size="icon" aria-label={`Удалить вариант ${optionNumber}`} onClick={() => setOptions((current) => current.filter((candidate) => candidate.key !== item.key))}><Trash2 /></Button> : null}
+              </div>
+              {notificationEnabled ? <Field orientation="horizontal" className="rounded-lg bg-warning/10 p-2.5">
+                <UsersRound className="size-4 shrink-0 text-warning" aria-hidden="true" />
+                <FieldLabel htmlFor={`poll-threshold-${item.key}`} className="font-normal">Оповестить при</FieldLabel>
+                <Input id={`poll-threshold-${item.key}`} className="w-20 bg-card text-center tabular-nums" aria-label={`Порог оповещения для варианта ${optionNumber}`} type="number" min="1" max="1000000" inputMode="numeric" value={item.notificationThreshold} onChange={(event) => updateOption(item.key, { notificationThreshold: event.target.value })} />
+                <span className="text-sm text-muted-foreground">чел.</span>
+              </Field> : null}
+            </Field>
+          })}
           <Button type="button" variant="ghost" className="self-start" disabled={options.length >= 12} onClick={addOption}><Plus data-icon="inline-start" />Добавить вариант</Button>
         </div>
-        <div className="rounded-xl bg-card p-3 shadow-sm"><p className="mb-3 text-sm font-medium">Настройки</p><div className="flex flex-col gap-3">
-          <label className="flex items-center justify-between gap-3 text-sm"><span>Анонимное голосование</span><input aria-label="Анонимное голосование" type="checkbox" className="size-4 accent-primary" checked={isAnonymous} onChange={(event) => setIsAnonymous(event.target.checked)} /></label>
-          <label className="flex items-center justify-between gap-3 text-sm"><span>Несколько ответов</span><input aria-label="Несколько ответов" type="checkbox" className="size-4 accent-primary" checked={allowsMultipleAnswers} onChange={(event) => setAllowsMultipleAnswers(event.target.checked)} /></label>
-        </div></div>
+        <FieldSet className="gap-2 rounded-xl bg-card p-3 shadow-sm"><FieldLegend variant="label">Настройки</FieldLegend>
+          <PollSetting id="poll-anonymous" label="Анонимное голосование" icon={ShieldCheck} tone="primary" checked={isAnonymous} onCheckedChange={setIsAnonymous} />
+          <PollSetting id="poll-multiple-answers" label="Несколько ответов" icon={ListChecks} tone="multiple" checked={allowsMultipleAnswers} onCheckedChange={setAllowsMultipleAnswers} />
+        </FieldSet>
         <FieldError>{validation}</FieldError>
       </FieldGroup>
     </div>
