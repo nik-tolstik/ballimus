@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { Reorder, useDragControls } from 'framer-motion'
-import { Bell, Check, GripVertical, ListChecks, Plus, RotateCcw, Send, Trash2, UsersRound, type LucideIcon } from 'lucide-react'
+import { Bell, Check, GripVertical, ListChecks, RotateCcw, Send, Trash2, UsersRound, type LucideIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Field, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
@@ -123,6 +123,8 @@ function PollOptionRow({
   index,
   total,
   notificationsEnabled,
+  inputRef,
+  onTextChange,
   onUpdate,
   onDelete,
   onMove,
@@ -131,6 +133,8 @@ function PollOptionRow({
   readonly index: number
   readonly total: number
   readonly notificationsEnabled: boolean
+  readonly inputRef: (node: HTMLInputElement | null) => void
+  readonly onTextChange: (key: string, text: string) => void
   readonly onUpdate: (key: string, patch: Partial<PollEditorOptionValues>) => void
   readonly onDelete: (key: string) => void
   readonly onMove: (key: string, direction: -1 | 1) => void
@@ -165,9 +169,9 @@ function PollOptionRow({
         >
           <GripVertical />
         </Button>
-        <Input aria-label={`Вариант ${optionNumber}`} maxLength={100} value={item.text} onChange={(event) => onUpdate(item.key, { text: event.target.value })} placeholder={`Вариант ${optionNumber}`} />
+        <Input ref={inputRef} aria-label={`Вариант ${optionNumber}`} maxLength={100} value={item.text} onChange={(event) => onTextChange(item.key, event.target.value)} placeholder={`Вариант ${optionNumber}`} />
         {notificationsEnabled ? <OptionNotificationToggle optionNumber={optionNumber} enabled={item.notificationEnabled} onEnabledChange={(notificationEnabled) => onUpdate(item.key, { notificationEnabled })} /> : null}
-        <Button type="button" variant="ghost" size="icon" aria-label={`Удалить вариант ${optionNumber}`} disabled={total <= 2} onClick={() => onDelete(item.key)}><Trash2 /></Button>
+        <Button type="button" variant="ghost" size="icon" aria-label={`Удалить вариант ${optionNumber}`} disabled={total <= 1} onClick={() => onDelete(item.key)}><Trash2 /></Button>
       </div>
     </Field>
   </Reorder.Item>
@@ -193,23 +197,53 @@ export function validatePollEditorValues(values: PollEditorValues): string | und
 
 export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollEditorValues) => void; readonly saving: boolean }) {
   const [question, setQuestion] = useState('')
-  const [options, setOptions] = useState<PollEditorOptionValues[]>([option(1), option(2)])
-  const [nextKey, setNextKey] = useState(3)
+  const [options, setOptions] = useState<PollEditorOptionValues[]>([option(1)])
   const [notificationThreshold, setNotificationThreshold] = useState<string | null>('10')
   const [allowsMultipleAnswers, setAllowsMultipleAnswers] = useState(false)
   const [validation, setValidation] = useState('')
+  const nextKeyRef = useRef(2)
+  const optionInputRefs = useRef(new Map<string, HTMLInputElement>())
+  const pendingFocusKeyRef = useRef<string | null>(null)
+
+  useLayoutEffect(() => {
+    const pendingFocusKey = pendingFocusKeyRef.current
+    if (pendingFocusKey === null) return
+    optionInputRefs.current.get(pendingFocusKey)?.focus()
+    pendingFocusKeyRef.current = null
+  }, [options])
 
   const updateOption = (key: string, patch: Partial<PollEditorOptionValues>) => {
     setOptions((current) => current.map((item) => item.key === key ? { ...item, ...patch } : item))
     setValidation('')
   }
-  const addOption = () => {
-    if (options.length >= 12) return
-    setOptions((current) => [...current, option(nextKey)])
-    setNextKey((current) => current + 1)
+  const updateOptionText = (key: string, text: string) => {
+    setOptions((current) => {
+      const index = current.findIndex((item) => item.key === key)
+      if (index < 0) return current
+
+      const currentOption = current[index]
+      if (currentOption === undefined) return current
+      if (text === '' && currentOption.text !== '' && current.length > 1) {
+        pendingFocusKeyRef.current = current[index + 1]?.key ?? current[index - 1]?.key ?? null
+        return current.filter((item) => item.key !== key)
+      }
+
+      const updated = current.map((item) => item.key === key ? { ...item, text } : item)
+      if (index === current.length - 1 && text.trim().length > 0 && current.length < 12) {
+        return [...updated, option(nextKeyRef.current++)]
+      }
+      return updated
+    })
+    setValidation('')
   }
   const deleteOption = (key: string) => {
-    setOptions((current) => current.length <= 2 ? current : current.filter((candidate) => candidate.key !== key))
+    setOptions((current) => {
+      if (current.length <= 1) return current
+      const index = current.findIndex((item) => item.key === key)
+      if (index < 0) return current
+      pendingFocusKeyRef.current = current[index + 1]?.key ?? current[index - 1]?.key ?? null
+      return current.filter((candidate) => candidate.key !== key)
+    })
     setValidation('')
   }
   const moveOption = (key: string, direction: -1 | 1) => {
@@ -230,12 +264,15 @@ export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollE
     setValidation('')
   }
   const submit = () => {
-    const values = { question, options, notificationThreshold, allowsMultipleAnswers }
+    const completedOptions = options.filter((item) => item.text.trim().length > 0)
+    const values = { question, options: completedOptions, notificationThreshold, allowsMultipleAnswers }
     const error = validatePollEditorValues(values)
     if (error !== undefined) { setValidation(error); return }
     setValidation('')
     onSave(values)
   }
+
+  const completedOptionsCount = options.filter((item) => item.text.trim().length > 0).length
 
   return <form aria-label="Форма создания опроса" className="flex min-h-0 flex-1 flex-col" onSubmit={(event) => { event.preventDefault(); submit() }}>
     <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
@@ -244,9 +281,8 @@ export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollE
         <div className="flex flex-col gap-3">
           <FieldLabel>Варианты ответа</FieldLabel>
           <Reorder.Group axis="y" values={options} onReorder={(next) => { setOptions(next); setValidation('') }} className="flex flex-col gap-3" layoutScroll>
-            {options.map((item, index) => <PollOptionRow key={item.key} item={item} index={index} total={options.length} notificationsEnabled={notificationThreshold !== null} onUpdate={updateOption} onDelete={deleteOption} onMove={moveOption} />)}
+            {options.map((item, index) => <PollOptionRow key={item.key} item={item} index={index} total={options.length} notificationsEnabled={notificationThreshold !== null} inputRef={(node) => { if (node === null) optionInputRefs.current.delete(item.key); else optionInputRefs.current.set(item.key, node) }} onTextChange={updateOptionText} onUpdate={updateOption} onDelete={deleteOption} onMove={moveOption} />)}
           </Reorder.Group>
-          <Button type="button" variant="ghost" className="self-start" disabled={options.length >= 12} onClick={addOption}><Plus data-icon="inline-start" />Добавить вариант</Button>
         </div>
         <FieldSet className="gap-0"><FieldLegend variant="label" className="mb-0 px-3">Настройки</FieldLegend>
           <FieldGroup className="mt-2 gap-2 rounded-xl bg-card p-3 shadow-sm">
@@ -258,6 +294,6 @@ export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollE
         <FieldError>{validation}</FieldError>
       </FieldGroup>
     </div>
-    <div className="sheet-actions bg-muted/60 px-4 pt-3 pb-[max(1rem,calc(1rem+var(--tg-safe-bottom)))]"><Button type="submit" className="h-10 w-full" disabled={saving}><Send data-icon="inline-start" />{saving ? 'Публикация…' : 'Опубликовать опрос'}</Button></div>
+    <div className="sheet-actions bg-muted/60 px-4 pt-3 pb-[max(1rem,calc(1rem+var(--tg-safe-bottom)))]"><Button type="submit" className="h-10 w-full" disabled={saving || completedOptionsCount < 2}><Send data-icon="inline-start" />{saving ? 'Публикация…' : 'Опубликовать опрос'}</Button></div>
   </form>
 }
