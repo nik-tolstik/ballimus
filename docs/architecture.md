@@ -28,7 +28,7 @@ Edits enqueue a refresh of the existing message. Deletes mark the match as delet
 
 ## Telegram delivery
 
-The Telegram card is a read-only projection. It is rendered as HTML text with no reply markup or callback data. The outbox supports publishing, refreshing, reconciling a delivery state, and deleting cards. Network failures retry with backoff; an ambiguous first send is marked uncertain rather than blindly resent.
+The Telegram card is a read-only projection. It is rendered as HTML text with no reply markup or callback data. The outbox supports publishing, refreshing, and deleting cards. Refresh and delete failures retry with backoff; an ambiguous first send is marked uncertain rather than blindly resent.
 
 Current weather is fetched from Open-Meteo for Minsk only when the owner invokes the endpoint. The formatted result is sent directly to the configured Telegram topic and is neither persisted nor rate limited.
 
@@ -43,7 +43,7 @@ The current application tables are:
 - `outbox` — Telegram delivery queue;
 - `job_claims` — jobs lease.
 
-Migration `0010_information_cards` queues deletion of legacy Telegram card messages before deleting legacy match, player, vote, roster, notification, webhook-update, and old-outbox data. `pnpm db:cleanup-legacy-cards` removes only delivered migration-only deletion events.
+Migration `0010_information_cards` queues deletion of legacy Telegram card messages before deleting legacy match, player, vote, roster, notification, webhook-update, and old-outbox data. Migration `0013_clear_legacy_runtime_state` clears old idempotency records and job leases. The venue catalog remains. `pnpm db:cleanup-legacy-cards` removes only delivered migration-only deletion events.
 
 ## Security and environments
 

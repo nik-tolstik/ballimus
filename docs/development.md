@@ -51,7 +51,7 @@ The cleanup command is for the migration-only legacy card deletion queue. Run it
 ## Local acceptance
 
 1. Create a venue, then create a match with an exact time and venue.
-2. Verify Telegram receives one card with no keyboard, roster, or voting controls.
+2. Verify Telegram receives one card with a `17:00-18:30`-style time range and no keyboard.
 3. Edit the match and confirm the same message changes.
 4. Delete the match and run `pnpm --filter @football/api jobs:run` if a retry is needed.
 5. Use the global Weather button and verify a current Minsk weather message appears in the configured topic.

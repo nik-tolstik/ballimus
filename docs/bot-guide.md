@@ -6,14 +6,14 @@ Football Bot is an owner-only Telegram Mini App for publishing match information
 
 Creating a match publishes one read-only Telegram card in the configured General topic. The card contains:
 
-- date and exact local time;
+- date and local time range, for example `17:00-18:30`;
 - a required catalog venue with a map link;
 - venue type (indoor or outdoor);
 - optional field price.
 
 The card has no inline keyboard, vote status, player list, threshold, or lifecycle controls. The organizer creates any poll through Telegram's native interface when it is needed.
 
-Editing a match updates the same Telegram message. Deleting a match marks it unavailable in the Mini App and queues deletion of the Telegram message. A jobs invocation retries transient Telegram failures. There is no match history.
+Editing or republishing a match updates the same Telegram message. Deleting a match marks it unavailable in the Mini App and queues deletion of the Telegram message. A jobs invocation retries transient Telegram failures. There is no match history.
 
 ## Owner Mini App
 
@@ -21,8 +21,8 @@ The configured owner opens the Mini App from Telegram. Signed Telegram `initData
 
 The Mini App has two sections:
 
-- **Matches** — create, edit, and delete information cards;
-- **Venues** — maintain the reusable venue catalog.
+- **Matches** — create and edit information cards; the actions menu republishes or deletes a card;
+- **Venues** — maintain the reusable venue catalog; the actions menu archives or restores a venue.
 
 The global **Weather** action sends the current Minsk weather to the configured Telegram chat/topic. It is independent of matches, has no daily cap, and can be pressed repeatedly.
 

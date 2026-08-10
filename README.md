@@ -1,6 +1,6 @@
 # Football Bot
 
-Football Bot coordinates football matches through a Telegram public match card and an owner-only Telegram Mini App. The maintained application is a pnpm workspace with a NestJS API, a React/Vite frontend, PostgreSQL persistence, generated OpenAPI client code, and short-lived background jobs.
+Football Bot publishes football match information cards through an owner-only Telegram Mini App. The maintained application is a pnpm workspace with a NestJS API, a React/Vite frontend, PostgreSQL persistence, generated OpenAPI client code, and short-lived background jobs.
 
 Production is not claimed to be deployed. The Vercel/Railway topology, test-group validation, and clean production cutover are documented in [the production runbook](docs/railway.md). Deployment, migration, legacy webhook removal, Mini App URL changes, and BotFather changes require explicit owner authorization.
 
@@ -12,11 +12,10 @@ Production is not claimed to be deployed. The Vercel/Railway topology, test-grou
 - `packages/db` — PostgreSQL Drizzle schema, migrations, repositories, transactions, idempotency, outbox, and job leases.
 - `packages/api-client` — generated OpenAPI models and TanStack Query hooks plus the transport mutator.
 
-The owner uses the Mini App to create, edit, and delete information cards. Each Telegram card has an exact date and time, a catalog venue with a map link and type, and an optional price. It has no inline keyboard, votes, players, roster, lifecycle, or history. The owner can also send the current Minsk weather to the configured chat topic.
+The owner uses the Mini App to create, edit, republish, and delete information cards. Each Telegram card has a local time range, a catalog venue with a map link and type, and an optional price. The owner can also send the current Minsk weather to the configured chat topic.
 
 ## Start here
 
-- [How the application works and how to run it](docs/application-guide.md)
 - [Documentation index](docs/README.md)
 - [Architecture](docs/architecture.md)
 - [Bot and Mini App guide](docs/bot-guide.md)
@@ -42,7 +41,7 @@ Use the API, web, PostgreSQL, authentication-fixture, and jobs commands in the [
 
 ## Quick local Telegram launch
 
-For the first setup, create a test-only `.env.local`, fill in the Telegram values described in the [application guide](docs/application-guide.md), and authenticate ngrok:
+For the first setup, create a test-only `.env.local`, fill in the Telegram values described in the [development guide](docs/development.md), and authenticate ngrok:
 
 ```bash
 pnpm install --frozen-lockfile

@@ -2,7 +2,7 @@
   "name": "football-bot",
   "version": "0.1.0",
   "private": true,
-  "description": "Telegram football match coordination bot",
+  "description": "Telegram Mini App for football match information cards",
   "type": "module",
   "packageManager": "pnpm@11.10.0",
   "engines": {
