@@ -97,6 +97,9 @@ export class MatchResponseDto {
   @ApiProperty({ type: MatchScheduleResponseDto })
   schedule!: MatchScheduleResponseDto;
 
+  @ApiProperty({ type: Number, minimum: 15, maximum: 480 })
+  durationMinutes!: number;
+
   @ApiProperty({ type: VenueResponseDto })
   venue!: VenueResponseDto;
 

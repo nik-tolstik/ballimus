@@ -18,6 +18,7 @@ import {
 export interface CreateMatchInput {
   readonly telegramChatId: DatabaseIdentifier;
   readonly scheduledAt: Date;
+  readonly durationMinutes: number;
   readonly venueId: DatabaseIdentifier;
   readonly fieldPriceRubles?: number | null;
   readonly creatorTelegramUserId: DatabaseIdentifier;
@@ -26,6 +27,7 @@ export interface CreateMatchInput {
 
 export interface UpdateMatchInput {
   readonly scheduledAt?: Date;
+  readonly durationMinutes?: number;
   readonly venueId?: DatabaseIdentifier;
   readonly fieldPriceRubles?: number | null;
   readonly expectedVersion?: number;
@@ -64,6 +66,13 @@ function fieldPrice(value: number | null | undefined): number | null | undefined
   return value;
 }
 
+function duration(value: number): number {
+  if (!Number.isSafeInteger(value) || value < 15 || value > 480) {
+    throw new ValidationRepositoryError("durationMinutes must be a safe integer between 15 and 480");
+  }
+  return value;
+}
+
 function requireRecord(record: Match | undefined, id: bigint): Match {
   if (record === undefined) throw new NotFoundRepositoryError(`Match ${id.toString(10)} was not found`);
   return record;
@@ -93,11 +102,13 @@ export class MatchesRepository {
 
   public async create(input: CreateMatchInput): Promise<Match> {
     validDate(input.scheduledAt, "scheduledAt");
+    const durationMinutes = duration(input.durationMinutes);
     const price = fieldPrice(input.fieldPriceRubles);
     const now = effectiveNow(input.createdAt);
     const rows = await this.db.insert(matches).values({
       telegramChatId: nonZero(input.telegramChatId, "telegramChatId"),
       scheduledAt: input.scheduledAt,
+      durationMinutes,
       venueId: positiveBigInt(input.venueId, "venueId"),
       fieldPriceRubles: price ?? null,
       creatorTelegramUserId: positiveBigInt(input.creatorTelegramUserId, "creatorTelegramUserId"),
@@ -119,9 +130,11 @@ export class MatchesRepository {
       throw new RepositoryConflictError("The match is already being deleted");
     }
     if (input.scheduledAt !== undefined) validDate(input.scheduledAt, "scheduledAt");
+    if (input.durationMinutes !== undefined) duration(input.durationMinutes);
     const price = fieldPrice(input.fieldPriceRubles);
     const rows = await this.db.update(matches).set({
       ...(input.scheduledAt === undefined ? {} : { scheduledAt: input.scheduledAt }),
+      ...(input.durationMinutes === undefined ? {} : { durationMinutes: input.durationMinutes }),
       ...(input.venueId === undefined ? {} : { venueId: positiveBigInt(input.venueId, "venueId") }),
       ...(price === undefined ? {} : { fieldPriceRubles: price }),
       version: sql`${matches.version} + 1`,

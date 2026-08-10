@@ -8,7 +8,7 @@ const venue = {
 
 const match = {
   id: '1', chatId: '-100', scheduledAt: '2026-08-12T17:00:00.000Z',
-  schedule: { date: '2026-08-12', time: '20:00', timezone: 'Europe/Minsk' }, venue,
+  schedule: { date: '2026-08-12', time: '20:00', timezone: 'Europe/Minsk' }, durationMinutes: 90, venue,
   fieldPriceRubles: 120, version: 1, creatorTelegramUserId: '1', deletionRequestedAt: null,
   createdAt: '2026-08-01T12:00:00.000Z', updatedAt: '2026-08-01T12:00:00.000Z',
   publicCard: { publicationState: 'published', telegramMessageId: '10', publicationAttemptedAt: '2026-08-01T12:00:01.000Z', lastError: null },
@@ -39,6 +39,7 @@ test('shows static information cards without roster or voting controls', async (
 
   await expect(page.getByRole('heading', { name: 'Матчи', exact: true })).toBeVisible()
   await expect(page.getByText(/BOX365 Пушкинская/u)).toBeVisible()
+  await expect(page.getByText('1 ч 30 мин.', { exact: true })).toBeVisible()
   await expect(page.getByText('Карточка опубликована', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: /Редактировать матч/u })).toHaveCount(1)
   await expect(page.getByRole('button', { name: /Удалить матч/u })).toHaveCount(1)

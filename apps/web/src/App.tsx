@@ -56,6 +56,7 @@ function matchRequest(values: EditorValues) {
   return {
     date: values.date,
     time: values.time,
+    durationMinutes: Number(values.durationMinutes),
     venueId: values.venueId,
     fieldPriceRubles: values.fieldPriceByn.trim() === '' ? null : Number(values.fieldPriceByn),
   }

@@ -12,6 +12,7 @@ export interface Match {
   readonly id: MatchId;
   readonly chatId: TelegramChatId;
   readonly scheduledAt: Date;
+  readonly durationMinutes: number;
   readonly venueId: DomainId;
   readonly fieldPriceRubles: number | null;
   readonly creatorTelegramUserId: TelegramUserId;

@@ -14,6 +14,7 @@ import { VenueForm, type VenueFormValues } from './venue-form'
 export interface EditorValues {
   readonly date: string
   readonly time: string
+  readonly durationMinutes: string
   readonly venueId: string
   readonly fieldPriceByn: string
 }
@@ -31,6 +32,7 @@ interface MatchEditorProps {
 export function validateEditorValues(values: EditorValues): string | undefined {
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(values.date)) return 'Выберите дату матча.'
   if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/u.test(values.time)) return 'Выберите точное время матча.'
+  if (!/^(?:[1-9]\d*)$/u.test(values.durationMinutes) || Number(values.durationMinutes) < 15 || Number(values.durationMinutes) > 480) return 'Длительность матча должна быть от 15 до 480 минут.'
   if (!/^[1-9]\d*$/u.test(values.venueId)) return 'Выберите площадку из каталога.'
   if (values.fieldPriceByn.trim() !== '') {
     const price = Number(values.fieldPriceByn)
@@ -46,13 +48,14 @@ export function currentHourTime(now = new Date()): string {
 export function MatchEditor({ match, onSave, conflict, onClearConflict, saving, venues, onCreateVenue }: MatchEditorProps) {
   const [date, setDate] = useState(match?.date ?? '')
   const [time, setTime] = useState(match?.time ?? currentHourTime())
+  const [durationMinutes, setDurationMinutes] = useState(String(match?.durationMinutes ?? 90))
   const [venueId, setVenueId] = useState<string | null>(match?.venue.id ?? null)
   const [fieldPriceByn, setFieldPriceByn] = useState(match?.fieldPriceByn === undefined ? '' : String(match.fieldPriceByn))
   const [venueCreateOpen, setVenueCreateOpen] = useState(false)
   const [validation, setValidation] = useState('')
 
   const submit = () => {
-    const values: EditorValues = { date, time, venueId: venueId ?? '', fieldPriceByn }
+    const values: EditorValues = { date, time, durationMinutes, venueId: venueId ?? '', fieldPriceByn }
     const error = validateEditorValues(values)
     if (error !== undefined) { setValidation(error); return }
     setValidation('')
@@ -66,6 +69,7 @@ export function MatchEditor({ match, onSave, conflict, onClearConflict, saving, 
         <FieldGroup className="gap-4">
           <Field data-invalid={validation !== '' && date === ''}><FieldLabel>Дата</FieldLabel><DatePicker value={date} onChange={(value) => { setDate(value); setValidation('') }} invalid={validation !== '' && date === ''} /></Field>
           <Field data-invalid={validation !== '' && time === ''}><FieldLabel>Точное время</FieldLabel><TimePicker ariaLabel="Время матча" value={time} onChange={(value) => { setTime(value); setValidation('') }} invalid={validation !== '' && time === ''} /></Field>
+          <Field data-invalid={validation.startsWith('Длительность')}><FieldLabel htmlFor="match-duration">Длительность · мин.</FieldLabel><Input id="match-duration" aria-label="Длительность матча в минутах" type="number" min="15" max="480" step="15" inputMode="numeric" value={durationMinutes} onChange={(event) => { setDurationMinutes(event.target.value); setValidation('') }} /></Field>
           <Field data-invalid={validation !== '' && venueId === null}><FieldLabel>Площадка</FieldLabel><VenueAutocomplete venues={venues} value={venueId} onValueChange={(value) => { setVenueId(value); setValidation('') }} onCreate={() => setVenueCreateOpen(true)} /></Field>
           <Field><FieldLabel htmlFor="field-price">Стоимость поля · руб.</FieldLabel><Input id="field-price" aria-label="Стоимость поля в белорусских рублях" type="number" min="0" step="1" inputMode="numeric" value={fieldPriceByn} onChange={(event) => { setFieldPriceByn(event.target.value); setValidation('') }} placeholder="Необязательно" /></Field>
           <FieldError>{validation}</FieldError>

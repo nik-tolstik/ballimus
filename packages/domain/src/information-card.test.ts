@@ -10,6 +10,7 @@ describe("information card domain", () => {
         id: 1n,
         chatId: -100n,
         scheduledAt: new Date("2026-08-10T17:00:00.000Z"),
+        durationMinutes: 90,
         venueId: 2n,
         fieldPriceRubles: 120,
         creatorTelegramUserId: 3n,
@@ -18,11 +19,12 @@ describe("information card domain", () => {
       venue: { id: 2n, name: "BOX365 <main>", mapUrl: "https://maps.example.test/field?a=1&b=2", venueType: "indoor" },
     });
 
-    expect(card).toContain("<b>⚽ Футбол</b>");
+    expect(card).toContain("1 ч 30 мин");
     expect(card).toContain("Точка на карте");
     expect(card).toContain("В здании");
     expect(card).toContain("120 рублей");
     expect(card).not.toMatch(/голос|игрок|состав|callback/iu);
+    expect(card).not.toContain("⚽ Футбол");
     expect(card).not.toContain("<main>");
   });
 

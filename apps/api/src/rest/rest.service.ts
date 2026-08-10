@@ -135,6 +135,7 @@ export class OwnerRestService {
         const match = await repositories.matches.create({
           telegramChatId: this.config.telegramGroupChatId,
           scheduledAt,
+          durationMinutes: input.durationMinutes,
           venueId: venue.id,
           ...(input.fieldPriceRubles === undefined ? {} : { fieldPriceRubles: input.fieldPriceRubles }),
           creatorTelegramUserId: ownerTelegramUserId,
@@ -166,7 +167,7 @@ export class OwnerRestService {
     this.assertOwner(ownerTelegramUserId);
     const expectedVersion = parseIfMatch(ifMatch, true);
     if (expectedVersion === undefined) throw new Error("If-Match was required but not provided");
-    if (input.date === undefined && input.time === undefined && input.venueId === undefined && input.fieldPriceRubles === undefined) {
+    if (input.date === undefined && input.time === undefined && input.durationMinutes === undefined && input.venueId === undefined && input.fieldPriceRubles === undefined) {
       throw toRestHttpException(restRequestError(400, "MATCH_PATCH_EMPTY", "Provide at least one match field to update."));
     }
     const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "patch-match", matchId, expectedVersion, input }, 200, async (repositories) => {
@@ -180,6 +181,7 @@ export class OwnerRestService {
         const updated = await repositories.matches.update(matchId, {
           expectedVersion,
           ...(input.date === undefined && input.time === undefined ? {} : { scheduledAt: this.toScheduledAt(date, time) }),
+          ...(input.durationMinutes === undefined ? {} : { durationMinutes: input.durationMinutes }),
           ...(venueId === undefined ? {} : { venueId }),
           ...(input.fieldPriceRubles === undefined ? {} : { fieldPriceRubles: input.fieldPriceRubles }),
         });
@@ -352,6 +354,7 @@ export class OwnerRestService {
         time: formatTimeInTimeZone(match.scheduledAt, this.config.groupTimezone),
         timezone: this.config.groupTimezone,
       },
+      durationMinutes: match.durationMinutes,
       venue: this.venueBody(venue),
       fieldPriceRubles: match.fieldPriceRubles,
       version: match.version,

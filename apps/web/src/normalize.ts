@@ -18,6 +18,7 @@ export interface NormalizedMatch {
   readonly date: string
   readonly time: string
   readonly dateLabel: string
+  readonly durationMinutes: number
   readonly venue: NormalizedVenue
   readonly fieldPriceByn: number | undefined
   readonly version: number
@@ -46,6 +47,7 @@ export function normalizeMatch(match: MatchResponseDto): NormalizedMatch {
     date: match.schedule.date,
     time: match.schedule.time,
     dateLabel: formatMatchDate(match.schedule.date, match.schedule.time),
+    durationMinutes: match.durationMinutes ?? 90,
     venue: normalizeVenue(match.venue),
     fieldPriceByn: match.fieldPriceRubles ?? undefined,
     version: match.version,

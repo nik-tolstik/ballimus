@@ -740,6 +740,11 @@
           "schedule": {
             "$ref": "#/components/schemas/MatchScheduleResponseDto"
           },
+          "durationMinutes": {
+            "type": "number",
+            "minimum": 15,
+            "maximum": 480
+          },
           "venue": {
             "$ref": "#/components/schemas/VenueResponseDto"
           },
@@ -778,6 +783,7 @@
           "chatId",
           "scheduledAt",
           "schedule",
+          "durationMinutes",
           "venue",
           "fieldPriceRubles",
           "version",
@@ -848,6 +854,12 @@
             "example": "20:00",
             "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
           },
+          "durationMinutes": {
+            "type": "number",
+            "example": 90,
+            "minimum": 15,
+            "maximum": 480
+          },
           "venueId": {
             "type": "string",
             "example": "15",
@@ -863,6 +875,7 @@
         "required": [
           "date",
           "time",
+          "durationMinutes",
           "venueId"
         ]
       },
@@ -878,6 +891,12 @@
             "type": "string",
             "example": "20:00",
             "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+          },
+          "durationMinutes": {
+            "type": "number",
+            "example": 90,
+            "minimum": 15,
+            "maximum": 480
           },
           "venueId": {
             "type": "string",

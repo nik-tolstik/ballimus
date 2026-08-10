@@ -5,6 +5,7 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  Max,
   IsOptional,
   IsString,
   IsUrl,
@@ -35,6 +36,13 @@ export class MatchCreateDto {
   @Matches(LOCAL_TIME_PATTERN)
   time!: string;
 
+  @ApiProperty({ type: Number, example: 90, minimum: 15, maximum: 480 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(15)
+  @Max(480)
+  durationMinutes!: number;
+
   @ApiProperty({ type: String, example: "15", pattern: "^[1-9]\\d*$" })
   @IsString()
   @Matches(DECIMAL_ID_PATTERN)
@@ -61,6 +69,14 @@ export class PatchMatchDto {
   @IsString()
   @Matches(LOCAL_TIME_PATTERN)
   time?: string;
+
+  @ApiPropertyOptional({ type: Number, example: 90, minimum: 15, maximum: 480 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(15)
+  @Max(480)
+  durationMinutes?: number;
 
   @ApiPropertyOptional({ type: String, example: "15", pattern: "^[1-9]\\d*$" })
   @IsOptional()

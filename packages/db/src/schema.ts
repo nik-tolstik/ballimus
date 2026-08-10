@@ -78,6 +78,7 @@ export const matches = pgTable(
     id: bigint("id", { mode: "bigint" }).generatedAlwaysAsIdentity().primaryKey(),
     telegramChatId: bigint("telegram_chat_id", { mode: "bigint" }).notNull(),
     scheduledAt: timestamp("scheduled_at", { withTimezone: true, mode: "date" }).notNull(),
+    durationMinutes: integer("duration_minutes").notNull().default(90),
     venueId: bigint("venue_id", { mode: "bigint" }).notNull().references(() => venues.id, { onDelete: "restrict", onUpdate: "cascade" }),
     fieldPriceRubles: integer("field_price_rubles"),
     creatorTelegramUserId: bigint("creator_telegram_user_id", { mode: "bigint" }).notNull(),
@@ -89,6 +90,7 @@ export const matches = pgTable(
   (table) => [
     check("matches_telegram_chat_id_non_zero", sql`${table.telegramChatId} <> 0`),
     check("matches_creator_telegram_user_id_positive", sql`${table.creatorTelegramUserId} > 0`),
+    check("matches_duration_minutes_valid", sql`${table.durationMinutes} between 15 and 480`),
     check("matches_field_price_non_negative", sql`${table.fieldPriceRubles} is null or ${table.fieldPriceRubles} >= 0`),
     check("matches_version_positive", sql`${table.version} >= 1`),
     unique("matches_id_chat_unique").on(table.id, table.telegramChatId),

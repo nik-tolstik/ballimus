@@ -61,6 +61,7 @@ describe("information-card PostgreSQL schema", () => {
     const match = await matches.create({
       telegramChatId: CHAT_ID,
       scheduledAt: new Date("2026-08-02T17:00:00.000Z"),
+      durationMinutes: 90,
       venueId: venue.id,
       fieldPriceRubles: 100,
       creatorTelegramUserId: OWNER_ID,
@@ -79,6 +80,7 @@ describe("information-card PostgreSQL schema", () => {
     const firstDeletion = await matches.requestDeletion(match.id, match.version);
     const repeatedDeletion = await matches.requestDeletion(match.id, 1);
 
+    expect(match.durationMinutes).toBe(90);
     expect(firstDeletion.deletionRequestedAt).toBeInstanceOf(Date);
     expect(repeatedDeletion.deletionRequestedAt).toEqual(firstDeletion.deletionRequestedAt);
     expect(await matches.list({ telegramChatId: CHAT_ID })).toEqual([]);

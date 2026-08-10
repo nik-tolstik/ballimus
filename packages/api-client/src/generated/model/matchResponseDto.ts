@@ -14,6 +14,11 @@ export interface MatchResponseDto {
   chatId: string;
   scheduledAt: string;
   schedule: MatchScheduleResponseDto;
+  /**
+   * @minimum 15
+   * @maximum 480
+   */
+  durationMinutes: number;
   venue: VenueResponseDto;
   /**
    * @minimum 0

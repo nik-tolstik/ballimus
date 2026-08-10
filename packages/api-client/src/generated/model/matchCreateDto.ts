@@ -11,6 +11,11 @@ export interface MatchCreateDto {
   date: string;
   /** @pattern ^(?:[01]\d|2[0-3]):[0-5]\d$ */
   time: string;
+  /**
+   * @minimum 15
+   * @maximum 480
+   */
+  durationMinutes: number;
   /** @pattern ^[1-9]\d*$ */
   venueId: string;
   /**

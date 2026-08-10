@@ -57,6 +57,7 @@ export class TelegramCardService {
         id: match.id,
         chatId: match.telegramChatId,
         scheduledAt: match.scheduledAt,
+        durationMinutes: match.durationMinutes,
         venueId: match.venueId,
         fieldPriceRubles: match.fieldPriceRubles,
         creatorTelegramUserId: match.creatorTelegramUserId,
