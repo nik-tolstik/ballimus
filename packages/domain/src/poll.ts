@@ -6,7 +6,7 @@ export interface PollThresholdNotificationInput {
   readonly threshold: number;
 }
 
-/** Formats the one-time chat message emitted when a poll option reaches its configured threshold. */
+/** Formats the one-time chat message emitted when a decision option reaches the poll threshold. */
 export function formatPollThresholdNotification(input: PollThresholdNotificationInput): string {
   if (!Number.isSafeInteger(input.threshold) || input.threshold < 1) {
     throw new Error("Poll notification threshold must be a positive safe integer");

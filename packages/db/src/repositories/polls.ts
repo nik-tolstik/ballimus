@@ -3,6 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import {
   telegramPolls,
   type TelegramPoll,
+  type TelegramPollOptionKind,
   type TelegramPollOptionState,
 } from "../schema.js";
 import {
@@ -21,7 +22,7 @@ import {
 
 export interface CreateTelegramPollOptionInput {
   readonly text: string;
-  readonly notificationThreshold?: number | null;
+  readonly kind: TelegramPollOptionKind;
 }
 
 export interface CreateTelegramPollInput {
@@ -29,8 +30,10 @@ export interface CreateTelegramPollInput {
   readonly telegramTopicId?: DatabaseIdentifier | null;
   readonly question: string;
   readonly options: readonly CreateTelegramPollOptionInput[];
+  readonly notificationThreshold?: number | null;
   readonly isAnonymous: boolean;
   readonly allowsMultipleAnswers: boolean;
+  readonly allowsRevoting: boolean;
   readonly creatorTelegramUserId: DatabaseIdentifier;
   readonly createdAt?: Date;
 }
@@ -75,13 +78,20 @@ function threshold(value: number | null | undefined): number | null {
   return value;
 }
 
+function optionKind(value: TelegramPollOptionKind, fieldName: string): TelegramPollOptionKind {
+  if (value !== "decision" && value !== "informational") {
+    throw new ValidationRepositoryError(`${fieldName} must be decision or informational`);
+  }
+  return value;
+}
+
 function initialOptions(options: readonly CreateTelegramPollOptionInput[]): TelegramPollOptionState[] {
   if (options.length < 2 || options.length > 12) {
     throw new ValidationRepositoryError("A Telegram poll must contain between 2 and 12 options");
   }
   return options.map((option, index) => ({
     text: nonEmpty(option.text, `options[${index}].text`, 100),
-    notificationThreshold: threshold(option.notificationThreshold),
+    kind: optionKind(option.kind, `options[${index}].kind`),
     voterCount: 0,
     notificationQueuedAt: null,
   }));
@@ -107,8 +117,10 @@ export class TelegramPollsRepository {
       telegramMessageId: null,
       question: nonEmpty(input.question, "question", 300),
       options: initialOptions(input.options),
+      notificationThreshold: threshold(input.notificationThreshold),
       isAnonymous: input.isAnonymous,
       allowsMultipleAnswers: input.allowsMultipleAnswers,
+      allowsRevoting: input.allowsRevoting,
       publicationState: "pending",
       publicationAttemptedAt: null,
       closedAt: null,
@@ -154,7 +166,7 @@ export class TelegramPollsRepository {
     if (current.publicationState !== "pending") {
       throw new RepositoryConflictError(`The poll cannot be published from state ${current.publicationState}`);
     }
-    const mergedOptions = this.mergeOptions(current.options, options, undefined).options;
+    const mergedOptions = this.mergeOptions(current.options, options, current.notificationThreshold, undefined).options;
     const now = effectiveNow(attemptedAt);
     const rows = await this.db.update(telegramPolls).set({
       telegramPollId: pollId,
@@ -198,7 +210,7 @@ export class TelegramPollsRepository {
       throw new RepositoryConflictError("Only a published Telegram poll can receive updates");
     }
     const now = effectiveNow(updatedAt);
-    const merged = this.mergeOptions(poll.options, options, now);
+    const merged = this.mergeOptions(poll.options, options, poll.notificationThreshold, now);
     const rows = await this.db.update(telegramPolls).set({
       options: merged.options,
       ...(isClosed && poll.closedAt === null ? { closedAt: now } : {}),
@@ -210,6 +222,7 @@ export class TelegramPollsRepository {
   private mergeOptions(
     current: readonly TelegramPollOptionState[],
     incoming: readonly TelegramPollUpdateOptionInput[],
+    notificationThreshold: number | null,
     queuedAt: Date | undefined,
   ): { readonly options: TelegramPollOptionState[]; readonly triggers: TelegramPollThresholdTrigger[] } {
     if (incoming.length !== current.length) throw new ValidationRepositoryError("Telegram poll option count changed unexpectedly");
@@ -221,11 +234,12 @@ export class TelegramPollsRepository {
       }
       const voterCount = count(next.voterCount, `options[${index}].voterCount`);
       const reached = queuedAt !== undefined
-        && option.notificationThreshold !== null
+        && notificationThreshold !== null
+        && option.kind === "decision"
         && option.notificationQueuedAt === null
-        && voterCount >= option.notificationThreshold;
-      if (reached && option.notificationThreshold !== null) {
-        triggers.push({ optionIndex: index, optionText: option.text, threshold: option.notificationThreshold, voterCount });
+        && voterCount >= notificationThreshold;
+      if (reached && notificationThreshold !== null) {
+        triggers.push({ optionIndex: index, optionText: option.text, threshold: notificationThreshold, voterCount });
       }
       return {
         ...option,

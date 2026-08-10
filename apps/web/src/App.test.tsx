@@ -28,14 +28,14 @@ describe('information-card Mini App', () => {
     const valid = {
       question: 'Кто играет?',
       options: [
-        { key: '1', text: 'Буду', notificationThreshold: '10' },
-        { key: '2', text: 'Не буду', notificationThreshold: null },
+        { key: '1', text: 'Буду', kind: 'decision' as const },
+        { key: '2', text: 'Не буду', kind: 'informational' as const },
       ],
-      isAnonymous: true,
+      notificationThreshold: '10',
       allowsMultipleAnswers: false,
     }
     expect(validatePollEditorValues(valid)).toBeUndefined()
     expect(validatePollEditorValues({ ...valid, options: [valid.options[0]!] })).toBe('Добавьте от 2 до 12 вариантов ответа.')
-    expect(validatePollEditorValues({ ...valid, options: [{ ...valid.options[0]!, notificationThreshold: '0' }, valid.options[1]!] })).toBe('Порог оповещения должен быть целым числом от 1 до 1 000 000.')
+    expect(validatePollEditorValues({ ...valid, notificationThreshold: '0' })).toBe('Количество для оповещения должно быть целым числом от 1 до 1 000 000.')
   })
 })

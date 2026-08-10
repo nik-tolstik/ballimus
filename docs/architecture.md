@@ -32,7 +32,7 @@ Edits enqueue a refresh of the existing message. Deletes mark the match as delet
 
 The Telegram card is a read-only projection. It is rendered as HTML text with no reply markup or callback data. The outbox supports publishing, refreshing, and deleting cards. Refresh and delete failures retry with backoff; an ambiguous first send is marked uncertain rather than blindly resent.
 
-Poll publication is durable. Telegram `poll` updates refresh ordered option counts. Crossing a configured per-option threshold atomically marks the notification as queued and creates a deduplicated `send_poll_threshold_notification` event. Polls and notifications use the configured Chat topic and never reference a match.
+Poll publication is durable. Telegram `poll` updates refresh ordered option counts. A poll can have one notification threshold, and each option is classified as either `decision` or `informational`. Crossing the threshold on a decision option atomically marks that option notification as queued and creates a deduplicated `send_poll_threshold_notification` event; informational options never trigger it. Polls and notifications use the configured Chat topic and never reference a match.
 
 Current weather is fetched from Open-Meteo for Minsk only when the owner invokes the endpoint. The formatted result is sent directly to the configured Telegram topic and is neither persisted nor rate limited.
 

@@ -12,8 +12,14 @@ export interface PollResponseDto {
   id: string;
   question: string;
   options: PollOptionResponseDto[];
+  /**
+   * @minimum 1
+   * @nullable
+   */
+  notificationThreshold: number | null;
   isAnonymous: boolean;
   allowsMultipleAnswers: boolean;
+  allowsRevoting: boolean;
   publicationState: PollResponseDtoPublicationState;
   /** @nullable */
   closedAt: string | null;

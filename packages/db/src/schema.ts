@@ -28,6 +28,9 @@ export type PublicationState = (typeof publicationStates)[number];
 export const pollPublicationStates = ["pending", "published", "uncertain", "failed"] as const;
 export type PollPublicationState = (typeof pollPublicationStates)[number];
 
+export const telegramPollOptionKinds = ["decision", "informational"] as const;
+export type TelegramPollOptionKind = (typeof telegramPollOptionKinds)[number];
+
 export const httpIdempotencyStatuses = ["processing", "succeeded", "failed"] as const;
 export type HttpIdempotencyStatus = (typeof httpIdempotencyStatuses)[number];
 
@@ -45,7 +48,7 @@ export type OutboxDeliveryState = (typeof outboxDeliveryStates)[number];
 
 export interface TelegramPollOptionState {
   readonly text: string;
-  readonly notificationThreshold: number | null;
+  readonly kind: TelegramPollOptionKind;
   readonly voterCount: number;
   readonly notificationQueuedAt: string | null;
 }
@@ -198,8 +201,10 @@ export const telegramPolls = pgTable(
     telegramMessageId: bigint("telegram_message_id", { mode: "bigint" }),
     question: text("question").notNull(),
     options: jsonb("options").$type<TelegramPollOptionState[]>().notNull(),
+    notificationThreshold: integer("notification_threshold"),
     isAnonymous: boolean("is_anonymous").notNull().default(true),
     allowsMultipleAnswers: boolean("allows_multiple_answers").notNull().default(false),
+    allowsRevoting: boolean("allows_revoting").notNull().default(true),
     publicationState: text("publication_state", { enum: pollPublicationStates }).notNull().default("pending"),
     publicationAttemptedAt: timestamp("publication_attempted_at", { withTimezone: true, mode: "date" }),
     closedAt: timestamp("closed_at", { withTimezone: true, mode: "date" }),
@@ -214,6 +219,7 @@ export const telegramPolls = pgTable(
     check("telegram_polls_message_id_positive", sql`${table.telegramMessageId} is null or ${table.telegramMessageId} > 0`),
     check("telegram_polls_question_valid", sql`length(${table.question}) between 1 and 300`),
     check("telegram_polls_options_valid", sql`jsonb_typeof(${table.options}) = 'array' and jsonb_array_length(${table.options}) between 2 and 12`),
+    check("telegram_polls_notification_threshold_valid", sql`${table.notificationThreshold} is null or ${table.notificationThreshold} between 1 and 1000000`),
     check("telegram_polls_publication_state_valid", sql`${table.publicationState} in (${pollPublicationStateSql})`),
     check("telegram_polls_creator_positive", sql`${table.creatorTelegramUserId} > 0`),
     check("telegram_polls_publication_reference_consistent", sql`(

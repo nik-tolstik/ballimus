@@ -138,12 +138,14 @@ test('creates a native poll with an option threshold notification', async ({ pag
   await page.getByLabel('Вопрос', { exact: true }).fill('Кто играет в воскресенье?')
   await page.getByLabel('Вариант 1', { exact: true }).fill('Буду')
   await page.getByLabel('Вариант 2', { exact: true }).fill('Не буду')
-  const firstNotification = page.getByRole('button', { name: 'Включить оповещение для варианта 1', exact: true })
-  await expect(firstNotification).toHaveAttribute('data-state', 'off')
-  await firstNotification.click()
-  await expect(page.getByRole('button', { name: 'Выключить оповещение для варианта 1', exact: true })).toHaveAttribute('data-state', 'on')
-  await expect(page.getByLabel('Порог оповещения для варианта 1', { exact: true })).toHaveValue('10')
-  await expect(page.getByRole('switch', { name: 'Анонимное голосование', exact: true })).toBeChecked()
+  await page.getByRole('radiogroup', { name: 'Тип варианта 2', exact: true }).getByRole('radio', { name: 'Инфо', exact: true }).click()
+  const notification = page.getByRole('switch', { name: 'Оповестить о количестве', exact: true })
+  await expect(notification).not.toBeChecked()
+  await notification.click()
+  await expect(notification).toBeChecked()
+  await expect(page.getByLabel('Количество для оповещения', { exact: true })).toHaveValue('10')
+  await expect(page.getByText('Голос можно отменять', { exact: true })).toBeVisible()
+  await expect(page.getByLabel('Анонимное голосование', { exact: true })).toHaveCount(0)
   const multipleAnswers = page.getByRole('switch', { name: 'Несколько ответов', exact: true })
   await expect(multipleAnswers).not.toBeChecked()
   await multipleAnswers.click()
@@ -153,10 +155,10 @@ test('creates a native poll with an option threshold notification', async ({ pag
   await expect.poll(() => mocked.pollRequests).toEqual([{
     question: 'Кто играет в воскресенье?',
     options: [
-      { text: 'Буду', notificationThreshold: 10 },
-      { text: 'Не буду', notificationThreshold: null },
+      { text: 'Буду', kind: 'decision' },
+      { text: 'Не буду', kind: 'informational' },
     ],
-    isAnonymous: true,
+    notificationThreshold: 10,
     allowsMultipleAnswers: true,
   }])
   await expect(page.getByText('Опрос отправлен в Telegram.', { exact: true })).toBeVisible()

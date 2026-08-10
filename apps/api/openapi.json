@@ -1040,14 +1040,16 @@
           "text": {
             "type": "string"
           },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "decision",
+              "informational"
+            ]
+          },
           "voterCount": {
             "type": "number",
             "minimum": 0
-          },
-          "notificationThreshold": {
-            "type": "number",
-            "nullable": true,
-            "minimum": 1
           },
           "notificationQueuedAt": {
             "type": "string",
@@ -1057,8 +1059,8 @@
         },
         "required": [
           "text",
+          "kind",
           "voterCount",
-          "notificationThreshold",
           "notificationQueuedAt"
         ]
       },
@@ -1078,10 +1080,18 @@
               "$ref": "#/components/schemas/PollOptionResponseDto"
             }
           },
+          "notificationThreshold": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1
+          },
           "isAnonymous": {
             "type": "boolean"
           },
           "allowsMultipleAnswers": {
+            "type": "boolean"
+          },
+          "allowsRevoting": {
             "type": "boolean"
           },
           "publicationState": {
@@ -1115,8 +1125,10 @@
           "id",
           "question",
           "options",
+          "notificationThreshold",
           "isAnonymous",
           "allowsMultipleAnswers",
+          "allowsRevoting",
           "publicationState",
           "closedAt",
           "lastError",
@@ -1147,17 +1159,18 @@
             "minLength": 1,
             "maxLength": 100
           },
-          "notificationThreshold": {
-            "type": "number",
-            "nullable": true,
-            "default": null,
-            "example": 10,
-            "minimum": 1,
-            "maximum": 1000000
+          "kind": {
+            "type": "string",
+            "enum": [
+              "decision",
+              "informational"
+            ],
+            "example": "decision"
           }
         },
         "required": [
-          "text"
+          "text",
+          "kind"
         ]
       },
       "PollCreateDto": {
@@ -1177,9 +1190,13 @@
               "$ref": "#/components/schemas/PollOptionCreateDto"
             }
           },
-          "isAnonymous": {
-            "type": "boolean",
-            "default": true
+          "notificationThreshold": {
+            "type": "number",
+            "nullable": true,
+            "default": null,
+            "example": 10,
+            "minimum": 1,
+            "maximum": 1000000
           },
           "allowsMultipleAnswers": {
             "type": "boolean",
@@ -1189,7 +1206,6 @@
         "required": [
           "question",
           "options",
-          "isAnonymous",
           "allowsMultipleAnswers"
         ]
       },

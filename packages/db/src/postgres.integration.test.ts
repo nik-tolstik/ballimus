@@ -89,18 +89,20 @@ describe("information-card PostgreSQL schema", () => {
     expect((await outbox.findByDeduplicationKey(`match:${match.id.toString(10)}:delete`))?.eventType).toBe("delete_public_card");
   });
 
-  it("persists native polls and emits each configured threshold only once", async () => {
+  it("emits a poll threshold once for decision options and ignores informational options", async () => {
     const polls = new TelegramPollsRepository(database.db);
     const poll = await polls.create({
       telegramChatId: CHAT_ID,
       telegramTopicId: 2n,
       question: "Кто играет?",
       options: [
-        { text: "Буду", notificationThreshold: 10 },
-        { text: "Не буду", notificationThreshold: null },
+        { text: "Буду", kind: "decision" },
+        { text: "Не буду", kind: "informational" },
       ],
+      notificationThreshold: 10,
       isAnonymous: true,
       allowsMultipleAnswers: false,
+      allowsRevoting: true,
       creatorTelegramUserId: OWNER_ID,
     });
     const published = await polls.markPublished(poll.id, "telegram-poll-1", 202n, [
@@ -114,7 +116,7 @@ describe("information-card PostgreSQL schema", () => {
       if (current === undefined) throw new Error("Published poll was not found");
       return repository.applyTelegramUpdate(current, [
         { text: "Буду", voterCount: 10 },
-        { text: "Не буду", voterCount: 4 },
+        { text: "Не буду", voterCount: 10 },
       ], false, new Date("2026-08-11T10:00:00.000Z"));
     });
     const repeated = await database.db.transaction(async (tx) => {
@@ -132,5 +134,6 @@ describe("information-card PostgreSQL schema", () => {
     expect(first.poll.options[0]?.notificationQueuedAt).toBe("2026-08-11T10:00:00.000Z");
     expect(repeated.triggers).toEqual([]);
     expect(repeated.poll.options.map((option) => option.voterCount)).toEqual([11, 5]);
+    expect(repeated.poll.options[1]?.notificationQueuedAt).toBeNull();
   });
 });

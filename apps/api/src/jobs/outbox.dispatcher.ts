@@ -192,6 +192,7 @@ export class OutboxDispatcher {
       options: poll.options.map((option) => option.text),
       isAnonymous: poll.isAnonymous,
       allowsMultipleAnswers: poll.allowsMultipleAnswers,
+      allowsRevoting: poll.allowsRevoting,
     });
     await this.polls.markPublished(poll.id, sent.pollId, sent.messageId, sent.options, now);
     return this.markDelivered(event, now);

@@ -33,6 +33,7 @@ export interface TelegramSendPollInput {
   readonly options: readonly string[];
   readonly isAnonymous: boolean;
   readonly allowsMultipleAnswers: boolean;
+  readonly allowsRevoting: boolean;
 }
 
 export interface TelegramSentMessage {
@@ -134,6 +135,7 @@ export class TelegramBotService {
         is_anonymous: input.isAnonymous,
         type: "regular",
         allows_multiple_answers: input.allowsMultipleAnswers,
+        allows_revoting: input.allowsRevoting,
         ...(messageThreadId === undefined ? {} : { message_thread_id: messageThreadId }),
       },
       signal,

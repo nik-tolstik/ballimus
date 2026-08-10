@@ -148,8 +148,10 @@ export class OwnerRestService {
           telegramTopicId: this.config.telegramChatTopicId,
           question: input.question,
           options: input.options,
-          isAnonymous: input.isAnonymous,
+          notificationThreshold: input.notificationThreshold ?? null,
+          isAnonymous: true,
           allowsMultipleAnswers: input.allowsMultipleAnswers,
+          allowsRevoting: true,
           creatorTelegramUserId: ownerTelegramUserId,
         });
         await repositories.outbox.insertInTransaction({
@@ -468,8 +470,10 @@ export class OwnerRestService {
       id: poll.id,
       question: poll.question,
       options: poll.options,
+      notificationThreshold: poll.notificationThreshold,
       isAnonymous: poll.isAnonymous,
       allowsMultipleAnswers: poll.allowsMultipleAnswers,
+      allowsRevoting: poll.allowsRevoting,
       publicationState: poll.publicationState,
       closedAt: poll.closedAt,
       lastError: poll.lastError,

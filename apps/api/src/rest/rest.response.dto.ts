@@ -77,11 +77,11 @@ export class PollOptionResponseDto {
   @ApiProperty({ type: String })
   text!: string;
 
+  @ApiProperty({ enum: ["decision", "informational"] })
+  kind!: "decision" | "informational";
+
   @ApiProperty({ type: Number, minimum: 0 })
   voterCount!: number;
-
-  @ApiProperty({ type: Number, nullable: true, minimum: 1 })
-  notificationThreshold!: number | null;
 
   @ApiProperty({ type: String, nullable: true, format: "date-time" })
   notificationQueuedAt!: string | null;
@@ -97,11 +97,17 @@ export class PollResponseDto {
   @ApiProperty({ type: [PollOptionResponseDto] })
   options!: PollOptionResponseDto[];
 
+  @ApiProperty({ type: Number, nullable: true, minimum: 1 })
+  notificationThreshold!: number | null;
+
   @ApiProperty({ type: Boolean })
   isAnonymous!: boolean;
 
   @ApiProperty({ type: Boolean })
   allowsMultipleAnswers!: boolean;
+
+  @ApiProperty({ type: Boolean })
+  allowsRevoting!: boolean;
 
   @ApiProperty({ enum: ["pending", "published", "uncertain", "failed"] })
   publicationState!: "pending" | "published" | "uncertain" | "failed";

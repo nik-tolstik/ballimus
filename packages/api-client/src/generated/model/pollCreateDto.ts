@@ -18,6 +18,11 @@ export interface PollCreateDto {
    * @maxItems 12
    */
   options: PollOptionCreateDto[];
-  isAnonymous: boolean;
+  /**
+   * @minimum 1
+   * @maximum 1000000
+   * @nullable
+   */
+  notificationThreshold?: number | null;
   allowsMultipleAnswers: boolean;
 }

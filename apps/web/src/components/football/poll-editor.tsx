@@ -1,39 +1,46 @@
 import { useState } from 'react'
-import { Bell, BellRing, ListChecks, Plus, Send, ShieldCheck, Trash2, UsersRound, type LucideIcon } from 'lucide-react'
+import { Check, Info, ListChecks, Plus, RotateCcw, Send, Trash2, UsersRound, type LucideIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Field, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { Toggle } from '@/components/ui/toggle'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
+
+export type PollOptionKind = 'decision' | 'informational'
 
 export interface PollEditorOptionValues {
   readonly key: string
   readonly text: string
-  readonly notificationThreshold: string | null
+  readonly kind: PollOptionKind
 }
 
 export interface PollEditorValues {
   readonly question: string
   readonly options: readonly PollEditorOptionValues[]
-  readonly isAnonymous: boolean
+  readonly notificationThreshold: string | null
   readonly allowsMultipleAnswers: boolean
 }
 
 function option(key: number): PollEditorOptionValues {
-  return { key: String(key), text: '', notificationThreshold: null }
+  return { key: String(key), text: '', kind: 'decision' }
 }
 
 const settingTone = {
-  primary: 'bg-primary/10 text-primary',
+  notification: 'bg-warning/10 text-warning',
   multiple: 'bg-chart-4/10 text-chart-4',
+  revoting: 'bg-success/10 text-success',
 } as const
+
+function SettingIcon({ icon: Icon, tone }: { readonly icon: LucideIcon; readonly tone: keyof typeof settingTone }) {
+  return <span className={cn('flex size-9 shrink-0 items-center justify-center rounded-lg', settingTone[tone])}><Icon className="size-4.5" aria-hidden="true" /></span>
+}
 
 function PollSetting({
   id,
   label,
-  icon: Icon,
+  icon,
   tone,
   checked,
   onCheckedChange,
@@ -47,11 +54,63 @@ function PollSetting({
 }) {
   return <Field orientation="horizontal" className="rounded-lg bg-muted/55 p-2.5">
     <FieldLabel htmlFor={id} className="min-w-0 flex-1 cursor-pointer items-center font-normal">
-      <span className={cn('flex size-9 shrink-0 items-center justify-center rounded-lg', settingTone[tone])}><Icon className="size-4.5" aria-hidden="true" /></span>
+      <SettingIcon icon={icon} tone={tone} />
       <span className="truncate">{label}</span>
     </FieldLabel>
     <Switch id={id} aria-label={label} checked={checked} onCheckedChange={onCheckedChange} />
   </Field>
+}
+
+function NotificationSetting({
+  threshold,
+  onThresholdChange,
+}: {
+  readonly threshold: string | null
+  readonly onThresholdChange: (threshold: string | null) => void
+}) {
+  const enabled = threshold !== null
+  return <div className="rounded-lg bg-muted/55">
+    <Field orientation="horizontal" className="p-2.5">
+      <FieldLabel htmlFor="poll-notification-enabled" className="min-w-0 flex-1 cursor-pointer items-center font-normal">
+        <SettingIcon icon={UsersRound} tone="notification" />
+        <span className="truncate">Оповестить о количестве</span>
+      </FieldLabel>
+      <Switch id="poll-notification-enabled" aria-label="Оповестить о количестве" checked={enabled} onCheckedChange={(checked) => onThresholdChange(checked ? '10' : null)} />
+    </Field>
+    <div aria-hidden={!enabled} className={cn('grid transition-[grid-template-rows,opacity] duration-200 ease-out', enabled ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0')}>
+      <div className="overflow-hidden">
+        <Field orientation="horizontal" className="px-2.5 pb-2.5 pl-14">
+          <FieldLabel htmlFor="poll-notification-threshold" className="font-normal">Количество</FieldLabel>
+          <Input id="poll-notification-threshold" className="w-20 bg-card text-center tabular-nums" aria-label="Количество для оповещения" type="number" min="1" max="1000000" inputMode="numeric" disabled={!enabled} value={threshold ?? '10'} onChange={(event) => onThresholdChange(event.target.value)} />
+        </Field>
+      </div>
+    </div>
+  </div>
+}
+
+function RevotingCapability() {
+  return <Field orientation="horizontal" className="rounded-lg bg-muted/55 p-2.5">
+    <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
+      <SettingIcon icon={RotateCcw} tone="revoting" />
+      <span className="truncate">Голос можно отменять</span>
+    </div>
+    <Check className="size-4.5 shrink-0 text-success" aria-hidden="true" />
+  </Field>
+}
+
+function OptionKindSelector({
+  optionNumber,
+  value,
+  onValueChange,
+}: {
+  readonly optionNumber: string
+  readonly value: PollOptionKind
+  readonly onValueChange: (value: PollOptionKind) => void
+}) {
+  return <ToggleGroup type="single" size="sm" spacing={0} className="w-full bg-muted/70 p-0.5" aria-label={`Тип варианта ${optionNumber}`} value={value} onValueChange={(next) => { if (next === 'decision' || next === 'informational') onValueChange(next) }}>
+    <ToggleGroupItem className="flex-1" variant="option-decision" value="decision"><UsersRound data-icon="inline-start" />Учитывать</ToggleGroupItem>
+    <ToggleGroupItem className="flex-1" variant="option-informational" value="informational"><Info data-icon="inline-start" />Инфо</ToggleGroupItem>
+  </ToggleGroup>
 }
 
 export function validatePollEditorValues(values: PollEditorValues): string | undefined {
@@ -61,11 +120,12 @@ export function validatePollEditorValues(values: PollEditorValues): string | und
   for (const item of values.options) {
     const text = item.text.trim()
     if (text.length < 1 || text.length > 100) return 'Заполните каждый вариант ответа (до 100 символов).'
-    if (item.notificationThreshold !== null) {
-      const threshold = Number(item.notificationThreshold)
-      if (!Number.isSafeInteger(threshold) || threshold < 1 || threshold > 1_000_000) {
-        return 'Порог оповещения должен быть целым числом от 1 до 1 000 000.'
-      }
+    if (item.kind !== 'decision' && item.kind !== 'informational') return 'Выберите тип для каждого варианта.'
+  }
+  if (values.notificationThreshold !== null) {
+    const threshold = Number(values.notificationThreshold)
+    if (!Number.isSafeInteger(threshold) || threshold < 1 || threshold > 1_000_000) {
+      return 'Количество для оповещения должно быть целым числом от 1 до 1 000 000.'
     }
   }
   return undefined
@@ -75,7 +135,7 @@ export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollE
   const [question, setQuestion] = useState('')
   const [options, setOptions] = useState<readonly PollEditorOptionValues[]>([option(1), option(2)])
   const [nextKey, setNextKey] = useState(3)
-  const [isAnonymous, setIsAnonymous] = useState(true)
+  const [notificationThreshold, setNotificationThreshold] = useState<string | null>(null)
   const [allowsMultipleAnswers, setAllowsMultipleAnswers] = useState(false)
   const [validation, setValidation] = useState('')
 
@@ -88,8 +148,12 @@ export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollE
     setOptions((current) => [...current, option(nextKey)])
     setNextKey((current) => current + 1)
   }
+  const updateThreshold = (threshold: string | null) => {
+    setNotificationThreshold(threshold)
+    setValidation('')
+  }
   const submit = () => {
-    const values = { question, options, isAnonymous, allowsMultipleAnswers }
+    const values = { question, options, notificationThreshold, allowsMultipleAnswers }
     const error = validatePollEditorValues(values)
     if (error !== undefined) { setValidation(error); return }
     setValidation('')
@@ -103,27 +167,21 @@ export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollE
         <div className="flex flex-col gap-3">
           <FieldLabel>Варианты ответа</FieldLabel>
           {options.map((item, index) => {
-            const notificationEnabled = item.notificationThreshold !== null
             const optionNumber = String(index + 1)
             return <Field key={item.key} className="rounded-xl bg-card p-3 shadow-sm">
               <div className="flex items-center gap-2">
                 <Input aria-label={`Вариант ${optionNumber}`} maxLength={100} value={item.text} onChange={(event) => updateOption(item.key, { text: event.target.value })} placeholder={`Вариант ${optionNumber}`} />
-                <Toggle type="button" variant="notification" size="icon-form" pressed={notificationEnabled} aria-label={`${notificationEnabled ? 'Выключить' : 'Включить'} оповещение для варианта ${optionNumber}`} title={notificationEnabled ? 'Оповещение включено' : 'Включить оповещение'} onPressedChange={(pressed) => updateOption(item.key, { notificationThreshold: pressed ? '10' : null })}>{notificationEnabled ? <BellRing /> : <Bell />}</Toggle>
                 {options.length > 2 ? <Button type="button" variant="ghost" size="icon" aria-label={`Удалить вариант ${optionNumber}`} onClick={() => setOptions((current) => current.filter((candidate) => candidate.key !== item.key))}><Trash2 /></Button> : null}
               </div>
-              {notificationEnabled ? <Field orientation="horizontal" className="rounded-lg bg-warning/10 p-2.5">
-                <UsersRound className="size-4 shrink-0 text-warning" aria-hidden="true" />
-                <FieldLabel htmlFor={`poll-threshold-${item.key}`} className="font-normal">Оповестить при</FieldLabel>
-                <Input id={`poll-threshold-${item.key}`} className="w-20 bg-card text-center tabular-nums" aria-label={`Порог оповещения для варианта ${optionNumber}`} type="number" min="1" max="1000000" inputMode="numeric" value={item.notificationThreshold} onChange={(event) => updateOption(item.key, { notificationThreshold: event.target.value })} />
-                <span className="text-sm text-muted-foreground">чел.</span>
-              </Field> : null}
+              <OptionKindSelector optionNumber={optionNumber} value={item.kind} onValueChange={(kind) => updateOption(item.key, { kind })} />
             </Field>
           })}
           <Button type="button" variant="ghost" className="self-start" disabled={options.length >= 12} onClick={addOption}><Plus data-icon="inline-start" />Добавить вариант</Button>
         </div>
         <FieldSet className="gap-2 rounded-xl bg-card p-3 shadow-sm"><FieldLegend variant="label">Настройки</FieldLegend>
-          <PollSetting id="poll-anonymous" label="Анонимное голосование" icon={ShieldCheck} tone="primary" checked={isAnonymous} onCheckedChange={setIsAnonymous} />
+          <NotificationSetting threshold={notificationThreshold} onThresholdChange={updateThreshold} />
           <PollSetting id="poll-multiple-answers" label="Несколько ответов" icon={ListChecks} tone="multiple" checked={allowsMultipleAnswers} onCheckedChange={setAllowsMultipleAnswers} />
+          <RevotingCapability />
         </FieldSet>
         <FieldError>{validation}</FieldError>
       </FieldGroup>

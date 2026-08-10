@@ -118,8 +118,8 @@ export function App({ telegramSession }: AppProps = {}) {
   const handleCreatePoll = (values: PollEditorValues) => createPollMutation.mutate({
     data: {
       question: values.question.trim(),
-      options: values.options.map((option) => ({ text: option.text.trim(), notificationThreshold: option.notificationThreshold === null ? null : Number(option.notificationThreshold) })),
-      isAnonymous: values.isAnonymous,
+      options: values.options.map((option) => ({ text: option.text.trim(), kind: option.kind })),
+      notificationThreshold: values.notificationThreshold === null ? null : Number(values.notificationThreshold),
       allowsMultipleAnswers: values.allowsMultipleAnswers,
     },
     headers: { 'Idempotency-Key': requestKey() },

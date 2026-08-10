@@ -69,8 +69,8 @@ describe("OutboxDispatcher", () => {
       {
         getById: vi.fn().mockResolvedValue({
           id: 7n, telegramChatId: -100n, telegramTopicId: 2n, question: "Играем?",
-          options: [{ text: "Да" }, { text: "Нет" }], isAnonymous: true,
-          allowsMultipleAnswers: false, publicationState: "pending",
+          options: [{ text: "Да", kind: "decision" }, { text: "Нет", kind: "informational" }], isAnonymous: true,
+          allowsMultipleAnswers: false, allowsRevoting: true, publicationState: "pending",
         }),
         markPublished,
         markPublicationUncertain: vi.fn(),
@@ -85,6 +85,7 @@ describe("OutboxDispatcher", () => {
       options: ["Да", "Нет"],
       isAnonymous: true,
       allowsMultipleAnswers: false,
+      allowsRevoting: true,
     });
     expect(markPublished).toHaveBeenCalledWith(7n, "telegram-poll-7", 70n, expect.any(Array), expect.any(Date));
   });

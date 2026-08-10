@@ -19,6 +19,7 @@ import {
 } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
+import { telegramPollOptionKinds } from "@football/db";
 import { venueTypes } from "@football/domain";
 
 const DECIMAL_ID_PATTERN = /^[1-9]\d*$/u;
@@ -33,14 +34,9 @@ export class PollOptionCreateDto {
   @MaxLength(100)
   text!: string;
 
-  @ApiPropertyOptional({ type: Number, nullable: true, default: null, example: 10, minimum: 1, maximum: 1_000_000 })
-  @IsOptional()
-  @ValidateIf((_object, value: unknown) => value !== null && value !== undefined)
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(1_000_000)
-  notificationThreshold?: number | null;
+  @ApiProperty({ enum: telegramPollOptionKinds, example: "decision" })
+  @IsIn(telegramPollOptionKinds)
+  kind!: (typeof telegramPollOptionKinds)[number];
 }
 
 export class PollCreateDto {
@@ -58,9 +54,14 @@ export class PollCreateDto {
   @Type(() => PollOptionCreateDto)
   options!: PollOptionCreateDto[];
 
-  @ApiProperty({ type: Boolean, default: true })
-  @IsBoolean()
-  isAnonymous!: boolean;
+  @ApiPropertyOptional({ type: Number, nullable: true, default: null, example: 10, minimum: 1, maximum: 1_000_000 })
+  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== null && value !== undefined)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1_000_000)
+  notificationThreshold?: number | null;
 
   @ApiProperty({ type: Boolean, default: false })
   @IsBoolean()
