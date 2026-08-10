@@ -1,91 +1,23 @@
 #!/usr/bin/env node
 
 import { execFile } from "node:child_process";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { promisify } from "node:util";
 import { resolve } from "node:path";
 
+import {
+  loadProductionConfig,
+  parsePublicProductionConfig,
+  validatePublicProductionConfig,
+} from "./production-release-config.mjs";
+
 const executeFile = promisify(execFile);
 const projectRoot = resolve(import.meta.dirname, "..");
-const publicConfigNames = [
-  "PRODUCTION_WEB_URL",
-  "PRODUCTION_API_URL",
-  "RAILWAY_PROJECT_ID",
-  "RAILWAY_ENVIRONMENT",
-  "RAILWAY_API_SERVICE",
-  "RAILWAY_JOBS_SERVICE",
-];
-
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function stringValue(value) {
-  return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
-}
-
-function readDotenvValue(value) {
-  const trimmed = value.trim();
-  const quote = trimmed[0];
-  if ((quote === "\"" || quote === "'") && trimmed.at(-1) === quote) return trimmed.slice(1, -1);
-  return trimmed;
-}
-
-export function parsePublicProductionConfig(source, environment = {}) {
-  const fileValues = {};
-  for (const line of source.split(/\r?\n/u)) {
-    const match = /^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/u.exec(line);
-    if (match === null) continue;
-    const [, name, rawValue] = match;
-    if (name !== undefined && rawValue !== undefined && publicConfigNames.includes(name)) {
-      fileValues[name] = readDotenvValue(rawValue);
-    }
-  }
-
-  const values = {};
-  for (const name of publicConfigNames) {
-    const value = stringValue(environment[name]) ?? stringValue(fileValues[name]);
-    if (value === undefined) throw new Error(`Missing public production configuration: ${name}`);
-    values[name] = value;
-  }
-  return validatePublicProductionConfig(values);
-}
-
-function httpsOrigin(name, value) {
-  let parsed;
-  try {
-    parsed = new URL(value);
-  } catch {
-    throw new Error(`${name} must be an absolute HTTPS origin`);
-  }
-  if (
-    parsed.protocol !== "https:" ||
-    parsed.username !== "" ||
-    parsed.password !== "" ||
-    parsed.pathname !== "/" ||
-    parsed.search !== "" ||
-    parsed.hash !== ""
-  ) {
-    throw new Error(`${name} must be an absolute HTTPS origin`);
-  }
-  return parsed.origin;
-}
-
-export function validatePublicProductionConfig(values) {
-  const railwayIdentifier = (name) => {
-    const value = values[name];
-    if (!/^[A-Za-z0-9_-]+$/u.test(value)) throw new Error(`${name} contains unsupported characters`);
-    return value;
-  };
-  return {
-    webUrl: httpsOrigin("PRODUCTION_WEB_URL", values.PRODUCTION_WEB_URL),
-    apiUrl: httpsOrigin("PRODUCTION_API_URL", values.PRODUCTION_API_URL),
-    railwayProjectId: railwayIdentifier("RAILWAY_PROJECT_ID"),
-    railwayEnvironment: railwayIdentifier("RAILWAY_ENVIRONMENT"),
-    railwayApiService: railwayIdentifier("RAILWAY_API_SERVICE"),
-    railwayJobsService: railwayIdentifier("RAILWAY_JOBS_SERVICE"),
-  };
-}
+export { parsePublicProductionConfig, validatePublicProductionConfig };
 
 export function parseGitHubRepository(remoteUrl) {
   const normalized = remoteUrl.trim().replace(/\.git$/u, "");
@@ -160,6 +92,19 @@ export function evaluateMigrationStatus(status, expectedMigrationCount) {
   return { ok: true, summary: `Production database has ${expectedMigrationCount} committed migrations` };
 }
 
+export function evaluateTelegramWebhookStatus(status) {
+  if (
+    !isRecord(status)
+    || typeof status.url !== "string"
+    || !Number.isSafeInteger(status.pendingUpdateCount)
+    || status.pendingUpdateCount < 0
+  ) {
+    return { ok: false, summary: "Telegram webhook status response was invalid" };
+  }
+  if (status.url !== "") return { ok: false, summary: "Telegram webhook is still configured" };
+  return { ok: true, summary: `Telegram webhook is disabled (pending updates: ${status.pendingUpdateCount})` };
+}
+
 export function parseJsonOutput(output, label) {
   try {
     return JSON.parse(output.trim());
@@ -206,13 +151,7 @@ async function committedMigrationCount() {
 }
 
 async function loadConfig() {
-  const configPath = process.env["PRODUCTION_VERIFY_CONFIG"] ?? resolve(projectRoot, ".env.production.local");
-  try {
-    return parsePublicProductionConfig(await readFile(configPath, "utf8"), process.env);
-  } catch (error) {
-    if (error instanceof Error) throw error;
-    throw new Error("Public production configuration could not be read");
-  }
+  return loadProductionConfig(parsePublicProductionConfig, projectRoot);
 }
 
 function result(name, check) {
@@ -257,9 +196,10 @@ async function main() {
       : { ok: false, summary: "Vercel production URL returned an error" };
   }));
   checks.push(await result("Railway services", async () => {
-    const services = parseJsonOutput(await runCommand("railway", [
-      "service", "status", "--all", "--json", "--environment", config.railwayEnvironment,
-    ], { RAILWAY_PROJECT_ID: config.railwayProjectId }), "Railway services");
+    const services = parseJsonOutput(await runCommand("pnpm", [
+      "exec", "railway", "service", "status", "--all", "--json", "--project", config.railwayProjectId,
+      "--environment", config.railwayEnvironment,
+    ]), "Railway services");
     return evaluateRailwayServices(services, config.railwayApiService, config.railwayJobsService);
   }));
   checks.push(await result("API health", async () => {
@@ -277,11 +217,18 @@ async function main() {
     return evaluateCors(response, config.webUrl);
   }));
   checks.push(await result("Database migrations", async () => {
-    const status = parseJsonOutput(await runCommand("railway", [
-      "ssh", "--project", config.railwayProjectId, "--environment", config.railwayEnvironment,
+    const status = parseJsonOutput(await runCommand("pnpm", [
+      "exec", "railway", "ssh", "--project", config.railwayProjectId, "--environment", config.railwayEnvironment,
       "--service", config.railwayApiService, "--", "node", "packages/db/dist/migration-status-cli.js",
     ]), "Migration status");
     return evaluateMigrationStatus(status, await committedMigrationCount());
+  }));
+  checks.push(await result("Telegram webhook", async () => {
+    const status = parseJsonOutput(await runCommand("pnpm", [
+      "exec", "railway", "ssh", "--project", config.railwayProjectId, "--environment", config.railwayEnvironment,
+      "--service", config.railwayApiService, "--", "node", "apps/api/dist/telegram/webhook-status-cli.js",
+    ]), "Telegram webhook status");
+    return evaluateTelegramWebhookStatus(status);
   }));
   for (const check of checks) {
     console.info(`${check.ok ? "PASS" : "FAIL"} ${check.name}: ${check.summary}`);
@@ -289,13 +236,17 @@ async function main() {
   if (checks.some((check) => !check.ok)) process.exitCode = 1;
 }
 
-if (process.argv.includes("--help") || process.argv.includes("-h")) {
-  console.info("Usage: pnpm release:verify-production");
-  console.info("Reads public settings from .env.production.local without changing production state.");
-} else if (process.argv[1] !== undefined && resolve(process.argv[1]) === resolve(import.meta.filename)) {
-  void main().catch((error) => {
-    const message = error instanceof Error ? error.message : "Production verification could not start";
-    console.error(`FAIL production verifier: ${message}`);
-    process.exitCode = 1;
-  });
+const runsDirectly = process.argv[1] !== undefined && resolve(process.argv[1]) === resolve(import.meta.filename);
+
+if (runsDirectly) {
+  if (process.argv.includes("--help") || process.argv.includes("-h")) {
+    console.info("Usage: pnpm release:verify-production");
+    console.info("Reads public settings from .env.production.local without changing production state.");
+  } else {
+    void main().catch((error) => {
+      const message = error instanceof Error ? error.message : "Production verification could not start";
+      console.error(`FAIL production verifier: ${message}`);
+      process.exitCode = 1;
+    });
+  }
 }
