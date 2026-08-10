@@ -67,7 +67,7 @@ export function DatePicker({ value, onChange, invalid = false }: { readonly valu
       <div className="desktop-custom-date-picker">
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
-            <Button type="button" variant="outline" size="form" className="w-full justify-start border-transparent bg-input/70 shadow-inner hover:bg-input/70 aria-expanded:bg-input/70" data-empty={date === undefined} aria-label="Дата матча" aria-invalid={invalid}>
+            <Button type="button" variant="outline" size="form" className="w-full justify-start border-transparent bg-input/70 shadow-inner hover:bg-input/70 aria-expanded:bg-input/70 dark:bg-input/70 dark:hover:bg-input/70 dark:aria-expanded:bg-input/70" data-empty={date === undefined} aria-label="Дата матча" aria-invalid={invalid}>
               <CalendarDays data-icon="inline-start" />
               <span className={cn('truncate', date === undefined && 'text-muted-foreground')}>{formatCalendarValue(value)}</span>
             </Button>

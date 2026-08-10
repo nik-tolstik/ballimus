@@ -35,7 +35,7 @@ export function VenueAutocomplete({ venues, value, onValueChange, onCreate, plac
     <Popover open={open} onOpenChange={(next) => { setOpen(next); if (!next) setSearch('') }}>
       <div className="flex gap-2">
         <PopoverTrigger asChild>
-          <Button type="button" variant="outline" role="combobox" aria-expanded={open} aria-label={ariaLabel} className="h-10 min-w-0 flex-1 justify-between px-3 font-normal">
+          <Button type="button" variant="outline" role="combobox" aria-expanded={open} aria-label={ariaLabel} className="h-10 min-w-0 flex-1 justify-between border-transparent bg-input/70 px-3 font-normal shadow-inner hover:bg-input/70 dark:bg-input/70 dark:hover:bg-input/70 dark:aria-expanded:bg-input/70">
             <span className={cn('truncate text-left', selected === undefined ? 'text-muted-foreground' : '')}>{selected?.name ?? placeholder}</span>
             <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
           </Button>
