@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Bell, Check, ListChecks, Plus, RotateCcw, Send, Trash2, UsersRound, type LucideIcon } from 'lucide-react'
+import { Reorder, useDragControls } from 'framer-motion'
+import { Bell, Check, GripVertical, ListChecks, Plus, RotateCcw, Send, Trash2, UsersRound, type LucideIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Field, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
@@ -79,7 +80,7 @@ function NotificationSetting({
       <div className="overflow-hidden">
         <Field orientation="horizontal" className="px-2.5 pb-2.5 pl-14">
           <FieldLabel htmlFor="poll-notification-threshold" className="font-normal">Количество</FieldLabel>
-          <Input id="poll-notification-threshold" className="w-20 bg-card text-center tabular-nums" aria-label="Количество для оповещения" type="number" min="1" max="1000000" inputMode="numeric" disabled={!enabled} value={threshold ?? '10'} onChange={(event) => onThresholdChange(event.target.value)} />
+          <Input id="poll-notification-threshold" className="w-20 bg-card text-center tabular-nums focus-visible:ring-inset" aria-label="Количество для оповещения" type="number" min="1" max="1000000" inputMode="numeric" disabled={!enabled} value={threshold ?? '10'} onChange={(event) => onThresholdChange(event.target.value)} />
         </Field>
       </div>
     </div>
@@ -108,13 +109,68 @@ function OptionNotificationToggle({
   return <Toggle
     type="button"
     variant="notification"
-    size="icon-form"
+    size="icon"
     pressed={enabled}
     aria-label={`Оповещение для варианта ${optionNumber}`}
     onPressedChange={onEnabledChange}
   >
     <Bell />
   </Toggle>
+}
+
+function PollOptionRow({
+  item,
+  index,
+  total,
+  notificationsEnabled,
+  onUpdate,
+  onDelete,
+  onMove,
+}: {
+  readonly item: PollEditorOptionValues
+  readonly index: number
+  readonly total: number
+  readonly notificationsEnabled: boolean
+  readonly onUpdate: (key: string, patch: Partial<PollEditorOptionValues>) => void
+  readonly onDelete: (key: string) => void
+  readonly onMove: (key: string, direction: -1 | 1) => void
+}) {
+  const dragControls = useDragControls()
+  const [dragging, setDragging] = useState(false)
+  const optionNumber = String(index + 1)
+
+  return <Reorder.Item
+    value={item}
+    dragListener={false}
+    dragControls={dragControls}
+    onDragStart={() => setDragging(true)}
+    onDragEnd={() => setDragging(false)}
+    whileDrag={{ scale: 1.015 }}
+    className={cn('relative list-none rounded-xl', dragging && 'z-10 shadow-lg')}
+  >
+    <Field className="rounded-xl bg-card p-3 shadow-sm transition-shadow">
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="touch-none cursor-grab text-muted-foreground active:cursor-grabbing"
+          aria-label={`Переместить вариант ${optionNumber}`}
+          onPointerDown={(event) => dragControls.start(event)}
+          onKeyDown={(event) => {
+            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+            event.preventDefault()
+            onMove(item.key, event.key === 'ArrowUp' ? -1 : 1)
+          }}
+        >
+          <GripVertical />
+        </Button>
+        <Input aria-label={`Вариант ${optionNumber}`} maxLength={100} value={item.text} onChange={(event) => onUpdate(item.key, { text: event.target.value })} placeholder={`Вариант ${optionNumber}`} />
+        {notificationsEnabled ? <OptionNotificationToggle optionNumber={optionNumber} enabled={item.notificationEnabled} onEnabledChange={(notificationEnabled) => onUpdate(item.key, { notificationEnabled })} /> : null}
+        <Button type="button" variant="ghost" size="icon" aria-label={`Удалить вариант ${optionNumber}`} disabled={total <= 2} onClick={() => onDelete(item.key)}><Trash2 /></Button>
+      </div>
+    </Field>
+  </Reorder.Item>
 }
 
 export function validatePollEditorValues(values: PollEditorValues): string | undefined {
@@ -137,9 +193,9 @@ export function validatePollEditorValues(values: PollEditorValues): string | und
 
 export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollEditorValues) => void; readonly saving: boolean }) {
   const [question, setQuestion] = useState('')
-  const [options, setOptions] = useState<readonly PollEditorOptionValues[]>([option(1), option(2)])
+  const [options, setOptions] = useState<PollEditorOptionValues[]>([option(1), option(2)])
   const [nextKey, setNextKey] = useState(3)
-  const [notificationThreshold, setNotificationThreshold] = useState<string | null>(null)
+  const [notificationThreshold, setNotificationThreshold] = useState<string | null>('10')
   const [allowsMultipleAnswers, setAllowsMultipleAnswers] = useState(false)
   const [validation, setValidation] = useState('')
 
@@ -151,6 +207,23 @@ export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollE
     if (options.length >= 12) return
     setOptions((current) => [...current, option(nextKey)])
     setNextKey((current) => current + 1)
+  }
+  const deleteOption = (key: string) => {
+    setOptions((current) => current.length <= 2 ? current : current.filter((candidate) => candidate.key !== key))
+    setValidation('')
+  }
+  const moveOption = (key: string, direction: -1 | 1) => {
+    setOptions((current) => {
+      const from = current.findIndex((item) => item.key === key)
+      const to = from + direction
+      if (from < 0 || to < 0 || to >= current.length) return current
+      const next = [...current]
+      const [moved] = next.splice(from, 1)
+      if (moved === undefined) return current
+      next.splice(to, 0, moved)
+      return next
+    })
+    setValidation('')
   }
   const updateThreshold = (threshold: string | null) => {
     setNotificationThreshold(threshold)
@@ -170,16 +243,9 @@ export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollE
         <Field data-invalid={validation.startsWith('Введите вопрос')}><FieldLabel htmlFor="poll-question">Вопрос</FieldLabel><Input id="poll-question" maxLength={300} value={question} onChange={(event) => { setQuestion(event.target.value); setValidation('') }} /></Field>
         <div className="flex flex-col gap-3">
           <FieldLabel>Варианты ответа</FieldLabel>
-          {options.map((item, index) => {
-            const optionNumber = String(index + 1)
-            return <Field key={item.key} className="rounded-xl bg-card p-3 shadow-sm">
-              <div className="flex items-center gap-2">
-                <Input aria-label={`Вариант ${optionNumber}`} maxLength={100} value={item.text} onChange={(event) => updateOption(item.key, { text: event.target.value })} placeholder={`Вариант ${optionNumber}`} />
-                <OptionNotificationToggle optionNumber={optionNumber} enabled={item.notificationEnabled} onEnabledChange={(notificationEnabled) => updateOption(item.key, { notificationEnabled })} />
-                {options.length > 2 ? <Button type="button" variant="ghost" size="icon" aria-label={`Удалить вариант ${optionNumber}`} onClick={() => setOptions((current) => current.filter((candidate) => candidate.key !== item.key))}><Trash2 /></Button> : null}
-              </div>
-            </Field>
-          })}
+          <Reorder.Group axis="y" values={options} onReorder={(next) => { setOptions(next); setValidation('') }} className="flex flex-col gap-3" layoutScroll>
+            {options.map((item, index) => <PollOptionRow key={item.key} item={item} index={index} total={options.length} notificationsEnabled={notificationThreshold !== null} onUpdate={updateOption} onDelete={deleteOption} onMove={moveOption} />)}
+          </Reorder.Group>
           <Button type="button" variant="ghost" className="self-start" disabled={options.length >= 12} onClick={addOption}><Plus data-icon="inline-start" />Добавить вариант</Button>
         </div>
         <FieldSet className="gap-2 rounded-xl bg-card p-3 shadow-sm"><FieldLegend variant="label">Настройки</FieldLegend>

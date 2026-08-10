@@ -27,7 +27,7 @@ The Mini App has three sections:
 
 A poll has a question, 2–12 ordered options, and an optional multiple-answer setting. Polls are anonymous regular polls and explicitly allow voters to change or retract their choices. The bell beside an option directly enables or disables count notifications for that option; new options have the bell enabled by default.
 
-Count notifications are disabled by default. Enabling the poll-level setting starts at 10 people and lets the organizer change the value before publication. When Telegram reports that an option with an enabled bell reached the threshold, the bot sends one message to the Chat topic. Options with a disabled bell never trigger notifications, and further updates never duplicate a notification already sent for an option.
+Count notifications are enabled by default at 10 people, and the organizer can change or disable the poll-level setting before publication. Bell controls are shown beside the options only while the poll-level setting is enabled. When Telegram reports that an option with an enabled bell reached the threshold, the bot sends one message to the Chat topic. Options with a disabled bell never trigger notifications, and further updates never duplicate a notification already sent for an option.
 
 The global **Weather** action sends the current Minsk weather to the configured Telegram chat/topic. It is independent of matches, has no daily cap, and can be pressed repeatedly.
 

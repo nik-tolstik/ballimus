@@ -138,15 +138,27 @@ test('creates a native poll with an option threshold notification', async ({ pag
   await page.getByLabel('Вопрос', { exact: true }).fill('Кто играет в воскресенье?')
   await page.getByLabel('Вариант 1', { exact: true }).fill('Буду')
   await page.getByLabel('Вариант 2', { exact: true }).fill('Не буду')
+  await expect(page.getByRole('button', { name: 'Удалить вариант 1', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Удалить вариант 2', exact: true })).toBeDisabled()
+  const notification = page.getByRole('switch', { name: 'Оповестить о количестве', exact: true })
+  await expect(notification).toBeChecked()
+  await expect(page.getByLabel('Количество для оповещения', { exact: true })).toHaveValue('10')
   const secondOptionNotification = page.getByRole('button', { name: 'Оповещение для варианта 2', exact: true })
   await expect(secondOptionNotification).toHaveAttribute('aria-pressed', 'true')
   await secondOptionNotification.click()
   await expect(secondOptionNotification).toHaveAttribute('aria-pressed', 'false')
-  const notification = page.getByRole('switch', { name: 'Оповестить о количестве', exact: true })
+  await notification.click()
   await expect(notification).not.toBeChecked()
+  await expect(page.getByRole('button', { name: /Оповещение для варианта/u })).toHaveCount(0)
   await notification.click()
   await expect(notification).toBeChecked()
-  await expect(page.getByLabel('Количество для оповещения', { exact: true })).toHaveValue('10')
+  await expect(secondOptionNotification).toHaveAttribute('aria-pressed', 'false')
+  await page.getByRole('button', { name: 'Добавить вариант', exact: true }).click()
+  await page.getByLabel('Вариант 3', { exact: true }).fill('Возможно')
+  await expect(page.getByRole('button', { name: 'Удалить вариант 3', exact: true })).toBeEnabled()
+  await page.getByRole('button', { name: 'Переместить вариант 3', exact: true }).press('ArrowUp')
+  await expect(page.getByLabel('Вариант 2', { exact: true })).toHaveValue('Возможно')
+  await expect(page.getByLabel('Вариант 3', { exact: true })).toHaveValue('Не буду')
   await expect(page.getByText('Голос можно отменять', { exact: true })).toBeVisible()
   await expect(page.getByLabel('Анонимное голосование', { exact: true })).toHaveCount(0)
   const multipleAnswers = page.getByRole('switch', { name: 'Несколько ответов', exact: true })
@@ -159,6 +171,7 @@ test('creates a native poll with an option threshold notification', async ({ pag
     question: 'Кто играет в воскресенье?',
     options: [
       { text: 'Буду', notificationEnabled: true },
+      { text: 'Возможно', notificationEnabled: true },
       { text: 'Не буду', notificationEnabled: false },
     ],
     notificationThreshold: 10,

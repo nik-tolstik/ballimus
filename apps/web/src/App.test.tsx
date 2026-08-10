@@ -24,7 +24,7 @@ describe('information-card Mini App', () => {
     expect('roster' in match).toBe(false)
   })
 
-  it('requires valid native poll options and defaults notifications to disabled', () => {
+  it('requires valid native poll options and notification thresholds', () => {
     const valid = {
       question: 'Кто играет?',
       options: [
