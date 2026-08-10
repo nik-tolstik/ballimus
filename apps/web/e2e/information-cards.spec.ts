@@ -25,7 +25,11 @@ async function mockOwnerApp(page: Page): Promise<{ readonly weatherRequests: str
     const request = route.request()
     const pathname = new URL(request.url()).pathname
     const json = (body: unknown) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) })
-    if (request.method() === 'GET' && pathname === '/v1/matches') return json({ matches: [match] })
+    if (request.method() === 'GET' && pathname === '/v1/matches') return json({ matches: [
+      match,
+      { ...match, id: '2', schedule: { ...match.schedule, time: '21:00' }, venue: { ...venue, id: '2', name: 'BOX365 Второй' }, fieldPriceRubles: 121, publicCard: { ...match.publicCard, publicationState: 'published' } },
+      { ...match, id: '3', schedule: { ...match.schedule, time: '22:00' }, venue: { ...venue, id: '3', name: 'BOX365 Третий' }, fieldPriceRubles: 122, publicCard: { ...match.publicCard, publicationState: 'failed', lastError: 'Telegram unavailable' } },
+    ] })
     if (request.method() === 'GET' && pathname === '/v1/venues') return json({ venues: [venue] })
     if (request.method() === 'POST' && pathname === '/v1/weather/current') { weatherRequests.push(pathname); return json({ sent: true, observedAt: '2026-08-10T12:00' }) }
     return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ code: 'NOT_FOUND' }) })
@@ -46,7 +50,9 @@ test('shows static information cards without roster or voting controls', async (
   await mapLink.click()
   await expect(await mapPage).toHaveURL(venue.mapUrl)
   await expect(page.getByText('120 руб.', { exact: true })).toBeVisible()
-  await expect(page.getByText('Публикуется', { exact: true })).toBeVisible()
+  await expect(page.getByText('Публикуется', { exact: true })).toHaveAttribute('data-variant', 'info')
+  await expect(page.getByText('Опубликована', { exact: true })).toHaveAttribute('data-variant', 'success')
+  await expect(page.getByText('Ошибка публикации', { exact: true })).toHaveAttribute('data-variant', 'destructive')
   await expect(page.getByRole('status', { name: 'Публикация карточки' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Карта', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /Редактировать матч/u })).toHaveCount(0)
