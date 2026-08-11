@@ -40,6 +40,7 @@ import { useTelegramWebApp, type TelegramSession } from './telegram'
 
 interface AppProps { readonly telegramSession?: TelegramSession }
 type AuthFailure = 'unauthorized' | 'expired' | undefined
+const POLL_RESULTS_REFRESH_INTERVAL_MS = 3_000
 
 function requestKey(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
@@ -77,7 +78,7 @@ export function App({ telegramSession }: AppProps = {}) {
   const [authFailure, setAuthFailure] = useState<AuthFailure>()
   const queryEnabled = session.status === 'ready' && session.initData !== undefined && authFailure === undefined
   const matchesQuery = useListOwnerMatches(undefined, { query: { enabled: queryEnabled } })
-  const pollsQuery = useListOwnerPolls({ query: { enabled: queryEnabled } })
+  const pollsQuery = useListOwnerPolls({ query: { enabled: queryEnabled, refetchInterval: tab === 'polls' ? POLL_RESULTS_REFRESH_INTERVAL_MS : false, refetchOnWindowFocus: true } })
   const venuesQuery = useListOwnerVenues({ includeArchived: true }, { query: { enabled: queryEnabled } })
   const matches = useMemo(() => matchesQuery.data?.matches.map(normalizeMatch) ?? [], [matchesQuery.data])
   const venues = useMemo(() => venuesQuery.data?.venues.map(normalizeVenue) ?? [], [venuesQuery.data])

@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 
 import { Inject, Injectable, UnauthorizedException } from "@nestjs/common";
-import { OutboxRepository, TelegramPollsRepository, type AppDatabase } from "@football/db";
+import { OutboxRepository, TelegramPollsRepository, type AppDatabase, type TelegramPoll } from "@football/db";
 
 import { API_CONFIG, type ApiConfig } from "../config/api-config.js";
 import { APP_DATABASE } from "../database/database.constants.js";
@@ -11,6 +11,16 @@ export interface ParsedTelegramPollUpdate {
   readonly pollId: string;
   readonly options: readonly { readonly text: string; readonly voterCount: number }[];
   readonly isClosed: boolean;
+}
+
+export function pollThresholdNotificationTarget(
+  config: Pick<ApiConfig, "telegramChatTopicId">,
+  poll: Pick<TelegramPoll, "telegramChatId">,
+): { readonly telegramChatId: bigint; readonly telegramTopicId: bigint } {
+  return {
+    telegramChatId: poll.telegramChatId,
+    telegramTopicId: config.telegramChatTopicId,
+  };
 }
 
 function objectValue(value: unknown): Record<string, unknown> | undefined {
@@ -69,12 +79,12 @@ export class TelegramPollUpdateService {
       if (current === undefined) return 0;
       const applied = await polls.applyTelegramUpdate(current, update.options, update.isClosed);
       const outbox = new OutboxRepository(tx);
+      const notificationTarget = pollThresholdNotificationTarget(this.config, current);
       for (const trigger of applied.triggers) {
         await outbox.insertInTransaction({
           eventType: "send_poll_threshold_notification",
           deduplicationKey: `poll:${current.id.toString(10)}:option:${String(trigger.optionIndex)}:threshold:${String(trigger.threshold)}`,
-          telegramChatId: current.telegramChatId,
-          telegramTopicId: current.telegramTopicId,
+          ...notificationTarget,
           payload: {
             pollId: current.id.toString(10),
             question: current.question,

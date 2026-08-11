@@ -100,7 +100,7 @@ describe("information-card PostgreSQL schema", () => {
         { text: "Не буду", notificationEnabled: false },
       ],
       notificationThreshold: 10,
-      isAnonymous: true,
+      isAnonymous: false,
       allowsMultipleAnswers: false,
       allowsRevoting: true,
       creatorTelegramUserId: OWNER_ID,

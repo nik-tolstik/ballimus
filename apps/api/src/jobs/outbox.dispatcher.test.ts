@@ -69,7 +69,7 @@ describe("OutboxDispatcher", () => {
       {
         getById: vi.fn().mockResolvedValue({
           id: 7n, telegramChatId: -100n, telegramTopicId: 2n, question: "Играем?",
-          options: [{ text: "Да", notificationEnabled: true }, { text: "Нет", notificationEnabled: false }], isAnonymous: true,
+          options: [{ text: "Да", notificationEnabled: true }, { text: "Нет", notificationEnabled: false }], isAnonymous: false,
           allowsMultipleAnswers: false, allowsRevoting: true, publicationState: "pending",
         }),
         markPublished,
@@ -83,7 +83,7 @@ describe("OutboxDispatcher", () => {
       messageThreadId: 2n,
       question: "Играем?",
       options: ["Да", "Нет"],
-      isAnonymous: true,
+      isAnonymous: false,
       allowsMultipleAnswers: false,
       allowsRevoting: true,
     });

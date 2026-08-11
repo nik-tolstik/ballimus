@@ -199,7 +199,7 @@ export const telegramPolls = pgTable(
     question: text("question").notNull(),
     options: jsonb("options").$type<TelegramPollOptionState[]>().notNull(),
     notificationThreshold: integer("notification_threshold"),
-    isAnonymous: boolean("is_anonymous").notNull().default(true),
+    isAnonymous: boolean("is_anonymous").notNull().default(false),
     allowsMultipleAnswers: boolean("allows_multiple_answers").notNull().default(false),
     allowsRevoting: boolean("allows_revoting").notNull().default(true),
     publicationState: text("publication_state", { enum: pollPublicationStates }).notNull().default("pending"),

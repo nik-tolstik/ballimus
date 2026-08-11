@@ -14,6 +14,7 @@ import {
   type AppDatabase,
   type Match as DbMatch,
   type MatchMessage,
+  type CreateTelegramPollInput,
   type TelegramPoll as DbTelegramPoll,
   type TransactionRepositories,
   type Venue as DbVenue,
@@ -40,6 +41,24 @@ const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1_000;
 
 type ReadRepositories = Pick<TransactionRepositories, "matches" | "matchMessages" | "polls" | "venues" | "outbox">;
 type MutationRepositories = Pick<TransactionRepositories, "matches" | "matchMessages" | "polls" | "venues" | "outbox" | "idempotency">;
+
+export function pollCreationInput(
+  config: Pick<ApiConfig, "telegramGroupChatId" | "telegramGeneralTopicId">,
+  ownerTelegramUserId: bigint,
+  input: PollCreateDto,
+): CreateTelegramPollInput {
+  return {
+    telegramChatId: config.telegramGroupChatId,
+    telegramTopicId: config.telegramGeneralTopicId,
+    question: input.question,
+    options: input.options,
+    notificationThreshold: input.notificationThreshold ?? null,
+    isAnonymous: false,
+    allowsMultipleAnswers: input.allowsMultipleAnswers,
+    allowsRevoting: true,
+    creatorTelegramUserId: ownerTelegramUserId,
+  };
+}
 
 function readRepositories(db: AppDatabase): ReadRepositories {
   return {
@@ -143,17 +162,7 @@ export class OwnerRestService {
     this.assertOwner(ownerTelegramUserId);
     const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "create-poll", input }, 201, async (repositories) => {
       try {
-        const poll = await repositories.polls.create({
-          telegramChatId: this.config.telegramGroupChatId,
-          telegramTopicId: this.config.telegramChatTopicId,
-          question: input.question,
-          options: input.options,
-          notificationThreshold: input.notificationThreshold ?? null,
-          isAnonymous: true,
-          allowsMultipleAnswers: input.allowsMultipleAnswers,
-          allowsRevoting: true,
-          creatorTelegramUserId: ownerTelegramUserId,
-        });
+        const poll = await repositories.polls.create(pollCreationInput(this.config, ownerTelegramUserId, input));
         await repositories.outbox.insertInTransaction({
           eventType: "publish_poll",
           deduplicationKey: `poll:${poll.id.toString(10)}:publish`,

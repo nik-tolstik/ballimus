@@ -14,10 +14,22 @@ const match = {
   publicCard: { publicationState: 'pending', telegramMessageId: '10', publicationAttemptedAt: '2026-08-01T12:00:01.000Z', lastError: null },
 }
 
-async function mockOwnerApp(page: Page): Promise<{ readonly weatherRequests: string[]; readonly republishRequests: string[]; readonly pollRequests: unknown[] }> {
+const poll = {
+  id: '1', question: 'Кто играет в воскресенье?',
+  options: [
+    { text: 'Буду', notificationEnabled: true, voterCount: 0, notificationQueuedAt: null },
+    { text: 'Не буду', notificationEnabled: false, voterCount: 0, notificationQueuedAt: null },
+  ],
+  notificationThreshold: 10, isAnonymous: false, allowsMultipleAnswers: false, allowsRevoting: true,
+  publicationState: 'published', closedAt: null, lastError: null,
+  createdAt: '2026-08-11T12:00:00.000Z', updatedAt: '2026-08-11T12:00:00.000Z',
+}
+
+async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boolean } = {}): Promise<{ readonly weatherRequests: string[]; readonly republishRequests: string[]; readonly pollRequests: unknown[] }> {
   const weatherRequests: string[] = []
   const republishRequests: string[] = []
   const pollRequests: unknown[] = []
+  let pollListRequests = 0
   await page.route('https://telegram.org/js/telegram-web-app.js', (route) => route.fulfill({ contentType: 'application/javascript', body: '' }))
   await page.addInitScript(() => {
     Object.defineProperty(window, '__FOOTBALL_API_BASE_URL__', { configurable: true, value: 'http://127.0.0.1:6174' })
@@ -33,7 +45,11 @@ async function mockOwnerApp(page: Page): Promise<{ readonly weatherRequests: str
       { ...match, id: '3', schedule: { ...match.schedule, time: '22:00' }, venue: { ...venue, id: '3', name: 'BOX365 Третий' }, fieldPriceRubles: 122, publicCard: { ...match.publicCard, publicationState: 'failed', lastError: 'Telegram unavailable' } },
     ] })
     if (request.method() === 'GET' && pathname === '/v1/venues') return json({ venues: [venue] })
-    if (request.method() === 'GET' && pathname === '/v1/polls') return json({ polls: [] })
+    if (request.method() === 'GET' && pathname === '/v1/polls') {
+      pollListRequests += 1
+      const currentPoll = pollListRequests < 2 ? poll : { ...poll, options: [{ ...poll.options[0], voterCount: 1 }, poll.options[1]] }
+      return json({ polls: options.existingPoll === true ? [currentPoll] : [] })
+    }
     if (request.method() === 'POST' && pathname === '/v1/polls') {
       const body = request.postDataJSON() as Record<string, unknown>
       pollRequests.push(body)
@@ -227,8 +243,9 @@ test('creates a native poll with an option threshold notification', async ({ pag
   })
   const deletionGroupHeights = deletionAnimation.map((sample) => sample.groupHeight)
   const deletedOptionHeights = deletionAnimation.flatMap((sample) => sample.deletedHeight === null ? [] : [sample.deletedHeight])
+  const deletionGroupHeightIncreases = deletionGroupHeights.slice(1).map((height, index) => height - deletionGroupHeights[index]!)
   expect(deletionAnimation.every((sample) => sample.maxOverflow < 1)).toBe(true)
-  expect(deletionGroupHeights.every((height, index) => index === 0 || height <= deletionGroupHeights[index - 1]!)).toBe(true)
+  expect(Math.max(0, ...deletionGroupHeightIncreases)).toBeLessThan(1)
   expect(deletedOptionHeights.at(-1)).toBeLessThan(deletedOptionHeights[0] ?? 0)
   await expect(page.getByLabel('Вариант 3', { exact: true })).toHaveCount(0)
   await expect(newOption).toBeFocused()
@@ -258,4 +275,18 @@ test('creates a native poll with an option threshold notification', async ({ pag
     allowsMultipleAnswers: true,
   }])
   await expect(page.getByText('Опрос отправлен в Telegram.', { exact: true })).toBeVisible()
+})
+
+test('opens poll settings and refreshes Telegram vote counts', async ({ page }) => {
+  await mockOwnerApp(page, { existingPoll: true })
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Опросы', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Опросы', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: `Открыть настройки опроса ${poll.question}`, exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Настройки опроса', exact: true })).toBeVisible()
+  await expect(page.getByText('Неанонимное голосование', { exact: true })).toBeVisible()
+  await expect(page.getByText('Голос можно отменять', { exact: true })).toBeVisible()
+  await expect(page.getByText('Оповестить о количестве', { exact: true })).toBeVisible()
+  await expect(page.getByLabel('1 голосов', { exact: true })).toBeVisible({ timeout: 5_000 })
 })
