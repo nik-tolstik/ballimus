@@ -204,6 +204,32 @@ test('creates a native poll with an option threshold notification', async ({ pag
   await expect(page.getByLabel('Вариант 3', { exact: true })).toHaveValue('')
   await expect(page.getByRole('button', { name: 'Удалить вариант 3', exact: true })).toBeVisible()
   await page.getByLabel('Вариант 3', { exact: true }).press('Backspace')
+  const deletionAnimation = await page.evaluate(async () => {
+    const samples: { groupHeight: number; deletedHeight: number | null; maxOverflow: number }[] = []
+    for (let frame = 0; frame < 16; frame += 1) {
+      const group = document.querySelector('input[aria-label="Новый вариант"]')?.closest('ul')
+      if (group === null || group === undefined) throw new Error('Poll option group is unavailable during deletion')
+      const groupRect = group.getBoundingClientRect()
+      const rows = [...group.querySelectorAll(':scope > li')]
+      const deletedRow = group.querySelector('input[aria-label="Вариант 3"]')?.closest('li')
+      const overflow = rows.flatMap((row) => {
+        const rect = row.getBoundingClientRect()
+        return [rect.bottom - groupRect.bottom, groupRect.top - rect.top]
+      })
+      samples.push({
+        groupHeight: groupRect.height,
+        deletedHeight: deletedRow?.getBoundingClientRect().height ?? null,
+        maxOverflow: Math.max(0, ...overflow),
+      })
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    }
+    return samples
+  })
+  const deletionGroupHeights = deletionAnimation.map((sample) => sample.groupHeight)
+  const deletedOptionHeights = deletionAnimation.flatMap((sample) => sample.deletedHeight === null ? [] : [sample.deletedHeight])
+  expect(deletionAnimation.every((sample) => sample.maxOverflow < 1)).toBe(true)
+  expect(deletionGroupHeights.every((height, index) => index === 0 || height <= deletionGroupHeights[index - 1]!)).toBe(true)
+  expect(deletedOptionHeights.at(-1)).toBeLessThan(deletedOptionHeights[0] ?? 0)
   await expect(page.getByLabel('Вариант 3', { exact: true })).toHaveCount(0)
   await expect(newOption).toBeFocused()
   await newOption.fill('Возможно')

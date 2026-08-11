@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { motion, Reorder, useDragControls, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion, Reorder, useDragControls, useReducedMotion } from 'framer-motion'
 import { Bell, Check, GripVertical, ListChecks, Plus, RotateCcw, Send, Trash2, UsersRound, type LucideIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -154,6 +154,8 @@ function PollOptionRow({
     onDragStart={() => setDragging(true)}
     onDragEnd={() => setDragging(false)}
     whileDrag={{ scale: 1.015 }}
+    {...(reduceMotion ? {} : { exit: { height: 0, marginBottom: -12, opacity: 0, overflow: 'hidden' } })}
+    transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
     className={cn('relative list-none rounded-xl', dragging && 'z-10 shadow-lg')}
   >
     <motion.div
@@ -314,7 +316,9 @@ export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollE
         <div className="flex flex-col gap-3">
           <FieldLabel>Варианты ответа</FieldLabel>
           <Reorder.Group axis="y" values={options.map((item) => item.key)} onReorder={reorderOptions} className="flex flex-col gap-3" layoutScroll>
-            {options.map((item, index) => <PollOptionRow key={item.key} item={item} index={index} notificationsEnabled={notificationThreshold !== null} inputRef={(node) => { if (node === null) optionInputRefs.current.delete(item.key); else optionInputRefs.current.set(item.key, node) }} onTextChange={updateOptionText} onUpdate={updateOption} onDelete={deleteOption} onMove={moveOption} />)}
+            <AnimatePresence initial={false}>
+              {options.map((item, index) => <PollOptionRow key={item.key} item={item} index={index} notificationsEnabled={notificationThreshold !== null} inputRef={(node) => { if (node === null) optionInputRefs.current.delete(item.key); else optionInputRefs.current.set(item.key, node) }} onTextChange={updateOptionText} onUpdate={updateOption} onDelete={deleteOption} onMove={moveOption} />)}
+            </AnimatePresence>
           </Reorder.Group>
         </div>
         <FieldSet className="gap-0"><FieldLegend variant="label" className="mb-0 px-3">Настройки</FieldLegend>
