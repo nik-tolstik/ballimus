@@ -42,7 +42,7 @@ Native polls require one separately authorized Telegram operation after the API 
 node apps/api/dist/telegram/webhook-config-cli.js --url https://<production-api>/v1/telegram/webhook --confirm-telegram-webhook
 ```
 
-Do not run this step without authorization for that production webhook change. The command registers only `poll` updates and never prints the bot token or derived secret.
+Do not run this step without authorization for that production webhook change. The command registers only `poll` and `poll_answer` updates and never prints the bot token or derived secret.
 
 ## Normal releases after FBOT-20
 

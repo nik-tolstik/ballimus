@@ -140,7 +140,7 @@ async function main() {
     waitForHttp(`${localWebUrl}/`, "the local Web app"),
   ]);
 
-  console.info(`\nLocal browser development is ready.\n  Web: ${localWebUrl}\n  API: http://127.0.0.1:6000\n\nThe signed local owner session is held only by the loopback Vite process. No ngrok tunnel is started.\n`);
+  console.info(`\nLocal browser development is ready.\n  Web: ${localWebUrl}\n  API: http://127.0.0.1:6000\n\nThe signed local owner session is held only by the loopback Vite process. The public Cloudflare Tunnel route is not used.\n`);
   await new Promise(() => {});
 }
 

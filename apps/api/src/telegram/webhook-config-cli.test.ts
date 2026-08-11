@@ -9,14 +9,14 @@ describe("Telegram poll webhook configuration", () => {
     expect(() => validateTelegramWebhookUrl("https://api.example.test/other")).toThrow("must end");
   });
 
-  it("registers only poll updates with a secret token", async () => {
+  it("registers poll totals and voter answers with a secret token", async () => {
     const fetchImplementation = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     await registerTelegramPollWebhook("123456:test-token", "https://api.example.test/v1/telegram/webhook", fetchImplementation);
     expect(fetchImplementation).toHaveBeenCalledWith(
       expect.stringContaining("/setWebhook"),
       expect.objectContaining({
         method: "POST",
-        body: expect.stringContaining('"allowed_updates":["poll"]'),
+        body: expect.stringContaining('"allowed_updates":["poll","poll_answer"]'),
       }),
     );
   });

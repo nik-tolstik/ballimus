@@ -141,6 +141,13 @@
       "when": 1786444800008,
       "tag": "0019_remove_poll_outbox",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1786459901193,
+      "tag": "0020_poll_voter_answers",
+      "breakpoints": true
     }
   ]
 }

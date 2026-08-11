@@ -7,12 +7,12 @@
 
 - This repository has two distinct development modes. Choose the mode from the user's wording before starting any process; there is no universal default.
 - If the user asks for the "browser server", "browser mode", to open the app in a browser, or to inspect UI outside Telegram, run `pnpm dev:browser` from the repository root. Do not run `pnpm dev` for these requests.
-- `pnpm dev:browser` starts API and Vite on loopback with a signed local-owner fixture. It does not start ngrok. Open `http://127.0.0.1:6173` in the browser.
-- Run `pnpm dev` only when the user explicitly asks for Telegram, ngrok, HTTPS tunnels, a Mini App opened from the test bot, or webhook testing. This mode opens the API and Web ngrok tunnels and expects real Telegram `initData`.
+- `pnpm dev:browser` starts API and Vite on loopback with a signed local-owner fixture. It does not use the public Cloudflare Tunnel route. Open `http://127.0.0.1:6173` in the browser.
+- Run `pnpm dev` only when the user explicitly asks for Telegram, the persistent HTTPS tunnel, a Mini App opened from the test bot, or webhook testing. This mode expects the local Cloudflare Tunnel connector to be healthy and uses real Telegram `initData`.
 - Never open the loopback Vite URL from `pnpm dev` as an ordinary browser test: it has no Telegram `initData` and correctly renders the owner-access error. Switch to `pnpm dev:browser` instead.
 - Before switching modes, stop the previous development process so ports `6000` and `6173` are not shared by stale API or Vite instances.
 - Start the local PostgreSQL container separately in Docker Desktop and apply migrations explicitly with `pnpm db:migrate` when required by the task.
-- Keep `.env.local`, the ngrok configuration, the bot, group, and database strictly local/non-production.
+- Keep `.env.local`, the Cloudflare Tunnel connector, the bot, group, and database strictly local/non-production.
 - When creating a worktree, copy every existing non-example `.env*` file from the source checkout before starting the project. Keep those files local, do not print their contents, and never commit them.
 - After a worktree branch is merged into `main`, remove that worktree and its local branch unless the user explicitly asks to keep them.
 - Start every non-trivial implementation task with an issue in the `FBOT` team and Football Bot project. Before implementation, verify the issue has no active executor, move it to `In Progress`, and assign it to the agent when possible. Use a dedicated worktree and an issue-based branch name; move the issue to `Done` only after the pull request is merged, CI is green, and the change is in `main`. See `docs/linear.md` for the complete workflow and exceptions.

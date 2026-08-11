@@ -8,7 +8,7 @@ packages/
   api-client/ generated OpenAPI React Query client
   db/        Drizzle schema, migrations, repositories, outbox
   domain/    card, poll-notification, and weather formatting
-scripts/     local PostgreSQL, ngrok, contract, and release verification helpers
+scripts/     local PostgreSQL, Cloudflare Tunnel, contract, and release verification helpers
 docs/        product and operational documentation
 ```
 

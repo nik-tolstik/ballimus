@@ -37,7 +37,7 @@ export async function registerTelegramPollWebhook(
     body: JSON.stringify({
       url,
       secret_token: deriveTelegramWebhookSecret(token),
-      allowed_updates: ["poll"],
+      allowed_updates: ["poll", "poll_answer"],
     }),
     signal: AbortSignal.timeout(5_000),
   });
