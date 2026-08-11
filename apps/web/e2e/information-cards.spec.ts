@@ -146,7 +146,34 @@ test('creates a native poll with an option threshold notification', async ({ pag
   await expect(page.getByRole('button', { name: 'Добавить вариант', exact: true })).toHaveCount(0)
   await expect(publishPoll).toBeDisabled()
   await page.getByLabel('Вопрос', { exact: true }).fill('Кто играет в воскресенье?')
+  await page.waitForTimeout(250)
+  const draftTopBeforeCreation = await newOption.evaluate((input) => {
+    const row = input.closest('li')
+    if (row === null) throw new Error('New poll option row is unavailable')
+    return row.getBoundingClientRect().top
+  })
   await newOption.fill('Буду')
+  const creationAnimation = await page.evaluate(async () => {
+    const samples: { createdTop: number; draftTop: number; draftHeight: number }[] = []
+    for (let frame = 0; frame < 10; frame += 1) {
+      const createdRow = document.querySelector('input[aria-label="Вариант 1"]')?.closest('li')
+      const draftRow = document.querySelector('input[aria-label="Новый вариант"]')?.closest('li')
+      if (createdRow === null || createdRow === undefined || draftRow === null || draftRow === undefined) throw new Error('Poll option animation rows are unavailable')
+      const createdRect = createdRow.getBoundingClientRect()
+      const draftRect = draftRow.getBoundingClientRect()
+      samples.push({ createdTop: createdRect.top, draftTop: draftRect.top, draftHeight: draftRect.height })
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    }
+    return samples
+  })
+  const createdTops = creationAnimation.map((sample) => sample.createdTop)
+  const draftTops = creationAnimation.map((sample) => sample.draftTop)
+  const draftHeights = creationAnimation.map((sample) => sample.draftHeight)
+  expect(Math.max(...createdTops) - Math.min(...createdTops)).toBeLessThan(1)
+  expect(Math.abs(createdTops[0]! - draftTopBeforeCreation)).toBeLessThan(1)
+  expect(Math.max(...draftTops) - Math.min(...draftTops)).toBeLessThan(1)
+  expect(draftHeights.at(-1)).toBeGreaterThan(draftHeights[0] ?? 0)
+  expect(draftHeights.every((height, index) => index === 0 || height >= draftHeights[index - 1]!)).toBe(true)
   await expect(page.getByLabel('Вариант 1', { exact: true })).toHaveValue('Буду')
   await expect(newOption).toBeVisible()
   await expect(publishPoll).toBeDisabled()

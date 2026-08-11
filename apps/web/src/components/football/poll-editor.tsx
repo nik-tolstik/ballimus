@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { Reorder, useDragControls } from 'framer-motion'
+import { motion, Reorder, useDragControls, useReducedMotion } from 'framer-motion'
 import { Bell, Check, GripVertical, ListChecks, Plus, RotateCcw, Send, Trash2, UsersRound, type LucideIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -24,10 +24,11 @@ export interface PollEditorValues {
 
 interface PollEditorOptionItem extends PollEditorOptionValues {
   readonly isDraft: boolean
+  readonly animateEntry: boolean
 }
 
-function option(key: number, isDraft: boolean): PollEditorOptionItem {
-  return { key: String(key), text: '', notificationEnabled: true, isDraft }
+function option(key: number, isDraft: boolean, animateEntry = true): PollEditorOptionItem {
+  return { key: String(key), text: '', notificationEnabled: true, isDraft, animateEntry }
 }
 
 const settingTone = {
@@ -142,11 +143,12 @@ function PollOptionRow({
   readonly onMove: (key: string, direction: -1 | 1) => void
 }) {
   const dragControls = useDragControls()
+  const reduceMotion = useReducedMotion()
   const [dragging, setDragging] = useState(false)
   const optionNumber = String(index + 1)
 
   return <Reorder.Item
-    value={item}
+    value={item.key}
     dragListener={false}
     dragControls={dragControls}
     onDragStart={() => setDragging(true)}
@@ -154,40 +156,46 @@ function PollOptionRow({
     whileDrag={{ scale: 1.015 }}
     className={cn('relative list-none rounded-xl', dragging && 'z-10 shadow-lg')}
   >
-    <Field className="rounded-xl bg-card p-3 shadow-sm transition-shadow">
-      <div className="flex items-center gap-2">
-        {item.isDraft ? <span className="flex size-8 shrink-0 items-center justify-center text-muted-foreground" aria-hidden="true"><Plus className="size-4" /></span> : <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="touch-none cursor-grab text-muted-foreground active:cursor-grabbing"
-          aria-label={`Переместить вариант ${optionNumber}`}
-          onPointerDown={(event) => dragControls.start(event)}
-          onKeyDown={(event) => {
-            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
-            event.preventDefault()
-            onMove(item.key, event.key === 'ArrowUp' ? -1 : 1)
-          }}
-        >
-          <GripVertical />
-        </Button>}
-        <Input
-          ref={inputRef}
-          aria-label={item.isDraft ? 'Новый вариант' : `Вариант ${optionNumber}`}
-          maxLength={100}
-          value={item.text}
-          onChange={(event) => onTextChange(item.key, event.target.value)}
-          onKeyDown={(event) => {
-            if (item.isDraft || item.text !== '' || (event.key !== 'Backspace' && event.key !== 'Delete')) return
-            event.preventDefault()
-            onDelete(item.key)
-          }}
-          placeholder={item.isDraft ? 'Новый вариант' : `Вариант ${optionNumber}`}
-        />
-        {!item.isDraft && notificationsEnabled ? <OptionNotificationToggle optionNumber={optionNumber} enabled={item.notificationEnabled} onEnabledChange={(notificationEnabled) => onUpdate(item.key, { notificationEnabled })} /> : null}
-        {item.isDraft ? null : <Button type="button" variant="ghost" size="icon" aria-label={`Удалить вариант ${optionNumber}`} onClick={() => onDelete(item.key)}><Trash2 /></Button>}
-      </div>
-    </Field>
+    <motion.div
+      initial={item.animateEntry && !reduceMotion ? { height: 0, opacity: 0, overflow: 'hidden' } : false}
+      animate={{ height: 'auto', opacity: 1, transitionEnd: { overflow: 'visible' } }}
+      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <Field className="rounded-xl bg-card p-3 shadow-sm transition-shadow">
+        <div className="flex items-center gap-2">
+          {item.isDraft ? <span className="flex size-8 shrink-0 items-center justify-center text-muted-foreground" aria-hidden="true"><Plus className="size-4" /></span> : <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="touch-none cursor-grab text-muted-foreground active:cursor-grabbing"
+            aria-label={`Переместить вариант ${optionNumber}`}
+            onPointerDown={(event) => dragControls.start(event)}
+            onKeyDown={(event) => {
+              if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+              event.preventDefault()
+              onMove(item.key, event.key === 'ArrowUp' ? -1 : 1)
+            }}
+          >
+            <GripVertical />
+          </Button>}
+          <Input
+            ref={inputRef}
+            aria-label={item.isDraft ? 'Новый вариант' : `Вариант ${optionNumber}`}
+            maxLength={100}
+            value={item.text}
+            onChange={(event) => onTextChange(item.key, event.target.value)}
+            onKeyDown={(event) => {
+              if (item.isDraft || item.text !== '' || (event.key !== 'Backspace' && event.key !== 'Delete')) return
+              event.preventDefault()
+              onDelete(item.key)
+            }}
+            placeholder={item.isDraft ? 'Новый вариант' : `Вариант ${optionNumber}`}
+          />
+          {!item.isDraft && notificationsEnabled ? <OptionNotificationToggle optionNumber={optionNumber} enabled={item.notificationEnabled} onEnabledChange={(notificationEnabled) => onUpdate(item.key, { notificationEnabled })} /> : null}
+          {item.isDraft ? null : <Button type="button" variant="ghost" size="icon" aria-label={`Удалить вариант ${optionNumber}`} onClick={() => onDelete(item.key)}><Trash2 /></Button>}
+        </div>
+      </Field>
+    </motion.div>
   </Reorder.Item>
 }
 
@@ -211,7 +219,7 @@ export function validatePollEditorValues(values: PollEditorValues): string | und
 
 export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollEditorValues) => void; readonly saving: boolean }) {
   const [question, setQuestion] = useState('')
-  const [options, setOptions] = useState<PollEditorOptionItem[]>([option(1, true)])
+  const [options, setOptions] = useState<PollEditorOptionItem[]>([option(1, true, false)])
   const [notificationThreshold, setNotificationThreshold] = useState<string | null>('10')
   const [allowsMultipleAnswers, setAllowsMultipleAnswers] = useState(false)
   const [validation, setValidation] = useState('')
@@ -271,6 +279,17 @@ export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollE
     })
     setValidation('')
   }
+  const reorderOptions = (orderedKeys: string[]) => {
+    setOptions((current) => {
+      const optionsByKey = new Map(current.map((item) => [item.key, item]))
+      const ordered = orderedKeys.flatMap((key) => {
+        const item = optionsByKey.get(key)
+        return item === undefined ? [] : [item]
+      })
+      return [...ordered.filter((item) => !item.isDraft), ...ordered.filter((item) => item.isDraft)]
+    })
+    setValidation('')
+  }
   const updateThreshold = (threshold: string | null) => {
     setNotificationThreshold(threshold)
     setValidation('')
@@ -294,7 +313,7 @@ export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollE
         <Field data-invalid={validation.startsWith('Введите вопрос')}><FieldLabel htmlFor="poll-question">Вопрос</FieldLabel><Input id="poll-question" maxLength={300} value={question} onChange={(event) => { setQuestion(event.target.value); setValidation('') }} /></Field>
         <div className="flex flex-col gap-3">
           <FieldLabel>Варианты ответа</FieldLabel>
-          <Reorder.Group axis="y" values={options} onReorder={(next) => { setOptions([...next.filter((item) => !item.isDraft), ...next.filter((item) => item.isDraft)]); setValidation('') }} className="flex flex-col gap-3" layoutScroll>
+          <Reorder.Group axis="y" values={options.map((item) => item.key)} onReorder={reorderOptions} className="flex flex-col gap-3" layoutScroll>
             {options.map((item, index) => <PollOptionRow key={item.key} item={item} index={index} notificationsEnabled={notificationThreshold !== null} inputRef={(node) => { if (node === null) optionInputRefs.current.delete(item.key); else optionInputRefs.current.set(item.key, node) }} onTextChange={updateOptionText} onUpdate={updateOption} onDelete={deleteOption} onMove={moveOption} />)}
           </Reorder.Group>
         </div>
