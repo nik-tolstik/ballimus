@@ -134,6 +134,13 @@
       "when": 1786444800007,
       "tag": "0018_manual_poll_publication",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1786444800008,
+      "tag": "0019_remove_poll_outbox",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { parseTelegramPollUpdate, pollThresholdNotificationTarget } from "./telegram-poll-update.service.js";
+import { parseTelegramPollUpdate, pollThresholdNotificationTarget, sendPollThresholdNotifications } from "./telegram-poll-update.service.js";
 
 describe("Telegram poll webhook parsing", () => {
   it("accepts a native poll count update", () => {
@@ -31,5 +31,23 @@ describe("Telegram poll webhook parsing", () => {
       { telegramChatTopicId: 42n },
       { telegramChatId: -100n },
     )).toEqual({ telegramChatId: -100n, telegramTopicId: 42n });
+  });
+
+  it("attempts threshold notifications directly once and does not retry failures", async () => {
+    const sendMessage = vi.fn()
+      .mockRejectedValueOnce(new Error("Telegram unavailable"))
+      .mockResolvedValueOnce({ messageId: 2n });
+
+    await expect(sendPollThresholdNotifications({ sendMessage }, [
+      { chatId: -100n, messageThreadId: 42n, question: "Играем?", optionText: "Да", threshold: 10 },
+      { chatId: -100n, messageThreadId: 42n, question: "Играем?", optionText: "Возможно", threshold: 10 },
+    ])).resolves.toBeUndefined();
+
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(sendMessage).toHaveBeenNthCalledWith(1, {
+      chatId: -100n,
+      messageThreadId: 42n,
+      text: "🙌 <b>Набралось 10 человек</b>\nОпрос: Играем?\nВариант: Да",
+    });
   });
 });

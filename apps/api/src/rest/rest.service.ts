@@ -215,6 +215,7 @@ export class OwnerRestService {
     pollId: bigint,
   ): Promise<Record<string, unknown>> {
     this.assertOwner(ownerTelegramUserId);
+    let archivedPollId: bigint | undefined;
     const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "archive-poll", pollId }, 200, async (repositories) => {
       const current = await repositories.polls.getById(pollId);
       if (current.telegramChatId !== this.config.telegramGroupChatId) {
@@ -222,16 +223,10 @@ export class OwnerRestService {
       }
       let poll = await repositories.polls.archive(pollId);
       if (poll.publicationState === "pending") poll = await repositories.polls.markPublicationCancelled(poll.id);
-      await repositories.outbox.insertInTransaction({
-        eventType: "delete_poll",
-        deduplicationKey: `poll:${poll.id.toString(10)}:delete`,
-        telegramChatId: poll.telegramChatId,
-        telegramTopicId: poll.telegramTopicId,
-        payload: { pollId: poll.id.toString(10) },
-      });
+      archivedPollId = poll.id;
       return serializeRestObject({ poll: this.pollBody(poll) });
     });
-    await this.tryDeliverOutbox();
+    if (archivedPollId !== undefined) await this.pollPublication.deleteArchived(archivedPollId);
     return body;
   }
 

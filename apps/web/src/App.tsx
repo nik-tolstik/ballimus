@@ -150,7 +150,7 @@ export function App({ telegramSession }: AppProps = {}) {
     try {
       await archivePollMutation.mutateAsync({ id: pollId, headers: { 'Idempotency-Key': requestKey() } })
       invalidatePolls()
-      toast.success('Опрос перемещён в архив и удаляется из Telegram.')
+      toast.success('Опрос перемещён в архив.')
       return true
     } catch {
       return false

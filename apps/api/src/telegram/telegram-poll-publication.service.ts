@@ -26,11 +26,18 @@ export interface TelegramPollPublicationRepository {
 
 export interface TelegramPollSender {
   sendPoll(input: Parameters<TelegramEffects["sendPoll"]>[0]): Promise<TelegramSentPoll>;
+  deleteMessage(input: Parameters<TelegramEffects["deleteMessage"]>[0]): Promise<void>;
 }
 
 function definiteFailureMessage(error: GrammyError): string {
   const description = error.description.trim();
   return description === "" ? "Telegram rejected the poll." : `Telegram rejected the poll: ${description}`;
+}
+
+function isAlreadyDeletedTelegramMessage(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const description = (error as { readonly description?: unknown }).description;
+  return typeof description === "string" && description.toLowerCase().includes("message to delete not found");
 }
 
 /** Makes one bounded native-poll publication attempt and always persists a terminal outcome. */
@@ -72,6 +79,17 @@ export class TelegramPollPublicationService {
         "Telegram did not confirm poll publication. Check General before republishing.",
         attemptedAt,
       );
+    }
+  }
+
+  public async deleteArchived(pollId: bigint): Promise<"deleted" | "skipped" | "failed"> {
+    const poll = await this.polls.getById(pollId);
+    if (poll.archivedAt === null || poll.telegramMessageId === null) return "skipped";
+    try {
+      await this.sender.deleteMessage({ chatId: poll.telegramChatId, messageId: poll.telegramMessageId });
+      return "deleted";
+    } catch (error) {
+      return isAlreadyDeletedTelegramMessage(error) ? "deleted" : "failed";
     }
   }
 }

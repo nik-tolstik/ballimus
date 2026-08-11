@@ -1,16 +1,29 @@
 import { timingSafeEqual } from "node:crypto";
 
 import { Inject, Injectable, UnauthorizedException } from "@nestjs/common";
-import { OutboxRepository, TelegramPollsRepository, type AppDatabase, type TelegramPoll } from "@football/db";
+import { TelegramPollsRepository, type AppDatabase, type TelegramPoll } from "@football/db";
+import { formatPollThresholdNotification } from "@football/domain";
 
 import { API_CONFIG, type ApiConfig } from "../config/api-config.js";
 import { APP_DATABASE } from "../database/database.constants.js";
-import { OutboxBestEffortService } from "./outbox-best-effort.service.js";
+import { TelegramEffects } from "./telegram-effects.js";
 
 export interface ParsedTelegramPollUpdate {
   readonly pollId: string;
   readonly options: readonly { readonly text: string; readonly voterCount: number }[];
   readonly isClosed: boolean;
+}
+
+export interface DirectPollThresholdNotification {
+  readonly chatId: bigint;
+  readonly messageThreadId: bigint;
+  readonly question: string;
+  readonly optionText: string;
+  readonly threshold: number;
+}
+
+export interface TelegramMessageSender {
+  sendMessage(input: Parameters<TelegramEffects["sendMessage"]>[0]): Promise<unknown>;
 }
 
 export function pollThresholdNotificationTarget(
@@ -57,13 +70,24 @@ function secretMatches(actual: string | undefined, expected: string): boolean {
   return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
-/** Applies authenticated Telegram poll counts and queues one notification per configured threshold. */
+export async function sendPollThresholdNotifications(
+  sender: TelegramMessageSender,
+  notifications: readonly DirectPollThresholdNotification[],
+): Promise<void> {
+  await Promise.allSettled(notifications.map(async (notification) => sender.sendMessage({
+    chatId: notification.chatId,
+    messageThreadId: notification.messageThreadId,
+    text: formatPollThresholdNotification(notification),
+  })));
+}
+
+/** Applies authenticated Telegram poll counts and attempts each threshold notification once. */
 @Injectable()
 export class TelegramPollUpdateService {
   public constructor(
     @Inject(APP_DATABASE) private readonly db: AppDatabase,
     @Inject(API_CONFIG) private readonly config: ApiConfig,
-    @Inject(OutboxBestEffortService) private readonly bestEffort: OutboxBestEffortService,
+    @Inject(TelegramEffects) private readonly effects: TelegramEffects,
   ) {}
 
   public async handle(secret: string | undefined, body: unknown): Promise<{ readonly ok: true }> {
@@ -73,38 +97,22 @@ export class TelegramPollUpdateService {
     const update = parseTelegramPollUpdate(body);
     if (update === undefined) return { ok: true };
 
-    const queued = await this.db.transaction(async (tx) => {
+    const notifications = await this.db.transaction(async (tx) => {
       const polls = new TelegramPollsRepository(tx);
       const current = await polls.getByTelegramPollIdForUpdate(update.pollId);
-      if (current === undefined || current.archivedAt !== null) return 0;
+      if (current === undefined || current.archivedAt !== null) return [];
       const applied = await polls.applyTelegramUpdate(current, update.options, update.isClosed);
-      const outbox = new OutboxRepository(tx);
       const notificationTarget = pollThresholdNotificationTarget(this.config, current);
-      for (const trigger of applied.triggers) {
-        await outbox.insertInTransaction({
-          eventType: "send_poll_threshold_notification",
-          deduplicationKey: `poll:${current.id.toString(10)}:option:${String(trigger.optionIndex)}:threshold:${String(trigger.threshold)}`,
-          ...notificationTarget,
-          payload: {
-            pollId: current.id.toString(10),
-            question: current.question,
-            optionText: trigger.optionText,
-            optionIndex: trigger.optionIndex,
-            threshold: trigger.threshold,
-            voterCount: trigger.voterCount,
-          },
-        });
-      }
-      return applied.triggers.length;
+      return applied.triggers.map((trigger) => ({
+        chatId: notificationTarget.telegramChatId,
+        messageThreadId: notificationTarget.telegramTopicId,
+        question: current.question,
+        optionText: trigger.optionText,
+        threshold: trigger.threshold,
+      }));
     });
 
-    if (queued > 0) {
-      try {
-        await this.bestEffort.dispatch();
-      } catch {
-        // The durable jobs runner retries threshold notifications.
-      }
-    }
+    await sendPollThresholdNotifications(this.effects, notifications);
     return { ok: true };
   }
 }

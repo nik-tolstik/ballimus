@@ -25,7 +25,7 @@ describe("TelegramPollPublicationService", () => {
   it("publishes once and stores Telegram references", async () => {
     const poll = pendingPoll();
     const published = { ...poll, publicationState: "published" as const, telegramPollId: "telegram-poll-7", telegramMessageId: 70n };
-    const sender = { sendPoll: vi.fn().mockResolvedValue({ pollId: "telegram-poll-7", messageId: 70n, options: poll.options }) };
+    const sender = { sendPoll: vi.fn().mockResolvedValue({ pollId: "telegram-poll-7", messageId: 70n, options: poll.options }), deleteMessage: vi.fn() };
     const repository = {
       getById: vi.fn().mockResolvedValue(poll),
       markPublished: vi.fn().mockResolvedValue(published),
@@ -57,7 +57,7 @@ describe("TelegramPollPublicationService", () => {
     };
     const service = new TelegramPollPublicationService(
       {} as never,
-      { sendPoll: vi.fn().mockRejectedValue(error) },
+      { sendPoll: vi.fn().mockRejectedValue(error), deleteMessage: vi.fn() },
       repository as never,
     );
 
@@ -82,7 +82,7 @@ describe("TelegramPollPublicationService", () => {
     };
     const service = new TelegramPollPublicationService(
       {} as never,
-      { sendPoll: vi.fn().mockRejectedValue(new Error("request timed out")) },
+      { sendPoll: vi.fn().mockRejectedValue(new Error("request timed out")), deleteMessage: vi.fn() },
       repository as never,
     );
 
@@ -93,5 +93,45 @@ describe("TelegramPollPublicationService", () => {
       expect.any(Date),
     );
     expect(repository.markPublicationFailed).not.toHaveBeenCalled();
+  });
+
+  it("attempts archived Telegram poll deletion once", async () => {
+    const poll = {
+      ...pendingPoll(),
+      publicationState: "published" as const,
+      telegramPollId: "telegram-poll-7",
+      telegramMessageId: 70n,
+      archivedAt: new Date("2026-08-11T12:00:00.000Z"),
+    };
+    const deleteMessage = vi.fn().mockResolvedValue(undefined);
+    const repository = { getById: vi.fn().mockResolvedValue(poll) };
+    const service = new TelegramPollPublicationService(
+      {} as never,
+      { sendPoll: vi.fn(), deleteMessage },
+      repository as never,
+    );
+
+    await expect(service.deleteArchived(7n)).resolves.toBe("deleted");
+    expect(deleteMessage).toHaveBeenCalledOnce();
+    expect(deleteMessage).toHaveBeenCalledWith({ chatId: -100n, messageId: 70n });
+  });
+
+  it("does not retry a failed archived Telegram poll deletion", async () => {
+    const poll = {
+      ...pendingPoll(),
+      publicationState: "published" as const,
+      telegramPollId: "telegram-poll-7",
+      telegramMessageId: 70n,
+      archivedAt: new Date("2026-08-11T12:00:00.000Z"),
+    };
+    const deleteMessage = vi.fn().mockRejectedValue(new Error("request timed out"));
+    const service = new TelegramPollPublicationService(
+      {} as never,
+      { sendPoll: vi.fn(), deleteMessage },
+      { getById: vi.fn().mockResolvedValue(poll) } as never,
+    );
+
+    await expect(service.deleteArchived(7n)).resolves.toBe("failed");
+    expect(deleteMessage).toHaveBeenCalledOnce();
   });
 });

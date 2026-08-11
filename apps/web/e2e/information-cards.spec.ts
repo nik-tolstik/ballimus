@@ -304,7 +304,7 @@ test('opens a poll, refreshes Telegram vote counts, and archives it', async ({ p
   await expect.poll(() => mocked.archivePollRequests).toEqual(['/v1/polls/1/archive'])
   await expect(page.getByRole('heading', { name: 'Опрос', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true })).toHaveCount(0)
-  await expect(page.getByText('Опрос перемещён в архив и удаляется из Telegram.', { exact: true })).toBeVisible()
+  await expect(page.getByText('Опрос перемещён в архив.', { exact: true })).toBeVisible()
 })
 
 test('manually republishes a poll after a failed first attempt', async ({ page }) => {

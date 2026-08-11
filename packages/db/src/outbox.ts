@@ -99,9 +99,7 @@ export class OutboxRepository {
     validateEventType(input.eventType);
     const deduplicationKey = nonEmpty(input.deduplicationKey, "deduplicationKey", 500);
     const matchId = input.matchId === undefined || input.matchId === null ? null : positiveBigInt(input.matchId, "matchId");
-    const matchlessEvent = input.eventType === "delete_public_card"
-      || input.eventType === "publish_poll"
-      || input.eventType === "send_poll_threshold_notification";
+    const matchlessEvent = input.eventType === "delete_public_card";
     if (!matchlessEvent && matchId === null) {
       throw new ValidationRepositoryError(`${input.eventType} events require matchId`);
     }

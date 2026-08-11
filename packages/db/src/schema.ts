@@ -35,9 +35,6 @@ export const outboxEventTypes = [
   "publish_public_card",
   "refresh_public_card",
   "delete_public_card",
-  "publish_poll",
-  "delete_poll",
-  "send_poll_threshold_notification",
 ] as const;
 export type OutboxEventType = (typeof outboxEventTypes)[number];
 
@@ -265,7 +262,7 @@ export const outbox = pgTable(
     check("outbox_telegram_chat_id_non_zero", sql`${table.telegramChatId} <> 0`),
     check("outbox_telegram_topic_id_positive", sql`${table.telegramTopicId} is null or ${table.telegramTopicId} > 0`),
     check("outbox_attempt_count_non_negative", sql`${table.attemptCount} >= 0`),
-    check("outbox_event_scope_consistent", sql`${table.eventType} in ('delete_public_card', 'publish_poll', 'delete_poll', 'send_poll_threshold_notification') or ${table.matchId} is not null`),
+    check("outbox_event_scope_consistent", sql`${table.eventType} = 'delete_public_card' or ${table.matchId} is not null`),
     check("outbox_delivery_state_valid", sql`${table.deliveryState} in (${outboxDeliverySql})`),
     check("outbox_delivery_timestamps_consistent", sql`(
       (${table.deliveryState} = 'delivered' and ${table.deliveredAt} is not null and ${table.uncertainAt} is null)
