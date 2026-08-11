@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 
 import {
   telegramPolls,
@@ -123,6 +123,7 @@ export class TelegramPollsRepository {
       publicationState: "pending",
       publicationAttemptedAt: null,
       closedAt: null,
+      archivedAt: null,
       lastError: null,
       creatorTelegramUserId: positiveBigInt(input.creatorTelegramUserId, "creatorTelegramUserId"),
       createdAt: now,
@@ -142,7 +143,10 @@ export class TelegramPollsRepository {
       throw new ValidationRepositoryError("poll list limit must be between 1 and 250");
     }
     return this.db.select().from(telegramPolls)
-      .where(eq(telegramPolls.telegramChatId, nonZero(telegramChatId, "telegramChatId")))
+      .where(and(
+        eq(telegramPolls.telegramChatId, nonZero(telegramChatId, "telegramChatId")),
+        isNull(telegramPolls.archivedAt),
+      ))
       .orderBy(desc(telegramPolls.createdAt), desc(telegramPolls.id))
       .limit(limit);
   }
@@ -188,6 +192,38 @@ export class TelegramPollsRepository {
       lastError: nonEmpty(error, "lastError", 2_000),
       updatedAt: now,
     }).where(and(eq(telegramPolls.id, parsedId), eq(telegramPolls.publicationState, "pending"))).returning();
+    return requirePoll(rows[0], parsedId.toString(10));
+  }
+
+  public async markPublicationCancelled(id: DatabaseIdentifier, attemptedAt?: Date): Promise<TelegramPoll> {
+    const parsedId = positiveBigInt(id, "pollId");
+    const current = await this.getById(parsedId);
+    if (current.publicationState === "cancelled") return current;
+    if (current.publicationState !== "pending" || current.archivedAt === null) {
+      throw new RepositoryConflictError("Only an archived pending poll can cancel publication");
+    }
+    const now = effectiveNow(attemptedAt);
+    const rows = await this.db.update(telegramPolls).set({
+      publicationState: "cancelled",
+      publicationAttemptedAt: now,
+      lastError: null,
+      updatedAt: now,
+    }).where(and(
+      eq(telegramPolls.id, parsedId),
+      eq(telegramPolls.publicationState, "pending"),
+    )).returning();
+    return requirePoll(rows[0], parsedId.toString(10));
+  }
+
+  public async archive(id: DatabaseIdentifier, archivedAt?: Date): Promise<TelegramPoll> {
+    const parsedId = positiveBigInt(id, "pollId");
+    const current = await this.getById(parsedId);
+    if (current.archivedAt !== null) return current;
+    const now = effectiveNow(archivedAt);
+    const rows = await this.db.update(telegramPolls).set({
+      archivedAt: now,
+      updatedAt: now,
+    }).where(and(eq(telegramPolls.id, parsedId), isNull(telegramPolls.archivedAt))).returning();
     return requirePoll(rows[0], parsedId.toString(10));
   }
 

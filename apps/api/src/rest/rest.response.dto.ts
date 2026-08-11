@@ -109,11 +109,14 @@ export class PollResponseDto {
   @ApiProperty({ type: Boolean })
   allowsRevoting!: boolean;
 
-  @ApiProperty({ enum: ["pending", "published", "uncertain", "failed"] })
-  publicationState!: "pending" | "published" | "uncertain" | "failed";
+  @ApiProperty({ enum: ["pending", "published", "uncertain", "failed", "cancelled"] })
+  publicationState!: "pending" | "published" | "uncertain" | "failed" | "cancelled";
 
   @ApiProperty({ type: String, nullable: true, format: "date-time" })
   closedAt!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, format: "date-time" })
+  archivedAt!: string | null;
 
   @ApiProperty({ type: String, nullable: true })
   lastError!: string | null;

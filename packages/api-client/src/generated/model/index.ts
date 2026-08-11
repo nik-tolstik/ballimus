@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
+export * from './archiveOwnerPollHeaders.js';
 export * from './archiveOwnerVenueHeaders.js';
 export * from './bootstrapResponseDto.js';
 export * from './createOwnerMatchHeaders.js';

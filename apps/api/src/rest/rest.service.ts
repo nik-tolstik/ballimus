@@ -179,6 +179,31 @@ export class OwnerRestService {
     return body;
   }
 
+  public async archivePoll(
+    ownerTelegramUserId: bigint,
+    idempotencyKey: string | undefined,
+    pollId: bigint,
+  ): Promise<Record<string, unknown>> {
+    this.assertOwner(ownerTelegramUserId);
+    const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "archive-poll", pollId }, 200, async (repositories) => {
+      const current = await repositories.polls.getById(pollId);
+      if (current.telegramChatId !== this.config.telegramGroupChatId) {
+        throw toRestHttpException(restRequestError(404, "RESOURCE_NOT_FOUND", "The requested resource was not found."));
+      }
+      const poll = await repositories.polls.archive(pollId);
+      await repositories.outbox.insertInTransaction({
+        eventType: "delete_poll",
+        deduplicationKey: `poll:${poll.id.toString(10)}:delete`,
+        telegramChatId: poll.telegramChatId,
+        telegramTopicId: poll.telegramTopicId,
+        payload: { pollId: poll.id.toString(10) },
+      });
+      return serializeRestObject({ poll: this.pollBody(poll) });
+    });
+    await this.tryDeliverOutbox();
+    return body;
+  }
+
   public async createMatch(
     ownerTelegramUserId: bigint,
     idempotencyKey: string | undefined,
@@ -485,6 +510,7 @@ export class OwnerRestService {
       allowsRevoting: poll.allowsRevoting,
       publicationState: poll.publicationState,
       closedAt: poll.closedAt,
+      archivedAt: poll.archivedAt,
       lastError: poll.lastError,
       createdAt: poll.createdAt,
       updatedAt: poll.updatedAt,

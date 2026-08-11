@@ -179,6 +179,20 @@ export class PollsController {
   ): Promise<Record<string, unknown>> {
     return this.service.createPoll(ownerTelegramUserId, idempotencyKey, input);
   }
+
+  @Post(":id/archive")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ operationId: "archiveOwnerPoll", summary: "Archive a poll and delete its Telegram message" })
+  @ApiParam({ name: "id", type: String })
+  @ApiHeader({ name: "Idempotency-Key", required: true })
+  @ApiOkResponse({ type: PollEnvelopeResponseDto })
+  public archive(
+    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Param("id", PositiveBigIntPipe) pollId: bigint,
+  ): Promise<Record<string, unknown>> {
+    return this.service.archivePoll(ownerTelegramUserId, idempotencyKey, pollId);
+  }
 }
 
 @ApiTags("weather")

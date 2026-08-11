@@ -120,6 +120,13 @@
       "when": 1786444800005,
       "tag": "0016_non_anonymous_general_polls",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786444800006,
+      "tag": "0017_archive_native_polls",
+      "breakpoints": true
     }
   ]
 }

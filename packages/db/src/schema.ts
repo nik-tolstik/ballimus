@@ -25,7 +25,7 @@ export interface BookingContact {
 export const publicationStates = ["pending", "published", "uncertain", "failed", "deleted"] as const;
 export type PublicationState = (typeof publicationStates)[number];
 
-export const pollPublicationStates = ["pending", "published", "uncertain", "failed"] as const;
+export const pollPublicationStates = ["pending", "published", "uncertain", "failed", "cancelled"] as const;
 export type PollPublicationState = (typeof pollPublicationStates)[number];
 
 export const httpIdempotencyStatuses = ["processing", "succeeded", "failed"] as const;
@@ -36,6 +36,7 @@ export const outboxEventTypes = [
   "refresh_public_card",
   "delete_public_card",
   "publish_poll",
+  "delete_poll",
   "send_poll_threshold_notification",
 ] as const;
 export type OutboxEventType = (typeof outboxEventTypes)[number];
@@ -205,6 +206,7 @@ export const telegramPolls = pgTable(
     publicationState: text("publication_state", { enum: pollPublicationStates }).notNull().default("pending"),
     publicationAttemptedAt: timestamp("publication_attempted_at", { withTimezone: true, mode: "date" }),
     closedAt: timestamp("closed_at", { withTimezone: true, mode: "date" }),
+    archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }),
     lastError: text("last_error"),
     creatorTelegramUserId: bigint("creator_telegram_user_id", { mode: "bigint" }).notNull(),
     createdAt: createdAt(),
@@ -221,7 +223,7 @@ export const telegramPolls = pgTable(
     check("telegram_polls_creator_positive", sql`${table.creatorTelegramUserId} > 0`),
     check("telegram_polls_publication_reference_consistent", sql`(
       (${table.publicationState} = 'published' and ${table.telegramPollId} is not null and ${table.telegramMessageId} is not null)
-      or (${table.publicationState} in ('pending', 'uncertain', 'failed') and ${table.telegramPollId} is null and ${table.telegramMessageId} is null)
+      or (${table.publicationState} in ('pending', 'uncertain', 'failed', 'cancelled') and ${table.telegramPollId} is null and ${table.telegramMessageId} is null)
     )`),
     check("telegram_polls_attempt_state_consistent", sql`(
       (${table.publicationState} = 'pending' and ${table.publicationAttemptedAt} is null)
@@ -229,7 +231,7 @@ export const telegramPolls = pgTable(
     )`),
     check("telegram_polls_error_state_consistent", sql`(
       (${table.publicationState} in ('failed', 'uncertain') and ${table.lastError} is not null and length(trim(${table.lastError})) > 0)
-      or (${table.publicationState} in ('pending', 'published') and ${table.lastError} is null)
+      or (${table.publicationState} in ('pending', 'published', 'cancelled') and ${table.lastError} is null)
     )`),
     uniqueIndex("telegram_polls_telegram_poll_id_unique").on(table.telegramPollId).where(sql`${table.telegramPollId} is not null`),
     index("telegram_polls_chat_created_idx").on(table.telegramChatId, table.createdAt),
@@ -263,7 +265,7 @@ export const outbox = pgTable(
     check("outbox_telegram_chat_id_non_zero", sql`${table.telegramChatId} <> 0`),
     check("outbox_telegram_topic_id_positive", sql`${table.telegramTopicId} is null or ${table.telegramTopicId} > 0`),
     check("outbox_attempt_count_non_negative", sql`${table.attemptCount} >= 0`),
-    check("outbox_event_scope_consistent", sql`${table.eventType} in ('delete_public_card', 'publish_poll', 'send_poll_threshold_notification') or ${table.matchId} is not null`),
+    check("outbox_event_scope_consistent", sql`${table.eventType} in ('delete_public_card', 'publish_poll', 'delete_poll', 'send_poll_threshold_notification') or ${table.matchId} is not null`),
     check("outbox_delivery_state_valid", sql`${table.deliveryState} in (${outboxDeliverySql})`),
     check("outbox_delivery_timestamps_consistent", sql`(
       (${table.deliveryState} = 'delivered' and ${table.deliveredAt} is not null and ${table.uncertainAt} is null)

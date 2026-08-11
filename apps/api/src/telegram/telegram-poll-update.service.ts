@@ -76,7 +76,7 @@ export class TelegramPollUpdateService {
     const queued = await this.db.transaction(async (tx) => {
       const polls = new TelegramPollsRepository(tx);
       const current = await polls.getByTelegramPollIdForUpdate(update.pollId);
-      if (current === undefined) return 0;
+      if (current === undefined || current.archivedAt !== null) return 0;
       const applied = await polls.applyTelegramUpdate(current, update.options, update.isClosed);
       const outbox = new OutboxRepository(tx);
       const notificationTarget = pollThresholdNotificationTarget(this.config, current);

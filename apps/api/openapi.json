@@ -380,6 +380,50 @@
         ]
       }
     },
+    "/v1/polls/{id}/archive": {
+      "post": {
+        "operationId": "archiveOwnerPoll",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PollEnvelopeResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "Archive a poll and delete its Telegram message",
+        "tags": [
+          "polls"
+        ]
+      }
+    },
     "/v1/weather/current": {
       "post": {
         "operationId": "sendCurrentWeather",
@@ -1096,10 +1140,16 @@
               "pending",
               "published",
               "uncertain",
-              "failed"
+              "failed",
+              "cancelled"
             ]
           },
           "closedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "archivedAt": {
             "type": "string",
             "nullable": true,
             "format": "date-time"
@@ -1127,6 +1177,7 @@
           "allowsRevoting",
           "publicationState",
           "closedAt",
+          "archivedAt",
           "lastError",
           "createdAt",
           "updatedAt"

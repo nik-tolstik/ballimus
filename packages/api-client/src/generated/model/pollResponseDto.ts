@@ -24,6 +24,8 @@ export interface PollResponseDto {
   /** @nullable */
   closedAt: string | null;
   /** @nullable */
+  archivedAt: string | null;
+  /** @nullable */
   lastError: string | null;
   createdAt: string;
   updatedAt: string;

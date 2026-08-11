@@ -25,6 +25,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ArchiveOwnerPollHeaders,
   CreateOwnerPollHeaders,
   PollCreateDto,
   PollEnvelopeResponseDto,
@@ -196,6 +197,70 @@ export const useCreateOwnerPoll = <TError = unknown,
       > => {
 
       const mutationOptions = getCreateOwnerPollMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * @summary Archive a poll and delete its Telegram message
+ */
+export const archiveOwnerPoll = (
+    id: string,
+    headers: ArchiveOwnerPollHeaders,
+ options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
+) => {
+
+
+      return customInstance<PollEnvelopeResponseDto>(
+      {url: `/v1/polls/${id}/archive`, method: 'POST',
+      headers, ...(signal ? { signal }: {})
+    },
+      options);
+    }
+
+
+
+export const getArchiveOwnerPollMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveOwnerPoll>>, TError,{id: string;headers: ArchiveOwnerPollHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof archiveOwnerPoll>>, TError,{id: string;headers: ArchiveOwnerPollHeaders}, TContext> => {
+
+const mutationKey = ['archiveOwnerPoll'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof archiveOwnerPoll>>, {id: string;headers: ArchiveOwnerPollHeaders}> = (props) => {
+          const {id,headers} = props ?? {};
+
+          return  archiveOwnerPoll(id,headers,requestOptions)
+        }
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ArchiveOwnerPollMutationResult = NonNullable<Awaited<ReturnType<typeof archiveOwnerPoll>>>
+
+    export type ArchiveOwnerPollMutationError = unknown
+
+    /**
+ * @summary Archive a poll and delete its Telegram message
+ */
+export const useArchiveOwnerPoll = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveOwnerPoll>>, TError,{id: string;headers: ArchiveOwnerPollHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof archiveOwnerPoll>>,
+        TError,
+        {id: string;headers: ArchiveOwnerPollHeaders},
+        TContext
+      > => {
+
+      const mutationOptions = getArchiveOwnerPollMutationOptions(options);
 
       return useMutation(mutationOptions, queryClient);
     }

@@ -60,7 +60,7 @@ The cleanup command is for the migration-only legacy card deletion queue. Run it
 3. Edit the match and confirm the same message changes.
 4. Delete the match and run `pnpm --filter @football/api jobs:run` if a retry is needed.
 5. Use the global Weather button and verify a current Minsk weather message appears in the configured topic.
-6. Create a non-anonymous native poll with one option notification enabled. Verify the poll appears in General, its option counts refresh in the Mini App, the default threshold is 10, and reaching it produces one notification in Chat only.
+6. Create a non-anonymous native poll with one option notification enabled. Verify the poll appears in General, its option counts refresh in the Mini App, the default threshold is 10, and reaching it produces one notification in Chat only. Open the poll card, archive it, and verify it disappears from the active list and its Telegram message is deleted.
 
 Playwright is the supported rendered frontend check. Codex Browser QA remains unavailable in this repository because of the `sandboxCwd is not a local file URI` runtime limitation; it is not a substitute for Playwright.
 

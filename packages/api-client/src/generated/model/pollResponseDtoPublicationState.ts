@@ -15,4 +15,5 @@ export const PollResponseDtoPublicationState = {
   published: 'published',
   uncertain: 'uncertain',
   failed: 'failed',
+  cancelled: 'cancelled',
 } as const;

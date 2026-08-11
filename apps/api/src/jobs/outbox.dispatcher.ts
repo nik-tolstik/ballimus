@@ -36,6 +36,7 @@ export interface TelegramPollRepositoryPort {
     attemptedAt?: Date,
   ): Promise<TelegramPoll>;
   markPublicationUncertain(id: bigint, error: string, attemptedAt?: Date): Promise<TelegramPoll>;
+  markPublicationCancelled(id: bigint, attemptedAt?: Date): Promise<TelegramPoll>;
 }
 
 export type OutboxDispatchResult =
@@ -128,6 +129,7 @@ export class OutboxDispatcher {
         case "refresh_public_card": return this.dispatchRefresh(event, now);
         case "delete_public_card": return this.dispatchDelete(event, now);
         case "publish_poll": return this.dispatchPublishPoll(event, now);
+        case "delete_poll": return this.dispatchDeletePoll(event, now);
         case "send_poll_threshold_notification": return this.dispatchPollThresholdNotification(event, now);
         default: throw new Error(`Unsupported outbox event type: ${event.eventType}`);
       }
@@ -182,6 +184,11 @@ export class OutboxDispatcher {
     const pollId = requiredPollId(event);
     const poll = await this.polls.getById(pollId);
     if (poll.publicationState === "published") return this.markDelivered(event, now);
+    if (poll.publicationState === "cancelled") return this.markDelivered(event, now);
+    if (poll.archivedAt !== null) {
+      await this.polls.markPublicationCancelled(pollId, now);
+      return this.markDelivered(event, now);
+    }
     if (poll.publicationState !== "pending") {
       throw new Error(`Poll ${pollId.toString(10)} cannot be published from state ${poll.publicationState}`);
     }
@@ -198,7 +205,29 @@ export class OutboxDispatcher {
     return this.markDelivered(event, now);
   }
 
+  private async dispatchDeletePoll(event: OutboxEvent, now: Date): Promise<OutboxDispatchResult> {
+    const pollId = requiredPollId(event);
+    const poll = await this.polls.getById(pollId);
+    if (poll.archivedAt === null) throw new Error(`Poll ${pollId.toString(10)} is not archived`);
+    if (poll.publicationState === "pending") {
+      throw new Error(`Poll ${pollId.toString(10)} is still completing publication`);
+    }
+    if (poll.publicationState === "uncertain") {
+      return this.markUncertain(event, `Archived poll ${pollId.toString(10)} requires Telegram publication reconciliation before deletion`, now);
+    }
+    if (poll.telegramMessageId !== null) {
+      try {
+        await this.effects.deleteMessage({ chatId: poll.telegramChatId, messageId: poll.telegramMessageId });
+      } catch (error) {
+        if (!isAlreadyDeletedTelegramMessage(error)) throw error;
+      }
+    }
+    return this.markDelivered(event, now);
+  }
+
   private async dispatchPollThresholdNotification(event: OutboxEvent, now: Date): Promise<OutboxDispatchResult> {
+    const poll = await this.polls.getById(requiredPollId(event));
+    if (poll.archivedAt !== null) return this.markDelivered(event, now);
     await this.effects.sendMessage({
       chatId: event.telegramChatId,
       ...(event.telegramTopicId === null ? {} : { messageThreadId: event.telegramTopicId }),

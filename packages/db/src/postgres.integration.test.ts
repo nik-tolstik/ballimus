@@ -136,4 +136,29 @@ describe("information-card PostgreSQL schema", () => {
     expect(repeated.poll.options.map((option) => option.voterCount)).toEqual([11, 5]);
     expect(repeated.poll.options[1]?.notificationQueuedAt).toBeNull();
   });
+
+  it("archives a poll and removes it from the active poll list", async () => {
+    const polls = new TelegramPollsRepository(database.db);
+    const poll = await polls.create({
+      telegramChatId: CHAT_ID,
+      telegramTopicId: 1n,
+      question: "Архивировать?",
+      options: [
+        { text: "Да", notificationEnabled: true },
+        { text: "Нет", notificationEnabled: true },
+      ],
+      notificationThreshold: 10,
+      isAnonymous: false,
+      allowsMultipleAnswers: false,
+      allowsRevoting: true,
+      creatorTelegramUserId: OWNER_ID,
+    });
+
+    const archived = await polls.archive(poll.id, new Date("2026-08-11T11:00:00.000Z"));
+    const cancelled = await polls.markPublicationCancelled(poll.id, new Date("2026-08-11T11:00:01.000Z"));
+
+    expect(archived.archivedAt).toEqual(new Date("2026-08-11T11:00:00.000Z"));
+    expect(cancelled.publicationState).toBe("cancelled");
+    expect(await polls.listByChat(CHAT_ID)).not.toContainEqual(expect.objectContaining({ id: poll.id }));
+  });
 });
