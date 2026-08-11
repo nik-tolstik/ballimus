@@ -1,11 +1,34 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { Bot, GrammyError } from "grammy";
+import { Bot, GrammyError, type ApiClientOptions } from "grammy";
 import type { InlineKeyboardMarkup } from "grammy/types";
 
 import { API_CONFIG, type ApiConfig } from "../config/api-config.js";
 
-export const TELEGRAM_API_TIMEOUT_MS = 5_000;
+export const TELEGRAM_API_TIMEOUT_MS = 15_000;
 export const EMPTY_INLINE_KEYBOARD: InlineKeyboardMarkup = { inline_keyboard: [] };
+
+type GrammyFetch = NonNullable<ApiClientOptions["fetch"]>;
+
+const nativeTelegramFetch: GrammyFetch = async (url, init) => {
+  const controller = new AbortController();
+  const sourceSignal = init?.signal;
+  const abort = () => controller.abort();
+  if (sourceSignal?.aborted === true) abort();
+  else sourceSignal?.addEventListener("abort", abort);
+
+  try {
+    const requestUrl = typeof url === "string" || url instanceof URL ? url : url.url;
+    const response = await globalThis.fetch(requestUrl, {
+      signal: controller.signal,
+      ...(init?.method === undefined ? {} : { method: init.method }),
+      ...(init?.headers === undefined ? {} : { headers: init.headers as HeadersInit }),
+      ...(init?.body === undefined ? {} : { body: init.body as BodyInit | null }),
+    });
+    return response as unknown as Awaited<ReturnType<GrammyFetch>>;
+  } finally {
+    sourceSignal?.removeEventListener("abort", abort);
+  }
+};
 
 export interface TelegramSendMessageInput {
   readonly chatId: bigint | number | string;
@@ -26,8 +49,31 @@ export interface TelegramDeleteMessageInput {
   readonly messageId: bigint | number | string;
 }
 
+export interface TelegramSendPollInput {
+  readonly chatId: bigint | number | string;
+  readonly messageThreadId?: bigint | number | string;
+  readonly question: string;
+  readonly options: readonly string[];
+  readonly isAnonymous: boolean;
+  readonly allowsMultipleAnswers: boolean;
+  readonly allowsRevoting: boolean;
+}
+
 export interface TelegramSentMessage {
   readonly messageId: bigint;
+}
+
+export interface TelegramSentPoll {
+  readonly pollId: string;
+  readonly messageId: bigint;
+  readonly options: readonly { readonly text: string; readonly voterCount: number }[];
+}
+
+export function generalTopicSendOptions(
+  generalTopicId: bigint | number | string,
+): Readonly<{ messageThreadId?: number }> {
+  const parsed = integerValue(generalTopicId, "telegramGeneralTopicId");
+  return parsed === 1n ? {} : { messageThreadId: positiveTelegramNumber(parsed, "telegramGeneralTopicId") };
 }
 
 type TelegramAbortSignal = NonNullable<Parameters<Bot["api"]["sendMessage"]>[3]>;
@@ -73,7 +119,9 @@ export class TelegramBotService {
   private readonly bot: Bot;
 
   public constructor(@Inject(API_CONFIG) apiConfig: ApiConfig) {
-    this.bot = new Bot(apiConfig.telegramBotToken);
+    this.bot = new Bot(apiConfig.telegramBotToken, {
+      client: { fetch: nativeTelegramFetch },
+    });
   }
 
   public async sendMessage(input: TelegramSendMessageInput): Promise<TelegramSentMessage> {
@@ -109,6 +157,28 @@ export class TelegramBotService {
     ));
   }
 
+  public async sendPoll(input: TelegramSendPollInput): Promise<TelegramSentPoll> {
+    const messageThreadId = optionalTelegramNumber(input.messageThreadId, "messageThreadId");
+    const sent = await this.withDeadline((signal) => this.bot.api.sendPoll(
+      chatId(input.chatId),
+      input.question,
+      input.options.map((text) => ({ text })),
+      {
+        is_anonymous: input.isAnonymous,
+        type: "regular",
+        allows_multiple_answers: input.allowsMultipleAnswers,
+        allows_revoting: input.allowsRevoting,
+        ...(messageThreadId === undefined ? {} : { message_thread_id: messageThreadId }),
+      },
+      signal,
+    ));
+    return {
+      pollId: sent.poll.id,
+      messageId: BigInt(sent.message_id),
+      options: sent.poll.options.map((option) => ({ text: option.text, voterCount: option.voter_count })),
+    };
+  }
+
   private withDeadline<T>(operation: (signal: TelegramAbortSignal) => Promise<T>): Promise<T> {
     return operation(AbortSignal.timeout(TELEGRAM_API_TIMEOUT_MS) as unknown as TelegramAbortSignal);
   }
@@ -129,5 +199,9 @@ export class TelegramEffects {
 
   public deleteMessage(input: TelegramDeleteMessageInput): Promise<void> {
     return this.bot.deleteMessage(input);
+  }
+
+  public sendPoll(input: TelegramSendPollInput): Promise<TelegramSentPoll> {
+    return this.bot.sendPoll(input);
   }
 }

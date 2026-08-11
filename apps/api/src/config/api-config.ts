@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { registerAs } from "@nestjs/config";
 
 export const API_CONFIG_NAMESPACE = "api" as const;
@@ -18,6 +20,7 @@ export interface ApiConfig {
   readonly telegramGeneralTopicId: bigint;
   readonly telegramChatTopicId: bigint;
   readonly telegramMiniAppUrl: string;
+  readonly telegramWebhookSecret: string;
   readonly webOrigin: string;
   readonly groupTimezone: string;
   readonly logLevel: ApiLogLevel;
@@ -39,6 +42,10 @@ export class ApiConfigurationError extends Error {
     this.name = "ApiConfigurationError";
     this.variables = variables;
   }
+}
+
+export function deriveTelegramWebhookSecret(botToken: string): string {
+  return createHash("sha256").update(`football-bot-poll-webhook:${botToken}`, "utf8").digest("hex");
 }
 
 function readString(environment: ApiEnvironment, name: string): string | undefined {
@@ -207,6 +214,7 @@ export function parseApiConfig(
       "TELEGRAM_MINI_APP_URL",
       requiredString(environment, "TELEGRAM_MINI_APP_URL"),
     ),
+    telegramWebhookSecret: deriveTelegramWebhookSecret(requiredString(environment, "TELEGRAM_BOT_TOKEN")),
     webOrigin: validateWebOrigin(requiredString(environment, "WEB_ORIGIN")),
     groupTimezone: validateTimezone(
       readString(environment, "GROUP_TIMEZONE") ?? DEFAULT_GROUP_TIMEZONE,

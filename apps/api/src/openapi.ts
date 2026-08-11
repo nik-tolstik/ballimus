@@ -12,7 +12,7 @@ export const TELEGRAM_MINI_APP_SECURITY_SCHEME = "telegramMiniApp" as const;
 export const PUBLIC_OPENAPI_PATH = "docs" as const;
 export const PUBLIC_OPENAPI_JSON_PATH = "docs-json" as const;
 
-const EXCLUDED_PUBLIC_PATHS = new Set(["/health", "/cron"]);
+const EXCLUDED_PUBLIC_PATHS = new Set(["/health", "/cron", "/telegram/webhook"]);
 
 function isExcludedPublicPath(path: string): boolean {
   const withoutVersionPrefix = path.replace(/^\/v1(?=\/|$)/, "");

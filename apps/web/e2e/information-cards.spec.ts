@@ -14,9 +14,26 @@ const match = {
   publicCard: { publicationState: 'pending', telegramMessageId: '10', publicationAttemptedAt: '2026-08-01T12:00:01.000Z', lastError: null },
 }
 
-async function mockOwnerApp(page: Page): Promise<{ readonly weatherRequests: string[]; readonly republishRequests: string[] }> {
+const poll = {
+  id: '1', question: 'Кто играет в воскресенье?',
+  options: [
+    { text: 'Буду', notificationEnabled: true, voterCount: 0, notificationQueuedAt: null },
+    { text: 'Не буду', notificationEnabled: false, voterCount: 0, notificationQueuedAt: null },
+  ],
+  notificationThreshold: 10, isAnonymous: false, allowsMultipleAnswers: false, allowsRevoting: true,
+  publicationState: 'published', closedAt: null, archivedAt: null, lastError: null,
+  createdAt: '2026-08-11T12:00:00.000Z', updatedAt: '2026-08-11T12:00:00.000Z',
+}
+
+async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boolean; readonly failedPoll?: boolean } = {}): Promise<{ readonly weatherRequests: string[]; readonly republishRequests: string[]; readonly republishPollRequests: string[]; readonly pollRequests: unknown[]; readonly archivePollRequests: string[] }> {
   const weatherRequests: string[] = []
   const republishRequests: string[] = []
+  const republishPollRequests: string[] = []
+  const pollRequests: unknown[] = []
+  const archivePollRequests: string[] = []
+  let pollListRequests = 0
+  let pollArchived = false
+  let pollRepublished = false
   await page.route('https://telegram.org/js/telegram-web-app.js', (route) => route.fulfill({ contentType: 'application/javascript', body: '' }))
   await page.addInitScript(() => {
     Object.defineProperty(window, '__FOOTBALL_API_BASE_URL__', { configurable: true, value: 'http://127.0.0.1:6174' })
@@ -32,11 +49,24 @@ async function mockOwnerApp(page: Page): Promise<{ readonly weatherRequests: str
       { ...match, id: '3', schedule: { ...match.schedule, time: '22:00' }, venue: { ...venue, id: '3', name: 'BOX365 Третий' }, fieldPriceRubles: 122, publicCard: { ...match.publicCard, publicationState: 'failed', lastError: 'Telegram unavailable' } },
     ] })
     if (request.method() === 'GET' && pathname === '/v1/venues') return json({ venues: [venue] })
+    if (request.method() === 'GET' && pathname === '/v1/polls') {
+      pollListRequests += 1
+      const publicationPoll = options.failedPoll === true && !pollRepublished ? { ...poll, publicationState: 'failed', lastError: 'Telegram rejected the poll' } : poll
+      const currentPoll = pollListRequests < 2 || options.failedPoll === true ? publicationPoll : { ...publicationPoll, options: [{ ...poll.options[0], voterCount: 1 }, poll.options[1]] }
+      return json({ polls: options.existingPoll === true && !pollArchived ? [currentPoll] : [] })
+    }
+    if (request.method() === 'POST' && pathname === '/v1/polls') {
+      const body = request.postDataJSON() as Record<string, unknown>
+      pollRequests.push(body)
+      return json({ poll: { id: '1', ...body, publicationState: 'published', closedAt: null, archivedAt: null, lastError: null, createdAt: '2026-08-11T12:00:00.000Z', updatedAt: '2026-08-11T12:00:00.000Z' } })
+    }
+    if (request.method() === 'POST' && pathname === '/v1/polls/1/republish') { republishPollRequests.push(pathname); pollRepublished = true; return json({ poll: { ...poll, publicationState: 'published' } }) }
+    if (request.method() === 'POST' && pathname === '/v1/polls/1/archive') { archivePollRequests.push(pathname); pollArchived = true; return json({ poll: { ...poll, archivedAt: '2026-08-11T12:30:00.000Z' } }) }
     if (request.method() === 'POST' && pathname === '/v1/weather/current') { weatherRequests.push(pathname); return json({ sent: true, observedAt: '2026-08-10T12:00' }) }
     if (request.method() === 'POST' && pathname === '/v1/matches/1/republish') { republishRequests.push(pathname); return json({ match: { ...match, version: 2 } }) }
     return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ code: 'NOT_FOUND' }) })
   })
-  return { weatherRequests, republishRequests }
+  return { weatherRequests, republishRequests, republishPollRequests, pollRequests, archivePollRequests }
 }
 
 async function faviconCornerAlpha(page: Page): Promise<number> {
@@ -119,4 +149,175 @@ test('sends current weather globally and keeps the venue catalog available', asy
   await page.getByRole('button', { name: 'Действия места', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Действия с местом', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'В архив', exact: true })).toBeVisible()
+})
+
+test('creates a native poll with an option threshold notification', async ({ page }) => {
+  const mocked = await mockOwnerApp(page)
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Опросы', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Опросы', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Новый опрос', exact: true }).click()
+  const publishPoll = page.getByRole('button', { name: 'Опубликовать опрос', exact: true })
+  const newOption = page.getByLabel('Новый вариант', { exact: true })
+  await expect(newOption).toBeVisible()
+  await expect(newOption).toHaveAttribute('placeholder', 'Новый вариант')
+  await expect(page.getByLabel('Вариант 1', { exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /Переместить вариант/u })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /Оповещение для варианта/u })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /Удалить вариант/u })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Добавить вариант', exact: true })).toHaveCount(0)
+  await expect(publishPoll).toBeDisabled()
+  await page.getByLabel('Вопрос', { exact: true }).fill('Кто играет в воскресенье?')
+  await page.waitForTimeout(250)
+  const draftTopBeforeCreation = await newOption.evaluate((input) => {
+    const row = input.closest('li')
+    if (row === null) throw new Error('New poll option row is unavailable')
+    return row.getBoundingClientRect().top
+  })
+  await newOption.fill('Буду')
+  const creationAnimation = await page.evaluate(async () => {
+    const samples: { createdTop: number; draftTop: number; draftHeight: number }[] = []
+    for (let frame = 0; frame < 10; frame += 1) {
+      const createdRow = document.querySelector('input[aria-label="Вариант 1"]')?.closest('li')
+      const draftRow = document.querySelector('input[aria-label="Новый вариант"]')?.closest('li')
+      if (createdRow === null || createdRow === undefined || draftRow === null || draftRow === undefined) throw new Error('Poll option animation rows are unavailable')
+      const createdRect = createdRow.getBoundingClientRect()
+      const draftRect = draftRow.getBoundingClientRect()
+      samples.push({ createdTop: createdRect.top, draftTop: draftRect.top, draftHeight: draftRect.height })
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    }
+    return samples
+  })
+  const createdTops = creationAnimation.map((sample) => sample.createdTop)
+  const draftTops = creationAnimation.map((sample) => sample.draftTop)
+  const draftHeights = creationAnimation.map((sample) => sample.draftHeight)
+  expect(Math.max(...createdTops) - Math.min(...createdTops)).toBeLessThan(1)
+  expect(Math.abs(createdTops[0]! - draftTopBeforeCreation)).toBeLessThan(1)
+  expect(Math.max(...draftTops) - Math.min(...draftTops)).toBeLessThan(1)
+  expect(draftHeights.at(-1)).toBeGreaterThan(draftHeights[0] ?? 0)
+  expect(draftHeights.every((height, index) => index === 0 || height >= draftHeights[index - 1]!)).toBe(true)
+  await expect(page.getByLabel('Вариант 1', { exact: true })).toHaveValue('Буду')
+  await expect(newOption).toBeVisible()
+  await expect(publishPoll).toBeDisabled()
+  await newOption.fill('Не буду')
+  await expect(page.getByLabel('Вариант 2', { exact: true })).toHaveValue('Не буду')
+  await expect(newOption).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Удалить вариант 1', exact: true })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Удалить вариант 2', exact: true })).toBeEnabled()
+  await expect(publishPoll).toBeEnabled()
+  const notification = page.getByRole('switch', { name: 'Оповестить о количестве', exact: true })
+  await expect(notification).toBeChecked()
+  await expect(page.getByLabel('Количество для оповещения', { exact: true })).toHaveValue('10')
+  const secondOptionNotification = page.getByRole('button', { name: 'Оповещение для варианта 2', exact: true })
+  await expect(secondOptionNotification).toHaveAttribute('aria-pressed', 'true')
+  await secondOptionNotification.click()
+  await expect(secondOptionNotification).toHaveAttribute('aria-pressed', 'false')
+  await notification.click()
+  await expect(notification).not.toBeChecked()
+  await expect(page.getByRole('button', { name: /Оповещение для варианта/u })).toHaveCount(0)
+  await notification.click()
+  await expect(notification).toBeChecked()
+  await expect(secondOptionNotification).toHaveAttribute('aria-pressed', 'false')
+  await newOption.fill('Временно')
+  await expect(page.getByLabel('Вариант 3', { exact: true })).toHaveValue('Временно')
+  await expect(newOption).toBeVisible()
+  await page.getByLabel('Вариант 3', { exact: true }).fill('')
+  await expect(page.getByLabel('Вариант 3', { exact: true })).toBeFocused()
+  await expect(page.getByLabel('Вариант 3', { exact: true })).toHaveValue('')
+  await expect(page.getByRole('button', { name: 'Удалить вариант 3', exact: true })).toBeVisible()
+  await page.getByLabel('Вариант 3', { exact: true }).press('Backspace')
+  const deletionAnimation = await page.evaluate(async () => {
+    const samples: { groupHeight: number; deletedHeight: number | null; maxOverflow: number }[] = []
+    for (let frame = 0; frame < 16; frame += 1) {
+      const group = document.querySelector('input[aria-label="Новый вариант"]')?.closest('ul')
+      if (group === null || group === undefined) throw new Error('Poll option group is unavailable during deletion')
+      const groupRect = group.getBoundingClientRect()
+      const rows = [...group.querySelectorAll(':scope > li')]
+      const deletedRow = group.querySelector('input[aria-label="Вариант 3"]')?.closest('li')
+      const overflow = rows.flatMap((row) => {
+        const rect = row.getBoundingClientRect()
+        return [rect.bottom - groupRect.bottom, groupRect.top - rect.top]
+      })
+      samples.push({
+        groupHeight: groupRect.height,
+        deletedHeight: deletedRow?.getBoundingClientRect().height ?? null,
+        maxOverflow: Math.max(0, ...overflow),
+      })
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    }
+    return samples
+  })
+  const deletionGroupHeights = deletionAnimation.map((sample) => sample.groupHeight)
+  const deletedOptionHeights = deletionAnimation.flatMap((sample) => sample.deletedHeight === null ? [] : [sample.deletedHeight])
+  const deletionGroupHeightIncreases = deletionGroupHeights.slice(1).map((height, index) => height - deletionGroupHeights[index]!)
+  expect(deletionAnimation.every((sample) => sample.maxOverflow < 1)).toBe(true)
+  expect(Math.max(0, ...deletionGroupHeightIncreases)).toBeLessThan(1)
+  expect(deletedOptionHeights.at(-1)).toBeLessThan(deletedOptionHeights[0] ?? 0)
+  await expect(page.getByLabel('Вариант 3', { exact: true })).toHaveCount(0)
+  await expect(newOption).toBeFocused()
+  await newOption.fill('Возможно')
+  await expect(page.getByLabel('Вариант 3', { exact: true })).toHaveValue('Возможно')
+  await expect(newOption).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Удалить вариант 3', exact: true })).toBeEnabled()
+  await page.getByRole('button', { name: 'Переместить вариант 3', exact: true }).press('ArrowUp')
+  await expect(page.getByLabel('Вариант 2', { exact: true })).toHaveValue('Возможно')
+  await expect(page.getByLabel('Вариант 3', { exact: true })).toHaveValue('Не буду')
+  await expect(page.getByText('Голос можно отменять', { exact: true })).toBeVisible()
+  await expect(page.getByLabel('Анонимное голосование', { exact: true })).toHaveCount(0)
+  const multipleAnswers = page.getByRole('switch', { name: 'Несколько ответов', exact: true })
+  await expect(multipleAnswers).not.toBeChecked()
+  await multipleAnswers.click()
+  await expect(multipleAnswers).toBeChecked()
+  await publishPoll.click()
+
+  await expect.poll(() => mocked.pollRequests).toEqual([{
+    question: 'Кто играет в воскресенье?',
+    options: [
+      { text: 'Буду', notificationEnabled: true },
+      { text: 'Возможно', notificationEnabled: true },
+      { text: 'Не буду', notificationEnabled: false },
+    ],
+    notificationThreshold: 10,
+    allowsMultipleAnswers: true,
+  }])
+  await expect(page.getByText('Опрос отправлен в Telegram.', { exact: true })).toBeVisible()
+})
+
+test('opens a poll, refreshes Telegram vote counts, and archives it', async ({ page }) => {
+  const mocked = await mockOwnerApp(page, { existingPoll: true })
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Опросы', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Опросы', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Опрос', exact: true })).toBeVisible()
+  await expect(page.getByText('Неанонимное голосование', { exact: true })).toBeVisible()
+  await expect(page.getByText('Голос можно отменять', { exact: true })).toBeVisible()
+  await expect(page.getByText('Оповестить о количестве', { exact: true })).toBeVisible()
+  await expect(page.getByLabel('1 голосов', { exact: true })).toBeVisible({ timeout: 5_000 })
+  page.once('dialog', async (dialog) => {
+    expect(dialog.message()).toContain('Опрос будет удалён из Telegram')
+    await dialog.accept()
+  })
+  await page.getByRole('button', { name: 'В архив', exact: true }).click()
+  await expect.poll(() => mocked.archivePollRequests).toEqual(['/v1/polls/1/archive'])
+  await expect(page.getByRole('heading', { name: 'Опрос', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true })).toHaveCount(0)
+  await expect(page.getByText('Опрос перемещён в архив.', { exact: true })).toBeVisible()
+})
+
+test('manually republishes a poll after a failed first attempt', async ({ page }) => {
+  const mocked = await mockOwnerApp(page, { existingPoll: true, failedPoll: true })
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Опросы', exact: true }).click()
+  await expect(page.getByText('Не опубликован', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true }).click()
+  await expect(page.getByText('Опрос не опубликован', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Переопубликовать', exact: true }).click()
+
+  await expect.poll(() => mocked.republishPollRequests).toEqual(['/v1/polls/1/republish'])
+  await expect(page.getByText('Опрос опубликован в Telegram.', { exact: true })).toBeVisible()
+  await expect(page.getByText('Опрос не опубликован', { exact: true })).toHaveCount(0)
 })

@@ -1,12 +1,14 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
+  boolean,
   check,
   foreignKey,
   index,
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -24,6 +26,12 @@ export interface BookingContact {
 export const publicationStates = ["pending", "published", "uncertain", "failed", "deleted"] as const;
 export type PublicationState = (typeof publicationStates)[number];
 
+export const pollPublicationStates = ["pending", "published", "uncertain", "failed", "cancelled"] as const;
+export type PollPublicationState = (typeof pollPublicationStates)[number];
+
+export const telegramPollVoterKinds = ["user", "chat"] as const;
+export type TelegramPollVoterKind = (typeof telegramPollVoterKinds)[number];
+
 export const httpIdempotencyStatuses = ["processing", "succeeded", "failed"] as const;
 export type HttpIdempotencyStatus = (typeof httpIdempotencyStatuses)[number];
 
@@ -37,9 +45,18 @@ export type OutboxEventType = (typeof outboxEventTypes)[number];
 export const outboxDeliveryStates = ["pending", "processing", "delivered", "failed", "uncertain"] as const;
 export type OutboxDeliveryState = (typeof outboxDeliveryStates)[number];
 
+export interface TelegramPollOptionState {
+  readonly text: string;
+  readonly notificationEnabled: boolean;
+  readonly voterCount: number;
+  readonly notificationQueuedAt: string | null;
+}
+
 const sqlStringList = (values: readonly string[]) => sql.join(values.map((value) => sql.raw(`'${value}'`)), sql`, `);
 const venueTypeSql = sqlStringList(venueTypes);
 const publicationStateSql = sqlStringList(publicationStates);
+const pollPublicationStateSql = sqlStringList(pollPublicationStates);
+const telegramPollVoterKindSql = sqlStringList(telegramPollVoterKinds);
 const idempotencyStateSql = sqlStringList(httpIdempotencyStatuses);
 const outboxEventSql = sqlStringList(outboxEventTypes);
 const outboxDeliverySql = sqlStringList(outboxDeliveryStates);
@@ -174,6 +191,80 @@ export const httpIdempotencyKeys = pgTable(
   ],
 );
 
+export const telegramPolls = pgTable(
+  "telegram_polls",
+  {
+    id: bigint("id", { mode: "bigint" }).generatedAlwaysAsIdentity().primaryKey(),
+    telegramPollId: text("telegram_poll_id"),
+    telegramChatId: bigint("telegram_chat_id", { mode: "bigint" }).notNull(),
+    telegramTopicId: bigint("telegram_topic_id", { mode: "bigint" }),
+    telegramMessageId: bigint("telegram_message_id", { mode: "bigint" }),
+    question: text("question").notNull(),
+    options: jsonb("options").$type<TelegramPollOptionState[]>().notNull(),
+    notificationThreshold: integer("notification_threshold"),
+    isAnonymous: boolean("is_anonymous").notNull().default(false),
+    allowsMultipleAnswers: boolean("allows_multiple_answers").notNull().default(false),
+    allowsRevoting: boolean("allows_revoting").notNull().default(true),
+    publicationState: text("publication_state", { enum: pollPublicationStates }).notNull().default("pending"),
+    publicationAttemptedAt: timestamp("publication_attempted_at", { withTimezone: true, mode: "date" }),
+    closedAt: timestamp("closed_at", { withTimezone: true, mode: "date" }),
+    archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }),
+    lastError: text("last_error"),
+    creatorTelegramUserId: bigint("creator_telegram_user_id", { mode: "bigint" }).notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    check("telegram_polls_chat_id_non_zero", sql`${table.telegramChatId} <> 0`),
+    check("telegram_polls_topic_id_positive", sql`${table.telegramTopicId} is null or ${table.telegramTopicId} > 0`),
+    check("telegram_polls_message_id_positive", sql`${table.telegramMessageId} is null or ${table.telegramMessageId} > 0`),
+    check("telegram_polls_question_valid", sql`length(${table.question}) between 1 and 300`),
+    check("telegram_polls_options_valid", sql`jsonb_typeof(${table.options}) = 'array' and jsonb_array_length(${table.options}) between 2 and 12`),
+    check("telegram_polls_notification_threshold_valid", sql`${table.notificationThreshold} is null or ${table.notificationThreshold} between 1 and 1000000`),
+    check("telegram_polls_publication_state_valid", sql`${table.publicationState} in (${pollPublicationStateSql})`),
+    check("telegram_polls_creator_positive", sql`${table.creatorTelegramUserId} > 0`),
+    check("telegram_polls_publication_reference_consistent", sql`(
+      (${table.publicationState} = 'published' and ${table.telegramPollId} is not null and ${table.telegramMessageId} is not null)
+      or (${table.publicationState} in ('pending', 'uncertain', 'failed', 'cancelled') and ${table.telegramPollId} is null and ${table.telegramMessageId} is null)
+    )`),
+    check("telegram_polls_attempt_state_consistent", sql`(
+      (${table.publicationState} = 'pending' and ${table.publicationAttemptedAt} is null)
+      or (${table.publicationState} <> 'pending' and ${table.publicationAttemptedAt} is not null)
+    )`),
+    check("telegram_polls_error_state_consistent", sql`(
+      (${table.publicationState} in ('failed', 'uncertain') and ${table.lastError} is not null and length(trim(${table.lastError})) > 0)
+      or (${table.publicationState} in ('pending', 'published', 'cancelled') and ${table.lastError} is null)
+    )`),
+    uniqueIndex("telegram_polls_telegram_poll_id_unique").on(table.telegramPollId).where(sql`${table.telegramPollId} is not null`),
+    index("telegram_polls_chat_created_idx").on(table.telegramChatId, table.createdAt),
+  ],
+);
+
+export const telegramPollVoterAnswers = pgTable(
+  "telegram_poll_voter_answers",
+  {
+    pollId: bigint("poll_id", { mode: "bigint" }).notNull().references(() => telegramPolls.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    voterKind: text("voter_kind", { enum: telegramPollVoterKinds }).notNull(),
+    telegramVoterId: bigint("telegram_voter_id", { mode: "bigint" }).notNull(),
+    username: text("username"),
+    displayName: text("display_name").notNull(),
+    selectedOptionIndexes: jsonb("selected_option_indexes").$type<number[]>().notNull().default(sql`'[]'::jsonb`),
+    lastTelegramUpdateId: bigint("last_telegram_update_id", { mode: "bigint" }).notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    primaryKey({ name: "telegram_poll_voter_answers_pk", columns: [table.pollId, table.voterKind, table.telegramVoterId] }),
+    check("telegram_poll_voter_answers_kind_valid", sql`${table.voterKind} in (${telegramPollVoterKindSql})`),
+    check("telegram_poll_voter_answers_voter_id_non_zero", sql`${table.telegramVoterId} <> 0`),
+    check("telegram_poll_voter_answers_username_valid", sql`${table.username} is null or length(trim(${table.username})) between 1 and 255`),
+    check("telegram_poll_voter_answers_display_name_valid", sql`length(trim(${table.displayName})) between 1 and 255`),
+    check("telegram_poll_voter_answers_options_valid", sql`jsonb_typeof(${table.selectedOptionIndexes}) = 'array'`),
+    check("telegram_poll_voter_answers_update_id_non_negative", sql`${table.lastTelegramUpdateId} >= 0`),
+    index("telegram_poll_voter_answers_poll_idx").on(table.pollId),
+  ],
+);
+
 export const outbox = pgTable(
   "outbox",
   {
@@ -249,6 +340,10 @@ export type OutboxEvent = typeof outbox.$inferSelect;
 export type NewOutboxEvent = typeof outbox.$inferInsert;
 export type JobClaim = typeof jobClaims.$inferSelect;
 export type NewJobClaim = typeof jobClaims.$inferInsert;
+export type TelegramPoll = typeof telegramPolls.$inferSelect;
+export type NewTelegramPoll = typeof telegramPolls.$inferInsert;
+export type TelegramPollVoterAnswer = typeof telegramPollVoterAnswers.$inferSelect;
+export type NewTelegramPollVoterAnswer = typeof telegramPollVoterAnswers.$inferInsert;
 
-export const schema = { venues, matches, matchMessages, httpIdempotencyKeys, outbox, jobClaims };
+export const schema = { venues, matches, matchMessages, telegramPolls, telegramPollVoterAnswers, httpIdempotencyKeys, outbox, jobClaims };
 export type DatabaseSchema = typeof schema;

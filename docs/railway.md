@@ -32,13 +32,21 @@ The repository pins Railway CLI v5. Its required postinstall binary is explicitl
    pnpm release:verify-production
    ```
 
-   This read-only verifier checks GitHub CI, Vercel status and URL, Railway services, API health, CORS, the migration ledger, and that no Telegram webhook URL is configured. It reads only public settings from `.env.production.local`; the Telegram token stays inside the API container and is never printed.
+   This read-only verifier checks GitHub CI, Vercel status and URL, Railway services, API health, CORS, the migration ledger, and the exact production poll webhook URL. It reads only public settings from `.env.production.local`; the Telegram token stays inside the API container and is never printed.
 
 The Railway cutover command never deploys Vercel, changes BotFather settings, registers or deletes a Telegram webhook, or sends Telegram messages. The Vercel promotion remains a deliberate provider action because it controls the public Mini App entry point.
 
+Native polls require one separately authorized Telegram operation after the API deployment. Run the bundled command inside the Railway API service with the exact production API URL and explicit confirmation flag:
+
+```sh
+node apps/api/dist/telegram/webhook-config-cli.js --url https://<production-api>/v1/telegram/webhook --confirm-telegram-webhook
+```
+
+Do not run this step without authorization for that production webhook change. The command registers only `poll` and `poll_answer` updates and never prints the bot token or derived secret.
+
 ## Normal releases after FBOT-20
 
-The FBOT-20 legacy-card migration, cleanup, and webhook removal were one-time work. Do not rerun legacy-card cleanup or webhook removal as part of a normal release. The current application has no webhook endpoint and no incoming Telegram update handling.
+The FBOT-20 legacy-card migration and cleanup were one-time work. Do not rerun legacy-card cleanup or restore the removed legacy callback webhook. The maintained webhook accepts native poll updates only.
 
 If Railway CLI or its API is temporarily unavailable, do not substitute a global v4 CLI or an internal region ID. Retry after the service recovers, preserving the same checked-out commit and release order.
 

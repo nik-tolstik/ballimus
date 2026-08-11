@@ -99,6 +99,55 @@
       "when": 1786444800002,
       "tag": "0013_clear_legacy_runtime_state",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786444800003,
+      "tag": "0014_native_telegram_polls",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1786444800004,
+      "tag": "0015_poll_option_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1786444800005,
+      "tag": "0016_non_anonymous_general_polls",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786444800006,
+      "tag": "0017_archive_native_polls",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1786444800007,
+      "tag": "0018_manual_poll_publication",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1786444800008,
+      "tag": "0019_remove_poll_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1786459901193,
+      "tag": "0020_poll_voter_answers",
+      "breakpoints": true
     }
   ]
 }

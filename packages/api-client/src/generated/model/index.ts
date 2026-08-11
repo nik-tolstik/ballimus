@@ -6,9 +6,11 @@
  * OpenAPI spec version: 1.0.0
  */
 
+export * from './archiveOwnerPollHeaders.js';
 export * from './archiveOwnerVenueHeaders.js';
 export * from './bootstrapResponseDto.js';
 export * from './createOwnerMatchHeaders.js';
+export * from './createOwnerPollHeaders.js';
 export * from './createOwnerVenueHeaders.js';
 export * from './deleteOwnerMatchHeaders.js';
 export * from './groupConfigurationResponseDto.js';
@@ -21,9 +23,17 @@ export * from './matchResponseDto.js';
 export * from './matchScheduleResponseDto.js';
 export * from './ownerIdentityResponseDto.js';
 export * from './patchMatchDto.js';
+export * from './pollCreateDto.js';
+export * from './pollEnvelopeResponseDto.js';
+export * from './pollListResponseDto.js';
+export * from './pollOptionCreateDto.js';
+export * from './pollOptionResponseDto.js';
+export * from './pollResponseDto.js';
+export * from './pollResponseDtoPublicationState.js';
 export * from './publicCardResponseDto.js';
 export * from './publicCardResponseDtoPublicationState.js';
 export * from './republishOwnerMatchHeaders.js';
+export * from './republishOwnerPollHeaders.js';
 export * from './restoreOwnerVenueHeaders.js';
 export * from './updateOwnerMatchHeaders.js';
 export * from './updateOwnerVenueHeaders.js';

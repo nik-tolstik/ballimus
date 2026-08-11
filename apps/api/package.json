@@ -25,7 +25,8 @@
     "start": "node dist/main.js",
     "openapi:write": "node ../../scripts/run-tsx.mjs src/openapi.ts --write",
     "jobs:run": "node ../../scripts/run-tsx.mjs src/jobs/cli.ts",
-    "jobs:start": "node dist/jobs/cli.js"
+    "jobs:start": "node dist/jobs/cli.js",
+    "telegram:webhook:set": "node dist/telegram/webhook-config-cli.js"
   },
   "dependencies": {
     "@football/db": "workspace:*",

@@ -8,11 +8,14 @@ import {
   MatchMessagesRepository,
   MatchesRepository,
   OutboxRepository,
+  TelegramPollsRepository,
   VenuesRepository,
   withTransaction,
   type AppDatabase,
   type Match as DbMatch,
   type MatchMessage,
+  type CreateTelegramPollInput,
+  type TelegramPoll as DbTelegramPoll,
   type TransactionRepositories,
   type Venue as DbVenue,
 } from "@football/db";
@@ -20,12 +23,14 @@ import {
 import { API_CONFIG, type ApiConfig } from "../config/api-config.js";
 import { APP_DATABASE } from "../database/database.constants.js";
 import { OutboxBestEffortService } from "../telegram/outbox-best-effort.service.js";
+import { TelegramPollPublicationService } from "../telegram/telegram-poll-publication.service.js";
 import { CurrentWeatherService } from "../weather/current-weather.service.js";
 import { canonicalRequestHash } from "./rest.canonical.js";
 import {
   type MatchCreateDto,
   type MatchListQueryDto,
   type PatchMatchDto,
+  type PollCreateDto,
   type VenueCreateDto,
   type VenueListQueryDto,
   type VenueUpdateDto,
@@ -35,13 +40,32 @@ import { serializeRestObject, type RestJsonValue } from "./rest.serialization.js
 
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1_000;
 
-type ReadRepositories = Pick<TransactionRepositories, "matches" | "matchMessages" | "venues" | "outbox">;
-type MutationRepositories = Pick<TransactionRepositories, "matches" | "matchMessages" | "venues" | "outbox" | "idempotency">;
+type ReadRepositories = Pick<TransactionRepositories, "matches" | "matchMessages" | "polls" | "venues" | "outbox">;
+type MutationRepositories = Pick<TransactionRepositories, "matches" | "matchMessages" | "polls" | "venues" | "outbox" | "idempotency">;
+
+export function pollCreationInput(
+  config: Pick<ApiConfig, "telegramGroupChatId" | "telegramGeneralTopicId">,
+  ownerTelegramUserId: bigint,
+  input: PollCreateDto,
+): CreateTelegramPollInput {
+  return {
+    telegramChatId: config.telegramGroupChatId,
+    telegramTopicId: config.telegramGeneralTopicId,
+    question: input.question,
+    options: input.options,
+    notificationThreshold: input.notificationThreshold ?? null,
+    isAnonymous: false,
+    allowsMultipleAnswers: input.allowsMultipleAnswers,
+    allowsRevoting: true,
+    creatorTelegramUserId: ownerTelegramUserId,
+  };
+}
 
 function readRepositories(db: AppDatabase): ReadRepositories {
   return {
     matches: new MatchesRepository(db),
     matchMessages: new MatchMessagesRepository(db),
+    polls: new TelegramPollsRepository(db),
     venues: new VenuesRepository(db),
     outbox: new OutboxRepository(db),
   };
@@ -52,6 +76,13 @@ function requiredKey(value: string | undefined): string {
     throw toRestHttpException(restRequestError(400, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key is required for mutations."));
   }
   return value.trim();
+}
+
+function pollIdFromResponse(body: Record<string, unknown>): bigint | undefined {
+  const poll = body["poll"];
+  if (typeof poll !== "object" || poll === null || Array.isArray(poll)) return undefined;
+  const id = (poll as Record<string, unknown>)["id"];
+  return typeof id === "string" && /^[1-9]\d*$/u.test(id) ? BigInt(id) : undefined;
 }
 
 /** Parses a strong version value supplied through the HTTP If-Match header. */
@@ -80,6 +111,7 @@ export class OwnerRestService {
     @Inject(APP_DATABASE) private readonly db: AppDatabase,
     @Inject(API_CONFIG) private readonly config: ApiConfig,
     @Inject(OutboxBestEffortService) private readonly bestEffort: OutboxBestEffortService,
+    @Inject(TelegramPollPublicationService) private readonly pollPublication: TelegramPollPublicationService,
     @Inject(CurrentWeatherService) private readonly weather: CurrentWeatherService,
   ) {}
 
@@ -119,6 +151,83 @@ export class OwnerRestService {
     } catch (error) {
       throw toRestHttpException(error);
     }
+  }
+
+  public async listPolls(ownerTelegramUserId: bigint): Promise<Record<string, unknown>> {
+    this.assertOwner(ownerTelegramUserId);
+    try {
+      const polls = await new TelegramPollsRepository(this.db).listByChat(this.config.telegramGroupChatId);
+      return serializeRestObject({ polls: polls.map((poll) => this.pollBody(poll)) });
+    } catch (error) {
+      throw toRestHttpException(error);
+    }
+  }
+
+  public async createPoll(
+    ownerTelegramUserId: bigint,
+    idempotencyKey: string | undefined,
+    input: PollCreateDto,
+  ): Promise<Record<string, unknown>> {
+    this.assertOwner(ownerTelegramUserId);
+    let createdPollId: bigint | undefined;
+    const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "create-poll", input }, 201, async (repositories) => {
+      try {
+        const poll = await repositories.polls.create(pollCreationInput(this.config, ownerTelegramUserId, input));
+        createdPollId = poll.id;
+        return serializeRestObject({ poll: this.pollBody(poll) });
+      } catch (error) {
+        throw toRestHttpException(error);
+      }
+    });
+    const responsePollId = createdPollId ?? pollIdFromResponse(body);
+    if (responsePollId === undefined) return body;
+    const poll = createdPollId === undefined
+      ? await new TelegramPollsRepository(this.db).getById(responsePollId)
+      : await this.pollPublication.publishPending(responsePollId);
+    return serializeRestObject({ poll: this.pollBody(poll) });
+  }
+
+  public async republishPoll(
+    ownerTelegramUserId: bigint,
+    idempotencyKey: string | undefined,
+    pollId: bigint,
+  ): Promise<Record<string, unknown>> {
+    this.assertOwner(ownerTelegramUserId);
+    let publicationPollId: bigint | undefined;
+    await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "republish-poll", pollId }, 200, async (repositories) => {
+      const current = await repositories.polls.getById(pollId);
+      if (current.telegramChatId !== this.config.telegramGroupChatId) {
+        throw toRestHttpException(restRequestError(404, "RESOURCE_NOT_FOUND", "The requested resource was not found."));
+      }
+      const poll = await repositories.polls.beginPublicationAttempt(pollId);
+      publicationPollId = poll.id;
+      return serializeRestObject({ poll: this.pollBody(poll) });
+    });
+    const poll = publicationPollId === undefined
+      ? await new TelegramPollsRepository(this.db).getById(pollId)
+      : await this.pollPublication.publishPending(publicationPollId);
+    return serializeRestObject({ poll: this.pollBody(poll) });
+  }
+
+  public async archivePoll(
+    ownerTelegramUserId: bigint,
+    idempotencyKey: string | undefined,
+    pollId: bigint,
+  ): Promise<Record<string, unknown>> {
+    this.assertOwner(ownerTelegramUserId);
+    let archivedPollId: bigint | undefined;
+    const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "archive-poll", pollId }, 200, async (repositories) => {
+      const current = await repositories.polls.getById(pollId);
+      if (current.telegramChatId !== this.config.telegramGroupChatId) {
+        throw toRestHttpException(restRequestError(404, "RESOURCE_NOT_FOUND", "The requested resource was not found."));
+      }
+      let poll = await repositories.polls.archive(pollId);
+      if (poll.publicationState === "pending") poll = await repositories.polls.markPublicationCancelled(poll.id);
+      archivedPollId = poll.id;
+      return serializeRestObject({ poll: this.pollBody(poll) });
+    });
+    if (archivedPollId !== undefined) await this.pollPublication.deleteArchived(archivedPollId);
+    return body;
   }
 
   public async createMatch(
@@ -413,6 +522,24 @@ export class OwnerRestService {
       version: venue.version,
       createdAt: venue.createdAt,
       updatedAt: venue.updatedAt,
+    });
+  }
+
+  private pollBody(poll: DbTelegramPoll): Record<string, RestJsonValue> {
+    return serializeRestObject({
+      id: poll.id,
+      question: poll.question,
+      options: poll.options,
+      notificationThreshold: poll.notificationThreshold,
+      isAnonymous: poll.isAnonymous,
+      allowsMultipleAnswers: poll.allowsMultipleAnswers,
+      allowsRevoting: poll.allowsRevoting,
+      publicationState: poll.publicationState,
+      closedAt: poll.closedAt,
+      archivedAt: poll.archivedAt,
+      lastError: poll.lastError,
+      createdAt: poll.createdAt,
+      updatedAt: poll.updatedAt,
     });
   }
 

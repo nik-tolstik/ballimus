@@ -49,4 +49,5 @@ describe("OutboxDispatcher", () => {
     await expect(dispatcher.dispatch(event())).resolves.toMatchObject({ status: "delivered" });
     expect(markDelivered).toHaveBeenCalledOnce();
   });
+
 });

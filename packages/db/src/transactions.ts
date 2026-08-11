@@ -4,11 +4,13 @@ import { OutboxRepository, type InsertOutboxEventInput } from "./outbox.js";
 import { HttpIdempotencyRepository } from "./repositories/idempotency.js";
 import { MatchMessagesRepository } from "./repositories/match-messages.js";
 import { MatchesRepository } from "./repositories/matches.js";
+import { TelegramPollsRepository } from "./repositories/polls.js";
 import { VenuesRepository } from "./repositories/venues.js";
 import type { DatabaseTransaction } from "./repositories/common.js";
 
 export interface TransactionRepositories {
   readonly matches: MatchesRepository;
+  readonly polls: TelegramPollsRepository;
   readonly matchMessages: MatchMessagesRepository;
   readonly venues: VenuesRepository;
   readonly idempotency: HttpIdempotencyRepository;
@@ -24,6 +26,7 @@ export function createTransactionRepositories(tx: DatabaseTransaction): Transact
   const outbox = new OutboxRepository(tx);
   return {
     matches: new MatchesRepository(tx),
+    polls: new TelegramPollsRepository(tx),
     matchMessages: new MatchMessagesRepository(tx),
     venues: new VenuesRepository(tx),
     idempotency: new HttpIdempotencyRepository(tx),

@@ -41,13 +41,14 @@ Use the API, web, PostgreSQL, authentication-fixture, and jobs commands in the [
 
 ## Quick local Telegram launch
 
-For the first setup, create a test-only `.env.local`, fill in the Telegram values described in the [development guide](docs/development.md), and authenticate ngrok:
+For the first setup, create a test-only `.env.local`, fill in the Telegram values described in the [development guide](docs/development.md), and configure the persistent Cloudflare Tunnel connector:
 
 ```bash
 pnpm install --frozen-lockfile
 cp .env.local.example .env.local
-ngrok config add-authtoken <ngrok-authtoken>
 ```
+
+Create a remotely managed Cloudflare Tunnel route from the hostname in `CLOUDFLARE_TUNNEL_URL` to `http://localhost:6173`, then install its connector on the development machine. Keep the connector token outside the repository.
 
 Then start each development session with:
 
@@ -64,7 +65,7 @@ set +a
 pnpm db:migrate
 ```
 
-Run the migration again whenever the schema changes. `pnpm dev` opens the API and Web tunnels and starts NestJS and Vite. It prints the Mini App URL to open from the configured test bot. Background work is intentionally one-shot and can be run from another terminal:
+Run the migration again whenever the schema changes. `pnpm dev` starts NestJS and Vite behind the already-connected Cloudflare Tunnel route. It prints the Mini App URL to open from the configured test bot. Background work is intentionally one-shot and can be run from another terminal:
 
 ```bash
 set -a

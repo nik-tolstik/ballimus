@@ -1,6 +1,7 @@
 import { Transform, Type } from "class-transformer";
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -24,6 +25,47 @@ const DECIMAL_ID_PATTERN = /^[1-9]\d*$/u;
 const CALENDAR_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 const LOCAL_TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/u;
 const PHONE_PATTERN = /^\+?[0-9][0-9\s().-]{4,48}$/u;
+
+export class PollOptionCreateDto {
+  @ApiProperty({ type: String, example: "Буду играть", minLength: 1, maxLength: 100 })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  text!: string;
+
+  @ApiProperty({ type: Boolean, default: true })
+  @IsBoolean()
+  notificationEnabled!: boolean;
+}
+
+export class PollCreateDto {
+  @ApiProperty({ type: String, example: "Кто играет в воскресенье?", minLength: 1, maxLength: 300 })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(300)
+  question!: string;
+
+  @ApiProperty({ type: [PollOptionCreateDto], minItems: 2, maxItems: 12 })
+  @IsArray()
+  @ArrayMinSize(2)
+  @ArrayMaxSize(12)
+  @ValidateNested({ each: true })
+  @Type(() => PollOptionCreateDto)
+  options!: PollOptionCreateDto[];
+
+  @ApiPropertyOptional({ type: Number, nullable: true, default: null, example: 10, minimum: 1, maximum: 1_000_000 })
+  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== null && value !== undefined)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1_000_000)
+  notificationThreshold?: number | null;
+
+  @ApiProperty({ type: Boolean, default: false })
+  @IsBoolean()
+  allowsMultipleAnswers!: boolean;
+}
 
 export class MatchCreateDto {
   @ApiProperty({ type: String, example: "2026-08-03", pattern: "^\\d{4}-\\d{2}-\\d{2}$" })

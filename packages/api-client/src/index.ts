@@ -1,6 +1,7 @@
 export * from "./generated/bootstrap/bootstrap.js";
 export * from "./generated/matches/matches.js";
 export * from "./generated/model/index.js";
+export * from "./generated/polls/polls.js";
 export * from "./generated/venues/venues.js";
 export * from "./generated/weather/weather.js";
 export {

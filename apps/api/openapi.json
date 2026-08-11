@@ -309,6 +309,165 @@
         ]
       }
     },
+    "/v1/polls": {
+      "get": {
+        "operationId": "listOwnerPolls",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PollListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "List native Telegram polls",
+        "tags": [
+          "polls"
+        ]
+      },
+      "post": {
+        "operationId": "createOwnerPoll",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PollCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PollEnvelopeResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "Create and publish a native Telegram poll",
+        "tags": [
+          "polls"
+        ]
+      }
+    },
+    "/v1/polls/{id}/republish": {
+      "post": {
+        "operationId": "republishOwnerPoll",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PollEnvelopeResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "Make one new attempt to publish a native Telegram poll",
+        "tags": [
+          "polls"
+        ]
+      }
+    },
+    "/v1/polls/{id}/archive": {
+      "post": {
+        "operationId": "archiveOwnerPoll",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PollEnvelopeResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "Archive a poll and delete its Telegram message",
+        "tags": [
+          "polls"
+        ]
+      }
+    },
     "/v1/weather/current": {
       "post": {
         "operationId": "sendCurrentWeather",
@@ -962,6 +1121,191 @@
             "minimum": 0
           }
         }
+      },
+      "PollOptionResponseDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "notificationEnabled": {
+            "type": "boolean"
+          },
+          "voterCount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "notificationQueuedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "text",
+          "notificationEnabled",
+          "voterCount",
+          "notificationQueuedAt"
+        ]
+      },
+      "PollResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "42"
+          },
+          "question": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PollOptionResponseDto"
+            }
+          },
+          "notificationThreshold": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1
+          },
+          "isAnonymous": {
+            "type": "boolean"
+          },
+          "allowsMultipleAnswers": {
+            "type": "boolean"
+          },
+          "allowsRevoting": {
+            "type": "boolean"
+          },
+          "publicationState": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "published",
+              "uncertain",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "closedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "archivedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "lastError": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "question",
+          "options",
+          "notificationThreshold",
+          "isAnonymous",
+          "allowsMultipleAnswers",
+          "allowsRevoting",
+          "publicationState",
+          "closedAt",
+          "archivedAt",
+          "lastError",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PollListResponseDto": {
+        "type": "object",
+        "properties": {
+          "polls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PollResponseDto"
+            }
+          }
+        },
+        "required": [
+          "polls"
+        ]
+      },
+      "PollOptionCreateDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "example": "Буду играть",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "notificationEnabled": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "text",
+          "notificationEnabled"
+        ]
+      },
+      "PollCreateDto": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "example": "Кто играет в воскресенье?",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "options": {
+            "minItems": 2,
+            "maxItems": 12,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PollOptionCreateDto"
+            }
+          },
+          "notificationThreshold": {
+            "type": "number",
+            "nullable": true,
+            "default": null,
+            "example": 10,
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "allowsMultipleAnswers": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "question",
+          "options",
+          "allowsMultipleAnswers"
+        ]
+      },
+      "PollEnvelopeResponseDto": {
+        "type": "object",
+        "properties": {
+          "poll": {
+            "$ref": "#/components/schemas/PollResponseDto"
+          }
+        },
+        "required": [
+          "poll"
+        ]
       },
       "WeatherCurrentResponseDto": {
         "type": "object",

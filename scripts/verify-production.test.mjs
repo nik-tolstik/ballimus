@@ -100,8 +100,10 @@ test("rejects a wrong CORS origin and stale migration ledger", () => {
   }, 9).ok, false);
 });
 
-test("requires the legacy Telegram webhook to be disabled", () => {
-  assert.equal(evaluateTelegramWebhookStatus({ url: "", pendingUpdateCount: 0 }).ok, true);
-  assert.equal(evaluateTelegramWebhookStatus({ url: "https://example.test/hook", pendingUpdateCount: 0 }).ok, false);
-  assert.equal(evaluateTelegramWebhookStatus({ url: "", pendingUpdateCount: -1 }).ok, false);
+test("requires the production poll webhook to use the exact API URL", () => {
+  const expected = "https://api.example.test/v1/telegram/webhook";
+  assert.equal(evaluateTelegramWebhookStatus({ url: expected, pendingUpdateCount: 0 }, expected).ok, true);
+  assert.equal(evaluateTelegramWebhookStatus({ url: "", pendingUpdateCount: 0 }, expected).ok, false);
+  assert.equal(evaluateTelegramWebhookStatus({ url: "https://other.example.test/hook", pendingUpdateCount: 0 }, expected).ok, false);
+  assert.equal(evaluateTelegramWebhookStatus({ url: expected, pendingUpdateCount: -1 }, expected).ok, false);
 });
