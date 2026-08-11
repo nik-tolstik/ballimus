@@ -10,7 +10,7 @@ import {
 
 import { APP_DATABASE } from "../database/database.constants.js";
 import { API_CONFIG, type ApiConfig } from "../config/api-config.js";
-import { EMPTY_INLINE_KEYBOARD, TelegramEffects, type TelegramSendMessageInput } from "./telegram-effects.js";
+import { EMPTY_INLINE_KEYBOARD, generalTopicSendOptions, TelegramEffects, type TelegramSendMessageInput } from "./telegram-effects.js";
 import type { AppDatabase } from "@football/db";
 
 export type TelegramCardPublicationState = PublicationState | "missing";
@@ -22,14 +22,9 @@ export type TelegramCardPublicationResult =
   | { readonly status: "published"; readonly reference: MatchMessage }
   | { readonly status: "reconciliation_required"; readonly reference?: MatchMessage; readonly publicationState: TelegramCardPublicationState };
 
-function safeTelegramNumber(value: bigint, fieldName: string): number {
-  if (value <= 0n || value > BigInt(Number.MAX_SAFE_INTEGER)) throw new TypeError(`${fieldName} must be a positive safe integer`);
-  return Number(value);
-}
-
 /** Omits the thread parameter for Telegram's special General topic ID 1. */
 export function publicCardSendOptions(generalTopicId: bigint): Pick<TelegramSendMessageInput, "messageThreadId"> {
-  return generalTopicId === 1n ? {} : { messageThreadId: safeTelegramNumber(generalTopicId, "telegramGeneralTopicId") };
+  return generalTopicSendOptions(generalTopicId);
 }
 
 /** Renders and delivers read-only match cards without inline actions. */

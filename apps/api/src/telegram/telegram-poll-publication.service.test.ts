@@ -7,7 +7,7 @@ function pendingPoll() {
   return {
     id: 7n,
     telegramChatId: -100n,
-    telegramTopicId: 2n,
+    telegramTopicId: 1n,
     question: "Играем?",
     options: [
       { text: "Да", notificationEnabled: true, voterCount: 0, notificationQueuedAt: null },
@@ -37,6 +37,14 @@ describe("TelegramPollPublicationService", () => {
 
     await expect(service.publishPending(7n)).resolves.toBe(published);
     expect(sender.sendPoll).toHaveBeenCalledOnce();
+    expect(sender.sendPoll).toHaveBeenCalledWith({
+      chatId: -100n,
+      question: "Играем?",
+      options: ["Да", "Нет"],
+      isAnonymous: false,
+      allowsMultipleAnswers: false,
+      allowsRevoting: true,
+    });
     expect(repository.markPublished).toHaveBeenCalledWith(7n, "telegram-poll-7", 70n, poll.options, expect.any(Date));
   });
 

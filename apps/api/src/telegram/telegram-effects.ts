@@ -46,6 +46,13 @@ export interface TelegramSentPoll {
   readonly options: readonly { readonly text: string; readonly voterCount: number }[];
 }
 
+export function generalTopicSendOptions(
+  generalTopicId: bigint | number | string,
+): Readonly<{ messageThreadId?: number }> {
+  const parsed = integerValue(generalTopicId, "telegramGeneralTopicId");
+  return parsed === 1n ? {} : { messageThreadId: positiveTelegramNumber(parsed, "telegramGeneralTopicId") };
+}
+
 type TelegramAbortSignal = NonNullable<Parameters<Bot["api"]["sendMessage"]>[3]>;
 
 function integerValue(value: bigint | number | string, fieldName: string): bigint {

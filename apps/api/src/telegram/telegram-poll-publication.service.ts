@@ -8,7 +8,7 @@ import {
 import { GrammyError } from "grammy";
 
 import { APP_DATABASE } from "../database/database.constants.js";
-import { TelegramEffects, type TelegramSentPoll } from "./telegram-effects.js";
+import { generalTopicSendOptions, TelegramEffects, type TelegramSentPoll } from "./telegram-effects.js";
 
 export interface TelegramPollPublicationRepository {
   getById(id: bigint): Promise<TelegramPoll>;
@@ -62,7 +62,7 @@ export class TelegramPollPublicationService {
     try {
       const sent = await this.sender.sendPoll({
         chatId: poll.telegramChatId,
-        ...(poll.telegramTopicId === null ? {} : { messageThreadId: poll.telegramTopicId }),
+        ...(poll.telegramTopicId === null ? {} : generalTopicSendOptions(poll.telegramTopicId)),
         question: poll.question,
         options: poll.options.map((option) => option.text),
         isAnonymous: poll.isAnonymous,
