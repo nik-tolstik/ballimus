@@ -31,9 +31,14 @@ pnpm db:migrate
 pnpm db:check
 ```
 
-`pnpm dev` opens the configured ngrok tunnels and starts the API and Vite app. It does not change Telegram configuration. The optional `pnpm dev -- --set-menu-button` command sets the menu button for the local test bot only. Use `pnpm dev -- --set-webhook` only with that local bot to register the ngrok API URL as a poll-only webhook and exercise threshold notifications.
+Choose one development mode based on the task:
 
-For browser-only work, run `pnpm dev:browser` and open `http://127.0.0.1:6173`. It creates a real signed local-owner session from `.env.local`, binds the Vite app to loopback, and does not start ngrok. This command is for local development only; it must not be exposed through a tunnel or used in production.
+- For browser-only UI work, a "browser server", or opening the app outside Telegram, run `pnpm dev:browser` and open `http://127.0.0.1:6173`. It creates a real signed local-owner session from `.env.local`, binds the Vite app to loopback, and does not start ngrok.
+- For explicit Telegram Mini App or webhook testing, run `pnpm dev`. It opens the configured ngrok tunnels and starts the API and Vite app with real Telegram authentication. It does not change Telegram configuration by default.
+
+Do not use `pnpm dev` for an ordinary browser session. Its loopback page has no Telegram `initData` and is expected to show the owner-access error. Stop the current development process before switching modes so stale API or Vite instances do not keep ports `6000` or `6173`.
+
+The optional `pnpm dev -- --set-menu-button` command sets the menu button for the local test bot only. Use `pnpm dev -- --set-webhook` only with that local bot to register the ngrok API URL as a poll-only webhook and exercise threshold notifications. Browser mode is for local development only; it must not be exposed through a tunnel or used in production.
 
 ## Useful commands
 
