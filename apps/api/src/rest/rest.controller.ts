@@ -180,6 +180,20 @@ export class PollsController {
     return this.service.createPoll(ownerTelegramUserId, idempotencyKey, input);
   }
 
+  @Post(":id/republish")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ operationId: "republishOwnerPoll", summary: "Make one new attempt to publish a native Telegram poll" })
+  @ApiParam({ name: "id", type: String })
+  @ApiHeader({ name: "Idempotency-Key", required: true })
+  @ApiOkResponse({ type: PollEnvelopeResponseDto })
+  public republish(
+    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Param("id", PositiveBigIntPipe) pollId: bigint,
+  ): Promise<Record<string, unknown>> {
+    return this.service.republishPoll(ownerTelegramUserId, idempotencyKey, pollId);
+  }
+
   @Post(":id/archive")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ operationId: "archiveOwnerPoll", summary: "Archive a poll and delete its Telegram message" })

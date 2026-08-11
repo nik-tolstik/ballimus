@@ -25,13 +25,15 @@ const poll = {
   createdAt: '2026-08-11T12:00:00.000Z', updatedAt: '2026-08-11T12:00:00.000Z',
 }
 
-async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boolean } = {}): Promise<{ readonly weatherRequests: string[]; readonly republishRequests: string[]; readonly pollRequests: unknown[]; readonly archivePollRequests: string[] }> {
+async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boolean; readonly failedPoll?: boolean } = {}): Promise<{ readonly weatherRequests: string[]; readonly republishRequests: string[]; readonly republishPollRequests: string[]; readonly pollRequests: unknown[]; readonly archivePollRequests: string[] }> {
   const weatherRequests: string[] = []
   const republishRequests: string[] = []
+  const republishPollRequests: string[] = []
   const pollRequests: unknown[] = []
   const archivePollRequests: string[] = []
   let pollListRequests = 0
   let pollArchived = false
+  let pollRepublished = false
   await page.route('https://telegram.org/js/telegram-web-app.js', (route) => route.fulfill({ contentType: 'application/javascript', body: '' }))
   await page.addInitScript(() => {
     Object.defineProperty(window, '__FOOTBALL_API_BASE_URL__', { configurable: true, value: 'http://127.0.0.1:6174' })
@@ -49,20 +51,22 @@ async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boole
     if (request.method() === 'GET' && pathname === '/v1/venues') return json({ venues: [venue] })
     if (request.method() === 'GET' && pathname === '/v1/polls') {
       pollListRequests += 1
-      const currentPoll = pollListRequests < 2 ? poll : { ...poll, options: [{ ...poll.options[0], voterCount: 1 }, poll.options[1]] }
+      const publicationPoll = options.failedPoll === true && !pollRepublished ? { ...poll, publicationState: 'failed', lastError: 'Telegram rejected the poll' } : poll
+      const currentPoll = pollListRequests < 2 || options.failedPoll === true ? publicationPoll : { ...publicationPoll, options: [{ ...poll.options[0], voterCount: 1 }, poll.options[1]] }
       return json({ polls: options.existingPoll === true && !pollArchived ? [currentPoll] : [] })
     }
     if (request.method() === 'POST' && pathname === '/v1/polls') {
       const body = request.postDataJSON() as Record<string, unknown>
       pollRequests.push(body)
-      return json({ poll: { id: '1', ...body, options: [], publicationState: 'pending', closedAt: null, archivedAt: null, lastError: null, createdAt: '2026-08-11T12:00:00.000Z', updatedAt: '2026-08-11T12:00:00.000Z' } })
+      return json({ poll: { id: '1', ...body, publicationState: 'published', closedAt: null, archivedAt: null, lastError: null, createdAt: '2026-08-11T12:00:00.000Z', updatedAt: '2026-08-11T12:00:00.000Z' } })
     }
+    if (request.method() === 'POST' && pathname === '/v1/polls/1/republish') { republishPollRequests.push(pathname); pollRepublished = true; return json({ poll: { ...poll, publicationState: 'published' } }) }
     if (request.method() === 'POST' && pathname === '/v1/polls/1/archive') { archivePollRequests.push(pathname); pollArchived = true; return json({ poll: { ...poll, archivedAt: '2026-08-11T12:30:00.000Z' } }) }
     if (request.method() === 'POST' && pathname === '/v1/weather/current') { weatherRequests.push(pathname); return json({ sent: true, observedAt: '2026-08-10T12:00' }) }
     if (request.method() === 'POST' && pathname === '/v1/matches/1/republish') { republishRequests.push(pathname); return json({ match: { ...match, version: 2 } }) }
     return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ code: 'NOT_FOUND' }) })
   })
-  return { weatherRequests, republishRequests, pollRequests, archivePollRequests }
+  return { weatherRequests, republishRequests, republishPollRequests, pollRequests, archivePollRequests }
 }
 
 async function faviconCornerAlpha(page: Page): Promise<number> {
@@ -301,4 +305,19 @@ test('opens a poll, refreshes Telegram vote counts, and archives it', async ({ p
   await expect(page.getByRole('heading', { name: 'Опрос', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true })).toHaveCount(0)
   await expect(page.getByText('Опрос перемещён в архив и удаляется из Telegram.', { exact: true })).toBeVisible()
+})
+
+test('manually republishes a poll after a failed first attempt', async ({ page }) => {
+  const mocked = await mockOwnerApp(page, { existingPoll: true, failedPoll: true })
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Опросы', exact: true }).click()
+  await expect(page.getByText('Не опубликован', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true }).click()
+  await expect(page.getByText('Опрос не опубликован', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Переопубликовать', exact: true }).click()
+
+  await expect.poll(() => mocked.republishPollRequests).toEqual(['/v1/polls/1/republish'])
+  await expect(page.getByText('Опрос опубликован в Telegram.', { exact: true })).toBeVisible()
+  await expect(page.getByText('Опрос не опубликован', { exact: true })).toHaveCount(0)
 })

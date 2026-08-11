@@ -29,7 +29,8 @@ import type {
   CreateOwnerPollHeaders,
   PollCreateDto,
   PollEnvelopeResponseDto,
-  PollListResponseDto
+  PollListResponseDto,
+  RepublishOwnerPollHeaders
 } from '.././model/index.js';
 
 import { customInstance } from '../../mutator.js';
@@ -197,6 +198,70 @@ export const useCreateOwnerPoll = <TError = unknown,
       > => {
 
       const mutationOptions = getCreateOwnerPollMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * @summary Make one new attempt to publish a native Telegram poll
+ */
+export const republishOwnerPoll = (
+    id: string,
+    headers: RepublishOwnerPollHeaders,
+ options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
+) => {
+
+
+      return customInstance<PollEnvelopeResponseDto>(
+      {url: `/v1/polls/${id}/republish`, method: 'POST',
+      headers, ...(signal ? { signal }: {})
+    },
+      options);
+    }
+
+
+
+export const getRepublishOwnerPollMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof republishOwnerPoll>>, TError,{id: string;headers: RepublishOwnerPollHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof republishOwnerPoll>>, TError,{id: string;headers: RepublishOwnerPollHeaders}, TContext> => {
+
+const mutationKey = ['republishOwnerPoll'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof republishOwnerPoll>>, {id: string;headers: RepublishOwnerPollHeaders}> = (props) => {
+          const {id,headers} = props ?? {};
+
+          return  republishOwnerPoll(id,headers,requestOptions)
+        }
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RepublishOwnerPollMutationResult = NonNullable<Awaited<ReturnType<typeof republishOwnerPoll>>>
+
+    export type RepublishOwnerPollMutationError = unknown
+
+    /**
+ * @summary Make one new attempt to publish a native Telegram poll
+ */
+export const useRepublishOwnerPoll = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof republishOwnerPoll>>, TError,{id: string;headers: RepublishOwnerPollHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof republishOwnerPoll>>,
+        TError,
+        {id: string;headers: RepublishOwnerPollHeaders},
+        TContext
+      > => {
+
+      const mutationOptions = getRepublishOwnerPollMutationOptions(options);
 
       return useMutation(mutationOptions, queryClient);
     }

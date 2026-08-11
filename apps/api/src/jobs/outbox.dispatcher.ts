@@ -139,10 +139,6 @@ export class OutboxDispatcher {
         await this.markInitialPublicationUncertain(event, reason, now);
         return this.markUncertain(event, `Initial public-card publication requires reconciliation: ${reason}`, now);
       }
-      if (event.eventType === "publish_poll") {
-        await this.markPollPublicationUncertain(event, reason, now);
-        return this.markUncertain(event, `Initial poll publication requires reconciliation: ${reason}`, now);
-      }
       const availableAt = retryAt(event, now);
       const failed = await this.delivery.markFailed(event.id, reason, { availableAt, failedAt: now });
       return { status: "failed", eventId: event.id, event: failed, error: reason, availableAt };
@@ -183,25 +179,17 @@ export class OutboxDispatcher {
   private async dispatchPublishPoll(event: OutboxEvent, now: Date): Promise<OutboxDispatchResult> {
     const pollId = requiredPollId(event);
     const poll = await this.polls.getById(pollId);
-    if (poll.publicationState === "published") return this.markDelivered(event, now);
-    if (poll.publicationState === "cancelled") return this.markDelivered(event, now);
     if (poll.archivedAt !== null) {
-      await this.polls.markPublicationCancelled(pollId, now);
+      if (poll.publicationState === "pending") await this.polls.markPublicationCancelled(pollId, now);
       return this.markDelivered(event, now);
     }
-    if (poll.publicationState !== "pending") {
-      throw new Error(`Poll ${pollId.toString(10)} cannot be published from state ${poll.publicationState}`);
+    if (poll.publicationState === "pending") {
+      await this.polls.markPublicationUncertain(
+        pollId,
+        "Automatic publication did not complete. Check General and use manual republish.",
+        now,
+      );
     }
-    const sent = await this.effects.sendPoll({
-      chatId: poll.telegramChatId,
-      ...(poll.telegramTopicId === null ? {} : { messageThreadId: poll.telegramTopicId }),
-      question: poll.question,
-      options: poll.options.map((option) => option.text),
-      isAnonymous: poll.isAnonymous,
-      allowsMultipleAnswers: poll.allowsMultipleAnswers,
-      allowsRevoting: poll.allowsRevoting,
-    });
-    await this.polls.markPublished(poll.id, sent.pollId, sent.messageId, sent.options, now);
     return this.markDelivered(event, now);
   }
 
@@ -261,11 +249,4 @@ export class OutboxDispatcher {
     }
   }
 
-  private async markPollPublicationUncertain(event: OutboxEvent, reason: string, now: Date): Promise<void> {
-    try {
-      await this.polls.markPublicationUncertain(requiredPollId(event), `Initial Telegram poll publication requires reconciliation: ${reason}`, now);
-    } catch {
-      // The uncertain outbox event remains available for manual recovery.
-    }
-  }
 }

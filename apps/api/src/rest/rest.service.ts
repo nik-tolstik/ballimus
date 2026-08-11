@@ -23,6 +23,7 @@ import {
 import { API_CONFIG, type ApiConfig } from "../config/api-config.js";
 import { APP_DATABASE } from "../database/database.constants.js";
 import { OutboxBestEffortService } from "../telegram/outbox-best-effort.service.js";
+import { TelegramPollPublicationService } from "../telegram/telegram-poll-publication.service.js";
 import { CurrentWeatherService } from "../weather/current-weather.service.js";
 import { canonicalRequestHash } from "./rest.canonical.js";
 import {
@@ -77,6 +78,13 @@ function requiredKey(value: string | undefined): string {
   return value.trim();
 }
 
+function pollIdFromResponse(body: Record<string, unknown>): bigint | undefined {
+  const poll = body["poll"];
+  if (typeof poll !== "object" || poll === null || Array.isArray(poll)) return undefined;
+  const id = (poll as Record<string, unknown>)["id"];
+  return typeof id === "string" && /^[1-9]\d*$/u.test(id) ? BigInt(id) : undefined;
+}
+
 /** Parses a strong version value supplied through the HTTP If-Match header. */
 export function parseIfMatch(value: string | undefined, required: boolean): number | undefined {
   if (value === undefined || value.trim() === "") {
@@ -103,6 +111,7 @@ export class OwnerRestService {
     @Inject(APP_DATABASE) private readonly db: AppDatabase,
     @Inject(API_CONFIG) private readonly config: ApiConfig,
     @Inject(OutboxBestEffortService) private readonly bestEffort: OutboxBestEffortService,
+    @Inject(TelegramPollPublicationService) private readonly pollPublication: TelegramPollPublicationService,
     @Inject(CurrentWeatherService) private readonly weather: CurrentWeatherService,
   ) {}
 
@@ -160,23 +169,44 @@ export class OwnerRestService {
     input: PollCreateDto,
   ): Promise<Record<string, unknown>> {
     this.assertOwner(ownerTelegramUserId);
+    let createdPollId: bigint | undefined;
     const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "create-poll", input }, 201, async (repositories) => {
       try {
         const poll = await repositories.polls.create(pollCreationInput(this.config, ownerTelegramUserId, input));
-        await repositories.outbox.insertInTransaction({
-          eventType: "publish_poll",
-          deduplicationKey: `poll:${poll.id.toString(10)}:publish`,
-          telegramChatId: poll.telegramChatId,
-          telegramTopicId: poll.telegramTopicId,
-          payload: { pollId: poll.id.toString(10) },
-        });
+        createdPollId = poll.id;
         return serializeRestObject({ poll: this.pollBody(poll) });
       } catch (error) {
         throw toRestHttpException(error);
       }
     });
-    await this.tryDeliverOutbox();
-    return body;
+    const responsePollId = createdPollId ?? pollIdFromResponse(body);
+    if (responsePollId === undefined) return body;
+    const poll = createdPollId === undefined
+      ? await new TelegramPollsRepository(this.db).getById(responsePollId)
+      : await this.pollPublication.publishPending(responsePollId);
+    return serializeRestObject({ poll: this.pollBody(poll) });
+  }
+
+  public async republishPoll(
+    ownerTelegramUserId: bigint,
+    idempotencyKey: string | undefined,
+    pollId: bigint,
+  ): Promise<Record<string, unknown>> {
+    this.assertOwner(ownerTelegramUserId);
+    let publicationPollId: bigint | undefined;
+    await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "republish-poll", pollId }, 200, async (repositories) => {
+      const current = await repositories.polls.getById(pollId);
+      if (current.telegramChatId !== this.config.telegramGroupChatId) {
+        throw toRestHttpException(restRequestError(404, "RESOURCE_NOT_FOUND", "The requested resource was not found."));
+      }
+      const poll = await repositories.polls.beginPublicationAttempt(pollId);
+      publicationPollId = poll.id;
+      return serializeRestObject({ poll: this.pollBody(poll) });
+    });
+    const poll = publicationPollId === undefined
+      ? await new TelegramPollsRepository(this.db).getById(pollId)
+      : await this.pollPublication.publishPending(publicationPollId);
+    return serializeRestObject({ poll: this.pollBody(poll) });
   }
 
   public async archivePoll(
@@ -190,7 +220,8 @@ export class OwnerRestService {
       if (current.telegramChatId !== this.config.telegramGroupChatId) {
         throw toRestHttpException(restRequestError(404, "RESOURCE_NOT_FOUND", "The requested resource was not found."));
       }
-      const poll = await repositories.polls.archive(pollId);
+      let poll = await repositories.polls.archive(pollId);
+      if (poll.publicationState === "pending") poll = await repositories.polls.markPublicationCancelled(poll.id);
       await repositories.outbox.insertInTransaction({
         eventType: "delete_poll",
         deduplicationKey: `poll:${poll.id.toString(10)}:delete`,

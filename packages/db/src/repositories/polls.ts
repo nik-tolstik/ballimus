@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, or } from "drizzle-orm";
 
 import {
   telegramPolls,
@@ -192,6 +192,39 @@ export class TelegramPollsRepository {
       lastError: nonEmpty(error, "lastError", 2_000),
       updatedAt: now,
     }).where(and(eq(telegramPolls.id, parsedId), eq(telegramPolls.publicationState, "pending"))).returning();
+    return requirePoll(rows[0], parsedId.toString(10));
+  }
+
+  public async markPublicationFailed(id: DatabaseIdentifier, error: string, attemptedAt?: Date): Promise<TelegramPoll> {
+    const parsedId = positiveBigInt(id, "pollId");
+    const now = effectiveNow(attemptedAt);
+    const rows = await this.db.update(telegramPolls).set({
+      publicationState: "failed",
+      publicationAttemptedAt: now,
+      lastError: nonEmpty(error, "lastError", 2_000),
+      updatedAt: now,
+    }).where(and(eq(telegramPolls.id, parsedId), eq(telegramPolls.publicationState, "pending"))).returning();
+    return requirePoll(rows[0], parsedId.toString(10));
+  }
+
+  public async beginPublicationAttempt(id: DatabaseIdentifier, attemptedAt?: Date): Promise<TelegramPoll> {
+    const parsedId = positiveBigInt(id, "pollId");
+    const current = await this.getById(parsedId);
+    if (current.archivedAt !== null) throw new RepositoryConflictError("An archived poll cannot be republished");
+    if (current.publicationState !== "failed" && current.publicationState !== "uncertain") {
+      throw new RepositoryConflictError(`The poll cannot be republished from state ${current.publicationState}`);
+    }
+    const now = effectiveNow(attemptedAt);
+    const rows = await this.db.update(telegramPolls).set({
+      publicationState: "pending",
+      publicationAttemptedAt: null,
+      lastError: null,
+      updatedAt: now,
+    }).where(and(
+      eq(telegramPolls.id, parsedId),
+      or(eq(telegramPolls.publicationState, "failed"), eq(telegramPolls.publicationState, "uncertain")),
+      isNull(telegramPolls.archivedAt),
+    )).returning();
     return requirePoll(rows[0], parsedId.toString(10));
   }
 

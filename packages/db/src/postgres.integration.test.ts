@@ -161,4 +161,33 @@ describe("information-card PostgreSQL schema", () => {
     expect(cancelled.publicationState).toBe("cancelled");
     expect(await polls.listByChat(CHAT_ID)).not.toContainEqual(expect.objectContaining({ id: poll.id }));
   });
+
+  it("allows a failed poll to begin one manual publication attempt", async () => {
+    const polls = new TelegramPollsRepository(database.db);
+    const poll = await polls.create({
+      telegramChatId: CHAT_ID,
+      telegramTopicId: 1n,
+      question: "Повторить отправку?",
+      options: [
+        { text: "Да", notificationEnabled: true },
+        { text: "Нет", notificationEnabled: true },
+      ],
+      notificationThreshold: 10,
+      isAnonymous: false,
+      allowsMultipleAnswers: false,
+      allowsRevoting: true,
+      creatorTelegramUserId: OWNER_ID,
+    });
+
+    const failed = await polls.markPublicationFailed(poll.id, "Telegram rejected the poll");
+    const retrying = await polls.beginPublicationAttempt(poll.id);
+    const published = await polls.markPublished(poll.id, "telegram-poll-retry", 303n, [
+      { text: "Да", voterCount: 0 },
+      { text: "Нет", voterCount: 0 },
+    ]);
+
+    expect(failed.publicationState).toBe("failed");
+    expect(retrying).toMatchObject({ publicationState: "pending", publicationAttemptedAt: null, lastError: null });
+    expect(published).toMatchObject({ publicationState: "published", telegramMessageId: 303n });
+  });
 });

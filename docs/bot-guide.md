@@ -29,12 +29,14 @@ A poll has a question, 2–12 ordered options, and an optional multiple-answer s
 
 Count notifications are enabled by default at 10 people, and the organizer can change or disable the poll-level setting before publication. Bell controls are shown beside the options only while the poll-level setting is enabled. When Telegram reports that an option with an enabled bell reached the threshold, the bot sends one message to the Chat topic even though the poll itself is published in General. Options with a disabled bell never trigger notifications, and further updates never duplicate a notification already sent for an option. The Polls screen refreshes active results while it is visible, and selecting a poll card opens the “Poll” view with its current option counts. Archiving from that view removes the poll from the active list and deletes its Telegram message.
 
+Creating or manually republishing a poll makes one bounded Telegram request. A confirmed Telegram rejection is shown as “Not published”; a timeout or network interruption asks the owner to check General because the poll may still have arrived. The application never automatically resends a poll. The owner can use **Republish** from the poll view after checking General when necessary.
+
 The global **Weather** action sends the current Minsk weather to the configured Telegram chat/topic. It is independent of matches, has no daily cap, and can be pressed repeatedly.
 
 All mutations use idempotency keys. Updating or deleting a match and editing a venue use `If-Match` versions to prevent silent overwrites.
 
 ## Operational boundary
 
-The API accepts only authenticated native `poll` updates at `/v1/telegram/webhook`. The endpoint ignores unrelated updates and unknown poll identifiers. It has no callback-query, message, roster, or `poll_answer` handling. Outbound cards, polls, threshold notifications, and weather messages use bounded Bot API calls.
+The API accepts only authenticated native `poll` updates at `/v1/telegram/webhook`. The endpoint ignores unrelated updates and unknown poll identifiers. It has no callback-query, message, roster, or `poll_answer` handling. Outbound cards, polls, threshold notifications, and weather messages use bounded Bot API calls. The durable outbox handles poll deletion and threshold notifications, but not poll publication retries.
 
 Local and production bots, chats, databases, origins, and secrets must remain separate. Production deployment, migration, webhook registration, and Telegram messages require separate explicit owner authorization.

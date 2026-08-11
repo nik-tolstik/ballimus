@@ -127,6 +127,13 @@
       "when": 1786444800006,
       "tag": "0017_archive_native_polls",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1786444800007,
+      "tag": "0018_manual_poll_publication",
+      "breakpoints": true
     }
   ]
 }

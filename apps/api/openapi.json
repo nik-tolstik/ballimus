@@ -380,6 +380,50 @@
         ]
       }
     },
+    "/v1/polls/{id}/republish": {
+      "post": {
+        "operationId": "republishOwnerPoll",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PollEnvelopeResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "Make one new attempt to publish a native Telegram poll",
+        "tags": [
+          "polls"
+        ]
+      }
+    },
     "/v1/polls/{id}/archive": {
       "post": {
         "operationId": "archiveOwnerPoll",

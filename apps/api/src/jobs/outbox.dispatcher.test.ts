@@ -50,15 +50,11 @@ describe("OutboxDispatcher", () => {
     expect(markDelivered).toHaveBeenCalledOnce();
   });
 
-  it("publishes a native poll and stores its Telegram reference", async () => {
+  it("retires a legacy poll publication event without sending another Telegram poll", async () => {
     const pollEvent = { ...event(), eventType: "publish_poll" as const, matchId: null, payload: { pollId: "7" } };
     const markDelivered = vi.fn().mockResolvedValue({ ...pollEvent, deliveryState: "delivered", deliveredAt: new Date() });
-    const sendPoll = vi.fn().mockResolvedValue({
-      pollId: "telegram-poll-7",
-      messageId: 70n,
-      options: [{ text: "Да", voterCount: 0 }, { text: "Нет", voterCount: 0 }],
-    });
-    const markPublished = vi.fn().mockResolvedValue(undefined);
+    const sendPoll = vi.fn();
+    const markPublicationUncertain = vi.fn().mockResolvedValue(undefined);
     const dispatcher = new OutboxDispatcher(
       {} as never,
       { sendPoll } as never,
@@ -72,23 +68,18 @@ describe("OutboxDispatcher", () => {
           options: [{ text: "Да", notificationEnabled: true }, { text: "Нет", notificationEnabled: false }], isAnonymous: false,
           allowsMultipleAnswers: false, allowsRevoting: true, publicationState: "pending", archivedAt: null,
         }),
-        markPublished,
-        markPublicationUncertain: vi.fn(),
+        markPublicationUncertain,
         markPublicationCancelled: vi.fn(),
       } as never,
     );
 
     await expect(dispatcher.dispatch(pollEvent)).resolves.toMatchObject({ status: "delivered" });
-    expect(sendPoll).toHaveBeenCalledWith({
-      chatId: -100n,
-      messageThreadId: 2n,
-      question: "Играем?",
-      options: ["Да", "Нет"],
-      isAnonymous: false,
-      allowsMultipleAnswers: false,
-      allowsRevoting: true,
-    });
-    expect(markPublished).toHaveBeenCalledWith(7n, "telegram-poll-7", 70n, expect.any(Array), expect.any(Date));
+    expect(sendPoll).not.toHaveBeenCalled();
+    expect(markPublicationUncertain).toHaveBeenCalledWith(
+      7n,
+      "Automatic publication did not complete. Check General and use manual republish.",
+      expect.any(Date),
+    );
   });
 
   it("sends a formatted threshold notification to the poll topic", async () => {

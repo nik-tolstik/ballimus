@@ -33,6 +33,7 @@ export * from './pollResponseDtoPublicationState.js';
 export * from './publicCardResponseDto.js';
 export * from './publicCardResponseDtoPublicationState.js';
 export * from './republishOwnerMatchHeaders.js';
+export * from './republishOwnerPollHeaders.js';
 export * from './restoreOwnerVenueHeaders.js';
 export * from './updateOwnerMatchHeaders.js';
 export * from './updateOwnerVenueHeaders.js';
