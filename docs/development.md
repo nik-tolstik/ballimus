@@ -18,8 +18,6 @@ TELEGRAM_OWNER_USER_ID=<local-owner-telegram-id>
 TELEGRAM_CHAT_ID=<local-test-chat-id>
 TELEGRAM_GENERAL_TOPIC_ID=<local-card-topic-id>
 TELEGRAM_CHAT_TOPIC_ID=<local-weather-topic-id>
-TELEGRAM_MINI_APP_URL=http://localhost:6173
-WEB_ORIGIN=http://localhost:6173
 CLOUDFLARE_TUNNEL_URL=https://football-dev.example.com
 GROUP_TIMEZONE=Europe/Minsk
 LOG_LEVEL=debug
@@ -32,14 +30,9 @@ pnpm db:migrate
 pnpm db:check
 ```
 
-Choose one development mode based on the task:
+Telegram Mini App is the only supported local development mode. First ensure that the remotely managed Cloudflare Tunnel connector is healthy, then run `pnpm dev`. It starts the API and Vite behind the persistent `CLOUDFLARE_TUNNEL_URL` origin with real Telegram authentication. It does not change Telegram configuration by default. Open the Mini App from the configured local test bot; the loopback ports are internal tunnel targets and do not contain a Telegram session.
 
-- For browser-only UI work, a "browser server", or opening the app outside Telegram, run `pnpm dev:browser` and open `http://127.0.0.1:6173`. It creates a real signed local-owner session from `.env.local`, binds the Vite app to loopback, and never uses the public Cloudflare Tunnel route.
-- For explicit Telegram Mini App or webhook testing, first ensure that the remotely managed Cloudflare Tunnel connector is healthy, then run `pnpm dev`. It starts the API and Vite behind the persistent `CLOUDFLARE_TUNNEL_URL` origin with real Telegram authentication. It does not change Telegram configuration by default.
-
-Do not use `pnpm dev` for an ordinary browser session. Its loopback page has no Telegram `initData` and is expected to show the owner-access error. Stop the current development process before switching modes so stale API or Vite instances do not keep ports `6000` or `6173`.
-
-The optional `pnpm dev -- --set-menu-button` command sets the menu button for the local test bot only. Use `pnpm dev -- --set-webhook` only with that local bot to register `${CLOUDFLARE_TUNNEL_URL}/v1/telegram/webhook` for aggregate `poll` and individual `poll_answer` updates and exercise threshold notifications. The Cloudflare route targets Vite on port `6173`; Vite proxies `/v1` to the loopback API on port `6000`. Browser mode is local-only and must never be exposed through the tunnel or used in production.
+The optional `pnpm dev -- --set-menu-button` command sets the menu button for the local test bot only. Use `pnpm dev -- --set-webhook` only with that bot to register `${CLOUDFLARE_TUNNEL_URL}/v1/telegram/webhook` for aggregate `poll` and individual `poll_answer` updates and exercise threshold notifications. The Cloudflare route targets Vite on port `6173`; Vite proxies `/v1` to the loopback API on port `6000`.
 
 ## Useful commands
 
