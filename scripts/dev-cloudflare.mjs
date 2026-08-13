@@ -8,6 +8,8 @@ import { get as getHttps } from "node:https";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { createChildProcessInvocation } from "./child-process.mjs";
+
 const projectRoot = resolve(import.meta.dirname, "..");
 const localEnvFile = resolve(projectRoot, ".env.local");
 const packageManager = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
@@ -82,7 +84,8 @@ function fail(message) {
 }
 
 function startChild(command, argumentsToRun, environment) {
-  const child = spawn(command, argumentsToRun, {
+  const invocation = createChildProcessInvocation(command, argumentsToRun);
+  const child = spawn(invocation.command, invocation.arguments, {
     cwd: projectRoot,
     env: environment,
     stdio: "inherit",

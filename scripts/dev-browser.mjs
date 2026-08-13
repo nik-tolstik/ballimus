@@ -5,6 +5,8 @@ import { existsSync } from "node:fs";
 import { get as getHttp } from "node:http";
 import { resolve } from "node:path";
 
+import { createChildProcessInvocation } from "./child-process.mjs";
+
 const projectRoot = resolve(import.meta.dirname, "..");
 const localEnvFile = resolve(projectRoot, ".env.local");
 const fixtureScript = resolve(projectRoot, "scripts/generate-init-data.mjs");
@@ -21,7 +23,8 @@ function fail(message) {
 }
 
 function startChild(command, argumentsToRun, environment) {
-  const child = spawn(command, argumentsToRun, {
+  const invocation = createChildProcessInvocation(command, argumentsToRun);
+  const child = spawn(invocation.command, invocation.arguments, {
     cwd: projectRoot,
     env: environment,
     stdio: "inherit",
