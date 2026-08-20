@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
+import { ConfirmationSheet } from './confirmation-sheet'
 import { PollEditor, type PollEditorValues } from './poll-editor'
 
 function publicationLabel(poll: PollResponseDto): string {
@@ -121,22 +122,25 @@ export function PollsPanel({ polls, saving, onCreate, onUpdateNotificationSettin
   const [editorOpen, setEditorOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [notificationsEditorOpen, setNotificationsEditorOpen] = useState(false)
+  const [confirmation, setConfirmation] = useState<'archive' | 'republish'>()
   const [selectedPollId, setSelectedPollId] = useState<string>()
   const selectedPoll = polls.find((poll) => poll.id === selectedPollId)
   const openSettings = (poll: PollResponseDto) => { setSelectedPollId(poll.id); setSettingsOpen(true) }
   const archiveSelectedPoll = async () => {
     if (selectedPoll === undefined) return
-    if (!window.confirm(`Переместить опрос «${selectedPoll.question}» в архив? Опрос будет удалён из Telegram.`)) return
     if (await onArchive(selectedPoll.id)) {
-      setSettingsOpen(false)
+      setConfirmation(undefined)
       setSelectedPollId(undefined)
     }
   }
   const republishSelectedPoll = async () => {
     if (selectedPoll === undefined) return
-    if (selectedPoll.publicationState === 'uncertain' && !window.confirm('Сначала проверьте General — Telegram мог получить опрос, даже если не подтвердил отправку. Переопубликовать?')) return
-    await onRepublish(selectedPoll.id)
+    if (await onRepublish(selectedPoll.id) && confirmation === 'republish') {
+      setConfirmation(undefined)
+      setSettingsOpen(true)
+    }
   }
+  const closeConfirmation = (open: boolean) => { if (!open) { setConfirmation(undefined); setSettingsOpen(true) } }
   const updateSelectedPollNotifications = async (notificationEnabled: readonly boolean[]) => {
     if (selectedPoll === undefined) return
     if (await onUpdateNotificationSettings(selectedPoll.id, notificationEnabled)) setNotificationsEditorOpen(false)
@@ -146,7 +150,8 @@ export function PollsPanel({ polls, saving, onCreate, onUpdateNotificationSettin
     <div className="flex items-end justify-between gap-4"><h1 className="text-2xl font-semibold tracking-tight">Опросы</h1><Button className="h-10 px-3" onClick={() => setEditorOpen(true)}><Plus data-icon="inline-start" />Новый опрос</Button></div>
     {polls.length === 0 ? <Empty><EmptyHeader><EmptyMedia variant="icon"><BarChart3 /></EmptyMedia><EmptyTitle>Опросов пока нет</EmptyTitle></EmptyHeader><EmptyContent><Button onClick={() => setEditorOpen(true)}><Plus data-icon="inline-start" />Создать опрос</Button></EmptyContent></Empty> : <div className="flex flex-col gap-2">{polls.map((poll) => <Card key={poll.id} size="sm" className="relative"><CardHeader><CardTitle>{poll.question}</CardTitle></CardHeader><CardContent className="flex flex-col gap-3"><div className="flex flex-col gap-2">{poll.options.map((option, index) => <div key={`${poll.id}-${String(index)}`} className="flex items-center justify-between gap-3 text-sm"><span className="min-w-0 truncate">{option.text}</span><div className="flex shrink-0 items-center gap-2">{poll.notificationThreshold !== null && option.notificationEnabled ? <Bell className="size-3.5 text-warning" aria-label="Оповещение включено" /> : null}<span className="font-medium tabular-nums">{option.voterCount}</span></div></div>)}</div><div className="flex flex-wrap items-center gap-2"><Badge variant={publicationVariant(poll)}>{poll.publicationState === 'pending' ? <LoaderCircle role="status" aria-label="Публикация опроса" className="animate-spin" /> : null}{publicationLabel(poll)}</Badge>{poll.notificationThreshold === null ? null : <Badge variant={poll.options.some((option) => option.notificationEnabled && option.notificationQueuedAt !== null) ? 'success' : 'secondary'}><Bell />{poll.notificationThreshold}</Badge>}</div></CardContent><button type="button" className="absolute inset-0 z-10 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50" aria-label={`Открыть опрос ${poll.question}`} onClick={() => openSettings(poll)} /></Card>)}</div>}
     <Sheet open={editorOpen} onOpenChange={setEditorOpen}><SheetContent side="bottom" className="mx-auto max-h-[92svh] w-full max-w-[480px] gap-0 rounded-t-2xl p-0 data-[side=bottom]:h-[min(92svh,48rem)]"><div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/35" /><SheetHeader className="px-4 pt-3 pb-4"><SheetTitle className="text-lg">Новый опрос</SheetTitle></SheetHeader><PollEditor saving={saving} onSave={(values) => { onCreate(values); setEditorOpen(false) }} /></SheetContent></Sheet>
-    <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}><SheetContent side="bottom" className="mx-auto max-h-[92svh] w-full max-w-[480px] gap-0 rounded-t-2xl p-0"><div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/35" /><SheetHeader className="px-4 pt-3 pb-4"><SheetTitle className="text-lg">Опрос</SheetTitle></SheetHeader>{selectedPoll === undefined ? null : <PollDetails poll={selectedPoll} saving={saving} onEditNotifications={() => { setSettingsOpen(false); setNotificationsEditorOpen(true) }} onRepublish={() => { void republishSelectedPoll() }} onArchive={() => { void archiveSelectedPoll() }} />}</SheetContent></Sheet>
+    <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}><SheetContent side="bottom" className="mx-auto max-h-[92svh] w-full max-w-[480px] gap-0 rounded-t-2xl p-0"><div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/35" /><SheetHeader className="px-4 pt-3 pb-4"><SheetTitle className="text-lg">Опрос</SheetTitle></SheetHeader>{selectedPoll === undefined ? null : <PollDetails poll={selectedPoll} saving={saving} onEditNotifications={() => { setSettingsOpen(false); setNotificationsEditorOpen(true) }} onRepublish={() => { if (selectedPoll.publicationState === 'uncertain') { setSettingsOpen(false); setConfirmation('republish') } else void republishSelectedPoll() }} onArchive={() => { setSettingsOpen(false); setConfirmation('archive') }} />}</SheetContent></Sheet>
     <Sheet open={notificationsEditorOpen} onOpenChange={setNotificationsEditorOpen}><SheetContent side="bottom" className="mx-auto max-h-[92svh] w-full max-w-[480px] gap-0 rounded-t-2xl p-0"><div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/35" /><SheetHeader className="px-4 pt-3 pb-4"><SheetTitle className="text-lg">Оповещения</SheetTitle></SheetHeader>{selectedPoll === undefined ? null : <PollNotificationSettingsEditor key={selectedPoll.id} poll={selectedPoll} saving={saving} onSave={(notificationEnabled) => { void updateSelectedPollNotifications(notificationEnabled) }} />}</SheetContent></Sheet>
+    <ConfirmationSheet open={confirmation !== undefined} title={confirmation === 'archive' ? 'Переместить опрос в архив?' : 'Переопубликовать опрос?'} description={confirmation === 'archive' ? `«${selectedPoll?.question ?? 'Опрос'}» будет удалён из Telegram.` : 'Сначала проверьте General: Telegram мог получить опрос, даже если не подтвердил отправку.'} confirmLabel={confirmation === 'archive' ? 'В архив' : 'Переопубликовать'} destructive={confirmation === 'archive'} pending={saving} onOpenChange={closeConfirmation} onConfirm={() => { if (confirmation === 'archive') void archiveSelectedPoll(); else void republishSelectedPoll() }} />
   </section>
 }

@@ -29,7 +29,7 @@ import {
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { ConfirmationSheet } from '@/components/football/confirmation-sheet'
 import { MatchesPanel } from '@/components/football/panels'
 import { PollsPanel } from '@/components/football/polls-panel'
 import { StateScreen } from '@/components/football/state-screen'
@@ -181,7 +181,6 @@ export function App({ telegramSession }: AppProps = {}) {
   }
   const handleUpdateMatch = (match: NormalizedMatch, values: EditorValues) => updateMatchMutation.mutate({ id: match.id, data: matchRequest(values), headers: { 'Idempotency-Key': requestKey(), 'If-Match': String(match.version) } }, { onSuccess: () => { setConflict(''); invalidateMatches(); toast.success('Карточка матча обновлена.') } })
   const handleDeleteMatch = async (match: NormalizedMatch): Promise<boolean> => {
-    if (!window.confirm(`Удалить карточку матча ${match.dateLabel}?`)) return false
     try {
       await deleteMatchMutation.mutateAsync({ id: match.id, headers: { 'Idempotency-Key': requestKey(), 'If-Match': String(match.version) } })
       invalidateMatches()
@@ -203,7 +202,6 @@ export function App({ telegramSession }: AppProps = {}) {
     }
   }
   const handleDeleteArchivedMatch = async (match: NormalizedMatch): Promise<boolean> => {
-    if (!window.confirm(`Удалить архивный матч ${match.dateLabel}? Это действие нельзя отменить.`)) return false
     try {
       await deleteArchivedMatchMutation.mutateAsync({ id: match.id, headers: { 'Idempotency-Key': requestKey(), 'If-Match': String(match.version) } })
       invalidateArchivedMatches()
@@ -233,7 +231,6 @@ export function App({ telegramSession }: AppProps = {}) {
     invalidateVenues(); invalidateMatches()
   }
   const handleDeleteVenue = async (venue: NormalizedVenue): Promise<boolean> => {
-    if (!window.confirm(`Удалить площадку «${venue.name}» навсегда?`)) return false
     try {
       await deleteVenueMutation.mutateAsync({ id: venue.id, headers: { 'Idempotency-Key': requestKey(), 'If-Match': String(venue.version) } })
       invalidateVenues()
@@ -256,17 +253,7 @@ export function App({ telegramSession }: AppProps = {}) {
       {loading ? <StateScreen kind="loading" title="Загружаем данные" copy="Синхронизируем данные…" /> : tab === 'matches' ? <MatchesPanel matches={matches} archivedMatches={archivedMatches} venues={venues} saving={matchSaving} conflict={conflict} onClearConflict={() => setConflict('')} onCreate={handleCreateMatch} onUpdate={handleUpdateMatch} onDelete={handleDeleteMatch} onArchive={handleArchiveMatch} onDeleteArchived={handleDeleteArchivedMatch} onRepublish={handleRepublishMatch} onCreateVenue={handleCreateVenue} /> : tab === 'polls' ? <PollsPanel polls={pollsQuery.data?.polls ?? []} saving={pollSaving} onCreate={handleCreatePoll} onUpdateNotificationSettings={handleUpdatePollNotificationSettings} onRepublish={handleRepublishPoll} onArchive={handleArchivePoll} /> : <VenuesPanel venues={venues} saving={venueSaving} onCreate={handleCreateVenue} onUpdate={handleUpdateVenue} onDelete={handleDeleteVenue} />}
     </main>
     <TabBar value={tab} onChange={setTab} />
-    <Sheet open={weatherConfirmationOpen} onOpenChange={setWeatherConfirmationOpen}>
-      <SheetContent side="bottom" className="mx-auto w-full max-w-[480px] rounded-t-2xl">
-        <SheetHeader>
-          <SheetTitle>Отправить погоду?</SheetTitle>
-        </SheetHeader>
-        <div className="flex flex-col gap-2 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-          <Button onClick={() => { setWeatherConfirmationOpen(false); weatherMutation.mutate() }} disabled={weatherMutation.isPending}>Отправить</Button>
-          <Button variant="ghost" onClick={() => setWeatherConfirmationOpen(false)} disabled={weatherMutation.isPending}>Отмена</Button>
-        </div>
-      </SheetContent>
-    </Sheet>
+    <ConfirmationSheet open={weatherConfirmationOpen} title="Отправить погоду?" confirmLabel="Отправить" pending={weatherMutation.isPending} onOpenChange={setWeatherConfirmationOpen} onConfirm={() => { setWeatherConfirmationOpen(false); weatherMutation.mutate() }} />
   </div>
 }
 
