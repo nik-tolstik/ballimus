@@ -46,9 +46,6 @@ export class VenueResponseDto {
   @ApiProperty({ type: String, nullable: true, format: "uri" })
   websiteUrl!: string | null;
 
-  @ApiProperty({ type: String, nullable: true, format: "date-time" })
-  archivedAt!: string | null;
-
   @ApiProperty({ type: Number, minimum: 1 })
   version!: number;
 

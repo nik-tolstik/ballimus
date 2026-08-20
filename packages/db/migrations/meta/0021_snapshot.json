@@ -1,0 +1,1305 @@
+{
+  "id": "30379e61-84d2-4b5e-89c2-67a609748ae5",
+  "prevId": "7f82d470-6345-48b3-9cd6-a48dc8844d26",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.http_idempotency_keys": {
+      "name": "http_idempotency_keys",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "http_idempotency_keys_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "owner_telegram_user_id": {
+          "name": "owner_telegram_user_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_hash": {
+          "name": "request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'processing'"
+        },
+        "response_status": {
+          "name": "response_status",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "response_body": {
+          "name": "response_body",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "http_idempotency_expiry_idx": {
+          "name": "http_idempotency_expiry_idx",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "http_idempotency_owner_key_unique": {
+          "name": "http_idempotency_owner_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "owner_telegram_user_id",
+            "idempotency_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "http_idempotency_owner_positive": {
+          "name": "http_idempotency_owner_positive",
+          "value": "\"http_idempotency_keys\".\"owner_telegram_user_id\" > 0"
+        },
+        "http_idempotency_key_not_empty": {
+          "name": "http_idempotency_key_not_empty",
+          "value": "length(trim(\"http_idempotency_keys\".\"idempotency_key\")) between 1 and 255"
+        },
+        "http_idempotency_request_hash_not_empty": {
+          "name": "http_idempotency_request_hash_not_empty",
+          "value": "length(trim(\"http_idempotency_keys\".\"request_hash\")) > 0"
+        },
+        "http_idempotency_status_valid": {
+          "name": "http_idempotency_status_valid",
+          "value": "\"http_idempotency_keys\".\"status\" in ('processing', 'succeeded', 'failed')"
+        },
+        "http_idempotency_response_status_valid": {
+          "name": "http_idempotency_response_status_valid",
+          "value": "\"http_idempotency_keys\".\"response_status\" is null or \"http_idempotency_keys\".\"response_status\" between 100 and 599"
+        },
+        "http_idempotency_completion_consistent": {
+          "name": "http_idempotency_completion_consistent",
+          "value": "(\n      (\"http_idempotency_keys\".\"status\" = 'processing' and \"http_idempotency_keys\".\"completed_at\" is null)\n      or (\"http_idempotency_keys\".\"status\" in ('succeeded', 'failed') and \"http_idempotency_keys\".\"completed_at\" is not null and \"http_idempotency_keys\".\"response_status\" is not null)\n    )"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.job_claims": {
+      "name": "job_claims",
+      "schema": "",
+      "columns": {
+        "job_name": {
+          "name": "job_name",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "claim_token": {
+          "name": "claim_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "claimed_at": {
+          "name": "claimed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lease_expires_at": {
+          "name": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_completed_at": {
+          "name": "last_completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "job_claims_job_name_not_empty": {
+          "name": "job_claims_job_name_not_empty",
+          "value": "length(trim(\"job_claims\".\"job_name\")) > 0"
+        },
+        "job_claims_token_not_empty": {
+          "name": "job_claims_token_not_empty",
+          "value": "length(trim(\"job_claims\".\"claim_token\")) > 0"
+        },
+        "job_claims_lease_after_claim": {
+          "name": "job_claims_lease_after_claim",
+          "value": "\"job_claims\".\"lease_expires_at\" > \"job_claims\".\"claimed_at\""
+        },
+        "job_claims_error_not_empty": {
+          "name": "job_claims_error_not_empty",
+          "value": "\"job_claims\".\"last_error\" is null or length(trim(\"job_claims\".\"last_error\")) > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.match_messages": {
+      "name": "match_messages",
+      "schema": "",
+      "columns": {
+        "match_id": {
+          "name": "match_id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "telegram_chat_id": {
+          "name": "telegram_chat_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "telegram_topic_id": {
+          "name": "telegram_topic_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "telegram_message_id": {
+          "name": "telegram_message_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "publication_state": {
+          "name": "publication_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "publication_attempted_at": {
+          "name": "publication_attempted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "publication_uncertain_at": {
+          "name": "publication_uncertain_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "match_messages_telegram_reference_unique": {
+          "name": "match_messages_telegram_reference_unique",
+          "columns": [
+            {
+              "expression": "telegram_chat_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "coalesce(\"telegram_topic_id\", 0)",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "telegram_message_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"match_messages\".\"telegram_message_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "match_messages_publication_state_idx": {
+          "name": "match_messages_publication_state_idx",
+          "columns": [
+            {
+              "expression": "publication_state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "match_messages_match_chat_fk": {
+          "name": "match_messages_match_chat_fk",
+          "tableFrom": "match_messages",
+          "tableTo": "matches",
+          "columnsFrom": [
+            "match_id",
+            "telegram_chat_id"
+          ],
+          "columnsTo": [
+            "id",
+            "telegram_chat_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "match_messages_telegram_chat_id_non_zero": {
+          "name": "match_messages_telegram_chat_id_non_zero",
+          "value": "\"match_messages\".\"telegram_chat_id\" <> 0"
+        },
+        "match_messages_telegram_topic_id_positive": {
+          "name": "match_messages_telegram_topic_id_positive",
+          "value": "\"match_messages\".\"telegram_topic_id\" is null or \"match_messages\".\"telegram_topic_id\" > 0"
+        },
+        "match_messages_telegram_message_id_positive": {
+          "name": "match_messages_telegram_message_id_positive",
+          "value": "\"match_messages\".\"telegram_message_id\" is null or \"match_messages\".\"telegram_message_id\" > 0"
+        },
+        "match_messages_publication_state_valid": {
+          "name": "match_messages_publication_state_valid",
+          "value": "\"match_messages\".\"publication_state\" in ('pending', 'published', 'uncertain', 'failed', 'deleted')"
+        },
+        "match_messages_publication_reference_consistent": {
+          "name": "match_messages_publication_reference_consistent",
+          "value": "(\n      (\"match_messages\".\"publication_state\" in ('published', 'deleted') and \"match_messages\".\"telegram_message_id\" is not null)\n      or (\"match_messages\".\"publication_state\" in ('pending', 'uncertain', 'failed') and \"match_messages\".\"telegram_message_id\" is null)\n    )"
+        },
+        "match_messages_uncertain_state_explicit": {
+          "name": "match_messages_uncertain_state_explicit",
+          "value": "(\n      (\"match_messages\".\"publication_state\" = 'uncertain' and \"match_messages\".\"publication_uncertain_at\" is not null)\n      or (\"match_messages\".\"publication_state\" <> 'uncertain' and \"match_messages\".\"publication_uncertain_at\" is null)\n    )"
+        },
+        "match_messages_attempt_state_consistent": {
+          "name": "match_messages_attempt_state_consistent",
+          "value": "(\n      (\"match_messages\".\"publication_state\" = 'pending' and \"match_messages\".\"publication_attempted_at\" is null)\n      or (\"match_messages\".\"publication_state\" <> 'pending' and \"match_messages\".\"publication_attempted_at\" is not null)\n    )"
+        },
+        "match_messages_error_state_consistent": {
+          "name": "match_messages_error_state_consistent",
+          "value": "(\n      (\"match_messages\".\"publication_state\" in ('failed', 'uncertain') and \"match_messages\".\"last_error\" is not null and length(trim(\"match_messages\".\"last_error\")) > 0)\n      or (\"match_messages\".\"publication_state\" in ('pending', 'published', 'deleted') and \"match_messages\".\"last_error\" is null)\n    )"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.matches": {
+      "name": "matches",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "matches_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "telegram_chat_id": {
+          "name": "telegram_chat_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scheduled_at": {
+          "name": "scheduled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "duration_minutes": {
+          "name": "duration_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 90
+        },
+        "venue_id": {
+          "name": "venue_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "field_price_rubles": {
+          "name": "field_price_rubles",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "creator_telegram_user_id": {
+          "name": "creator_telegram_user_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "deletion_requested_at": {
+          "name": "deletion_requested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "matches_venue_id_idx": {
+          "name": "matches_venue_id_idx",
+          "columns": [
+            {
+              "expression": "venue_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "matches_active_idx": {
+          "name": "matches_active_idx",
+          "columns": [
+            {
+              "expression": "telegram_chat_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "deletion_requested_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "scheduled_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "matches_venue_id_venues_id_fk": {
+          "name": "matches_venue_id_venues_id_fk",
+          "tableFrom": "matches",
+          "tableTo": "venues",
+          "columnsFrom": [
+            "venue_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "matches_id_chat_unique": {
+          "name": "matches_id_chat_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "telegram_chat_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "matches_telegram_chat_id_non_zero": {
+          "name": "matches_telegram_chat_id_non_zero",
+          "value": "\"matches\".\"telegram_chat_id\" <> 0"
+        },
+        "matches_creator_telegram_user_id_positive": {
+          "name": "matches_creator_telegram_user_id_positive",
+          "value": "\"matches\".\"creator_telegram_user_id\" > 0"
+        },
+        "matches_duration_minutes_valid": {
+          "name": "matches_duration_minutes_valid",
+          "value": "\"matches\".\"duration_minutes\" between 15 and 480"
+        },
+        "matches_field_price_non_negative": {
+          "name": "matches_field_price_non_negative",
+          "value": "\"matches\".\"field_price_rubles\" is null or \"matches\".\"field_price_rubles\" >= 0"
+        },
+        "matches_version_positive": {
+          "name": "matches_version_positive",
+          "value": "\"matches\".\"version\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.outbox": {
+      "name": "outbox",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "outbox_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "deduplication_key": {
+          "name": "deduplication_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "match_id": {
+          "name": "match_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "telegram_chat_id": {
+          "name": "telegram_chat_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "telegram_topic_id": {
+          "name": "telegram_topic_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "delivery_state": {
+          "name": "delivery_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "attempt_count": {
+          "name": "attempt_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "available_at": {
+          "name": "available_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "locked_at": {
+          "name": "locked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_expires_at": {
+          "name": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "delivered_at": {
+          "name": "delivered_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "uncertain_at": {
+          "name": "uncertain_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "outbox_delivery_queue_idx": {
+          "name": "outbox_delivery_queue_idx",
+          "columns": [
+            {
+              "expression": "delivery_state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "available_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "outbox_match_idx": {
+          "name": "outbox_match_idx",
+          "columns": [
+            {
+              "expression": "match_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "outbox_match_id_matches_id_fk": {
+          "name": "outbox_match_id_matches_id_fk",
+          "tableFrom": "outbox",
+          "tableTo": "matches",
+          "columnsFrom": [
+            "match_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "outbox_deduplication_key_unique": {
+          "name": "outbox_deduplication_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "deduplication_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "outbox_event_type_valid": {
+          "name": "outbox_event_type_valid",
+          "value": "\"outbox\".\"event_type\" in ('publish_public_card', 'refresh_public_card', 'delete_public_card')"
+        },
+        "outbox_deduplication_key_not_empty": {
+          "name": "outbox_deduplication_key_not_empty",
+          "value": "length(trim(\"outbox\".\"deduplication_key\")) > 0"
+        },
+        "outbox_telegram_chat_id_non_zero": {
+          "name": "outbox_telegram_chat_id_non_zero",
+          "value": "\"outbox\".\"telegram_chat_id\" <> 0"
+        },
+        "outbox_telegram_topic_id_positive": {
+          "name": "outbox_telegram_topic_id_positive",
+          "value": "\"outbox\".\"telegram_topic_id\" is null or \"outbox\".\"telegram_topic_id\" > 0"
+        },
+        "outbox_attempt_count_non_negative": {
+          "name": "outbox_attempt_count_non_negative",
+          "value": "\"outbox\".\"attempt_count\" >= 0"
+        },
+        "outbox_event_scope_consistent": {
+          "name": "outbox_event_scope_consistent",
+          "value": "\"outbox\".\"event_type\" = 'delete_public_card' or \"outbox\".\"match_id\" is not null"
+        },
+        "outbox_delivery_state_valid": {
+          "name": "outbox_delivery_state_valid",
+          "value": "\"outbox\".\"delivery_state\" in ('pending', 'processing', 'delivered', 'failed', 'uncertain')"
+        },
+        "outbox_delivery_timestamps_consistent": {
+          "name": "outbox_delivery_timestamps_consistent",
+          "value": "(\n      (\"outbox\".\"delivery_state\" = 'delivered' and \"outbox\".\"delivered_at\" is not null and \"outbox\".\"uncertain_at\" is null)\n      or (\"outbox\".\"delivery_state\" = 'uncertain' and \"outbox\".\"delivered_at\" is null and \"outbox\".\"uncertain_at\" is not null)\n      or (\"outbox\".\"delivery_state\" in ('pending', 'processing', 'failed') and \"outbox\".\"delivered_at\" is null and \"outbox\".\"uncertain_at\" is null)\n    )"
+        },
+        "outbox_error_consistent": {
+          "name": "outbox_error_consistent",
+          "value": "(\n      (\"outbox\".\"delivery_state\" in ('failed', 'uncertain') and \"outbox\".\"last_error\" is not null and length(trim(\"outbox\".\"last_error\")) > 0)\n      or (\"outbox\".\"delivery_state\" in ('pending', 'processing', 'delivered') and \"outbox\".\"last_error\" is null)\n    )"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.telegram_poll_voter_answers": {
+      "name": "telegram_poll_voter_answers",
+      "schema": "",
+      "columns": {
+        "poll_id": {
+          "name": "poll_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "voter_kind": {
+          "name": "voter_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "telegram_voter_id": {
+          "name": "telegram_voter_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "selected_option_indexes": {
+          "name": "selected_option_indexes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "last_telegram_update_id": {
+          "name": "last_telegram_update_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "telegram_poll_voter_answers_poll_idx": {
+          "name": "telegram_poll_voter_answers_poll_idx",
+          "columns": [
+            {
+              "expression": "poll_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "telegram_poll_voter_answers_poll_id_telegram_polls_id_fk": {
+          "name": "telegram_poll_voter_answers_poll_id_telegram_polls_id_fk",
+          "tableFrom": "telegram_poll_voter_answers",
+          "tableTo": "telegram_polls",
+          "columnsFrom": [
+            "poll_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {
+        "telegram_poll_voter_answers_pk": {
+          "name": "telegram_poll_voter_answers_pk",
+          "columns": [
+            "poll_id",
+            "voter_kind",
+            "telegram_voter_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "telegram_poll_voter_answers_kind_valid": {
+          "name": "telegram_poll_voter_answers_kind_valid",
+          "value": "\"telegram_poll_voter_answers\".\"voter_kind\" in ('user', 'chat')"
+        },
+        "telegram_poll_voter_answers_voter_id_non_zero": {
+          "name": "telegram_poll_voter_answers_voter_id_non_zero",
+          "value": "\"telegram_poll_voter_answers\".\"telegram_voter_id\" <> 0"
+        },
+        "telegram_poll_voter_answers_username_valid": {
+          "name": "telegram_poll_voter_answers_username_valid",
+          "value": "\"telegram_poll_voter_answers\".\"username\" is null or length(trim(\"telegram_poll_voter_answers\".\"username\")) between 1 and 255"
+        },
+        "telegram_poll_voter_answers_display_name_valid": {
+          "name": "telegram_poll_voter_answers_display_name_valid",
+          "value": "length(trim(\"telegram_poll_voter_answers\".\"display_name\")) between 1 and 255"
+        },
+        "telegram_poll_voter_answers_options_valid": {
+          "name": "telegram_poll_voter_answers_options_valid",
+          "value": "jsonb_typeof(\"telegram_poll_voter_answers\".\"selected_option_indexes\") = 'array'"
+        },
+        "telegram_poll_voter_answers_update_id_non_negative": {
+          "name": "telegram_poll_voter_answers_update_id_non_negative",
+          "value": "\"telegram_poll_voter_answers\".\"last_telegram_update_id\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.telegram_polls": {
+      "name": "telegram_polls",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "telegram_polls_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "telegram_poll_id": {
+          "name": "telegram_poll_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "telegram_chat_id": {
+          "name": "telegram_chat_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "telegram_topic_id": {
+          "name": "telegram_topic_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "telegram_message_id": {
+          "name": "telegram_message_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "question": {
+          "name": "question",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "options": {
+          "name": "options",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "notification_threshold": {
+          "name": "notification_threshold",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_anonymous": {
+          "name": "is_anonymous",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "allows_multiple_answers": {
+          "name": "allows_multiple_answers",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "allows_revoting": {
+          "name": "allows_revoting",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "publication_state": {
+          "name": "publication_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "publication_attempted_at": {
+          "name": "publication_attempted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "creator_telegram_user_id": {
+          "name": "creator_telegram_user_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "telegram_polls_telegram_poll_id_unique": {
+          "name": "telegram_polls_telegram_poll_id_unique",
+          "columns": [
+            {
+              "expression": "telegram_poll_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"telegram_polls\".\"telegram_poll_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "telegram_polls_chat_created_idx": {
+          "name": "telegram_polls_chat_created_idx",
+          "columns": [
+            {
+              "expression": "telegram_chat_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "telegram_polls_chat_id_non_zero": {
+          "name": "telegram_polls_chat_id_non_zero",
+          "value": "\"telegram_polls\".\"telegram_chat_id\" <> 0"
+        },
+        "telegram_polls_topic_id_positive": {
+          "name": "telegram_polls_topic_id_positive",
+          "value": "\"telegram_polls\".\"telegram_topic_id\" is null or \"telegram_polls\".\"telegram_topic_id\" > 0"
+        },
+        "telegram_polls_message_id_positive": {
+          "name": "telegram_polls_message_id_positive",
+          "value": "\"telegram_polls\".\"telegram_message_id\" is null or \"telegram_polls\".\"telegram_message_id\" > 0"
+        },
+        "telegram_polls_question_valid": {
+          "name": "telegram_polls_question_valid",
+          "value": "length(\"telegram_polls\".\"question\") between 1 and 300"
+        },
+        "telegram_polls_options_valid": {
+          "name": "telegram_polls_options_valid",
+          "value": "jsonb_typeof(\"telegram_polls\".\"options\") = 'array' and jsonb_array_length(\"telegram_polls\".\"options\") between 2 and 12"
+        },
+        "telegram_polls_notification_threshold_valid": {
+          "name": "telegram_polls_notification_threshold_valid",
+          "value": "\"telegram_polls\".\"notification_threshold\" is null or \"telegram_polls\".\"notification_threshold\" between 1 and 1000000"
+        },
+        "telegram_polls_publication_state_valid": {
+          "name": "telegram_polls_publication_state_valid",
+          "value": "\"telegram_polls\".\"publication_state\" in ('pending', 'published', 'uncertain', 'failed', 'cancelled')"
+        },
+        "telegram_polls_creator_positive": {
+          "name": "telegram_polls_creator_positive",
+          "value": "\"telegram_polls\".\"creator_telegram_user_id\" > 0"
+        },
+        "telegram_polls_publication_reference_consistent": {
+          "name": "telegram_polls_publication_reference_consistent",
+          "value": "(\n      (\"telegram_polls\".\"publication_state\" = 'published' and \"telegram_polls\".\"telegram_poll_id\" is not null and \"telegram_polls\".\"telegram_message_id\" is not null)\n      or (\"telegram_polls\".\"publication_state\" in ('pending', 'uncertain', 'failed', 'cancelled') and \"telegram_polls\".\"telegram_poll_id\" is null and \"telegram_polls\".\"telegram_message_id\" is null)\n    )"
+        },
+        "telegram_polls_attempt_state_consistent": {
+          "name": "telegram_polls_attempt_state_consistent",
+          "value": "(\n      (\"telegram_polls\".\"publication_state\" = 'pending' and \"telegram_polls\".\"publication_attempted_at\" is null)\n      or (\"telegram_polls\".\"publication_state\" <> 'pending' and \"telegram_polls\".\"publication_attempted_at\" is not null)\n    )"
+        },
+        "telegram_polls_error_state_consistent": {
+          "name": "telegram_polls_error_state_consistent",
+          "value": "(\n      (\"telegram_polls\".\"publication_state\" in ('failed', 'uncertain') and \"telegram_polls\".\"last_error\" is not null and length(trim(\"telegram_polls\".\"last_error\")) > 0)\n      or (\"telegram_polls\".\"publication_state\" in ('pending', 'published', 'cancelled') and \"telegram_polls\".\"last_error\" is null)\n    )"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.venues": {
+      "name": "venues",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "venues_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "map_url": {
+          "name": "map_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "venue_type": {
+          "name": "venue_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "booking_contacts": {
+          "name": "booking_contacts",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "website_url": {
+          "name": "website_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "venues_name_ci_unique": {
+          "name": "venues_name_ci_unique",
+          "columns": [
+            {
+              "expression": "lower(\"name\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "venues_name_not_empty": {
+          "name": "venues_name_not_empty",
+          "value": "length(trim(\"venues\".\"name\")) > 0"
+        },
+        "venues_map_url_not_empty": {
+          "name": "venues_map_url_not_empty",
+          "value": "length(trim(\"venues\".\"map_url\")) > 0"
+        },
+        "venues_type_valid": {
+          "name": "venues_type_valid",
+          "value": "\"venues\".\"venue_type\" in ('outdoor', 'indoor')"
+        },
+        "venues_booking_contacts_valid": {
+          "name": "venues_booking_contacts_valid",
+          "value": "case when jsonb_typeof(\"venues\".\"booking_contacts\") = 'array' then jsonb_array_length(\"venues\".\"booking_contacts\") between 0 and 5 else false end"
+        },
+        "venues_version_positive": {
+          "name": "venues_version_positive",
+          "value": "\"venues\".\"version\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

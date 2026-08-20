@@ -16,8 +16,6 @@ export interface VenueResponseDto {
   bookingContacts: VenueBookingContactResponseDto[];
   /** @nullable */
   websiteUrl: string | null;
-  /** @nullable */
-  archivedAt: string | null;
   /** @minimum 1 */
   version: number;
   createdAt: string;

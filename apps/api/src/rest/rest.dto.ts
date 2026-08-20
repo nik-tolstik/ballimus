@@ -1,4 +1,4 @@
-import { Transform, Type } from "class-transformer";
+import { Type } from "class-transformer";
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -226,12 +226,4 @@ export class VenueUpdateDto {
   @IsUrl({ require_protocol: true })
   @MaxLength(2_000)
   websiteUrl?: string | null;
-}
-
-export class VenueListQueryDto {
-  @ApiPropertyOptional({ type: Boolean, default: false })
-  @IsOptional()
-  @Transform(({ value }: { readonly value: unknown }) => value === true || value === "true")
-  @IsBoolean()
-  includeArchived?: boolean;
 }

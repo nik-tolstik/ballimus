@@ -498,16 +498,7 @@
     "/v1/venues": {
       "get": {
         "operationId": "listOwnerVenues",
-        "parameters": [
-          {
-            "name": "includeArchived",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "boolean"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": "",
@@ -635,11 +626,9 @@
         "tags": [
           "venues"
         ]
-      }
-    },
-    "/v1/venues/{id}/archive": {
-      "post": {
-        "operationId": "archiveOwnerVenue",
+      },
+      "delete": {
+        "operationId": "deleteOwnerVenue",
         "parameters": [
           {
             "name": "If-Match",
@@ -672,7 +661,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VenueEnvelopeResponseDto"
+                  "example": {
+                    "deleted": true,
+                    "venueId": "42"
+                  }
                 }
               }
             }
@@ -683,59 +675,7 @@
             "telegramMiniApp": []
           }
         ],
-        "summary": "Archive a venue catalog entry",
-        "tags": [
-          "venues"
-        ]
-      }
-    },
-    "/v1/venues/{id}/restore": {
-      "post": {
-        "operationId": "restoreOwnerVenue",
-        "parameters": [
-          {
-            "name": "If-Match",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VenueEnvelopeResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Restore a venue catalog entry",
+        "summary": "Permanently delete a venue catalog entry",
         "tags": [
           "venues"
         ]
@@ -867,11 +807,6 @@
             "nullable": true,
             "format": "uri"
           },
-          "archivedAt": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time"
-          },
           "version": {
             "type": "number",
             "minimum": 1
@@ -892,7 +827,6 @@
           "venueType",
           "bookingContacts",
           "websiteUrl",
-          "archivedAt",
           "version",
           "createdAt",
           "updatedAt"

@@ -92,6 +92,37 @@ describe("information-card PostgreSQL schema", () => {
     expect((await outbox.findByDeduplicationKey(`match:${match.id.toString(10)}:delete`))?.eventType).toBe("delete_public_card");
   });
 
+  it("permanently deletes unreferenced venues and protects venues used by matches", async () => {
+    const venues = new VenuesRepository(database.db);
+    const matches = new MatchesRepository(database.db);
+    const unused = await venues.create({
+      name: "Unused venue",
+      mapUrl: "https://maps.example.test/unused-venue",
+      venueType: "outdoor",
+    });
+
+    await expect(venues.delete(unused.id, unused.version)).resolves.toBe(true);
+    await expect(venues.findById(unused.id)).resolves.toBeUndefined();
+
+    const used = await venues.create({
+      name: "Used venue",
+      mapUrl: "https://maps.example.test/used-venue",
+      venueType: "indoor",
+    });
+    const match = await matches.create({
+      telegramChatId: CHAT_ID,
+      scheduledAt: new Date("2026-08-03T17:00:00.000Z"),
+      durationMinutes: 90,
+      venueId: used.id,
+      creatorTelegramUserId: OWNER_ID,
+    });
+
+    await expect(venues.delete(used.id, used.version)).rejects.toMatchObject({
+      name: "VenueInUseRepositoryError",
+    });
+    await expect(matches.findById(match.id)).resolves.toMatchObject({ venueId: used.id });
+  });
+
   it("emits once per upward threshold crossing and ignores disabled options", async () => {
     const polls = new TelegramPollsRepository(database.db);
     const poll = await polls.create({

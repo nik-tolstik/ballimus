@@ -32,7 +32,6 @@ import {
   type PatchMatchDto,
   type PollCreateDto,
   type VenueCreateDto,
-  type VenueListQueryDto,
   type VenueUpdateDto,
 } from "./rest.dto.js";
 import { restRequestError, toRestHttpException } from "./rest.errors.js";
@@ -240,7 +239,6 @@ export class OwnerRestService {
     const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "create-match", input }, 201, async (repositories) => {
       try {
         const venue = await repositories.venues.getForUpdate(BigInt(input.venueId));
-        this.assertActiveVenue(venue);
         const match = await repositories.matches.create({
           telegramChatId: this.config.telegramGroupChatId,
           scheduledAt,
@@ -286,7 +284,7 @@ export class OwnerRestService {
         const date = input.date ?? calendarDateInTimeZone(current.scheduledAt, this.config.groupTimezone);
         const time = input.time ?? formatTimeInTimeZone(current.scheduledAt, this.config.groupTimezone);
         const venueId = input.venueId === undefined ? undefined : BigInt(input.venueId);
-        if (venueId !== undefined) this.assertActiveVenue(await repositories.venues.getForUpdate(venueId));
+        if (venueId !== undefined) await repositories.venues.getForUpdate(venueId);
         const updated = await repositories.matches.update(matchId, {
           expectedVersion,
           ...(input.date === undefined && input.time === undefined ? {} : { scheduledAt: this.toScheduledAt(date, time) }),
@@ -372,10 +370,10 @@ export class OwnerRestService {
     return body;
   }
 
-  public async listVenues(ownerTelegramUserId: bigint, query: VenueListQueryDto): Promise<Record<string, unknown>> {
+  public async listVenues(ownerTelegramUserId: bigint): Promise<Record<string, unknown>> {
     this.assertOwner(ownerTelegramUserId);
     try {
-      const venues = await new VenuesRepository(this.db).list({ includeArchived: query.includeArchived === true });
+      const venues = await new VenuesRepository(this.db).list();
       return serializeRestObject({ venues: venues.map((venue) => this.venueBody(venue)) });
     } catch (error) {
       throw toRestHttpException(error);
@@ -421,19 +419,18 @@ export class OwnerRestService {
     return body;
   }
 
-  public async setVenueArchived(
+  public async deleteVenue(
     ownerTelegramUserId: bigint,
     idempotencyKey: string | undefined,
     ifMatch: string | undefined,
     venueId: bigint,
-    archived: boolean,
   ): Promise<Record<string, unknown>> {
     this.assertOwner(ownerTelegramUserId);
     const expectedVersion = parseIfMatch(ifMatch, true);
-    return this.mutate(ownerTelegramUserId, idempotencyKey, { operation: archived ? "archive-venue" : "restore-venue", venueId, expectedVersion }, 200, async (repositories) => {
+    return this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "delete-venue", venueId, expectedVersion }, 200, async (repositories) => {
       try {
-        const venue = await repositories.venues.setArchived(venueId, archived, expectedVersion);
-        return serializeRestObject({ venue: this.venueBody(venue) });
+        const deleted = await repositories.venues.delete(venueId, expectedVersion);
+        return serializeRestObject({ deleted, venueId });
       } catch (error) {
         throw toRestHttpException(error);
       }
@@ -518,7 +515,6 @@ export class OwnerRestService {
       venueType: venue.venueType,
       bookingContacts: venue.bookingContacts,
       websiteUrl: venue.websiteUrl,
-      archivedAt: venue.archivedAt,
       version: venue.version,
       createdAt: venue.createdAt,
       updatedAt: venue.updatedAt,
@@ -589,12 +585,6 @@ export class OwnerRestService {
   private assertCurrentMatch(match: DbMatch): void {
     if (match.telegramChatId !== this.config.telegramGroupChatId || match.deletionRequestedAt !== null) {
       throw toRestHttpException(restRequestError(404, "RESOURCE_NOT_FOUND", "The requested resource was not found."));
-    }
-  }
-
-  private assertActiveVenue(venue: DbVenue): void {
-    if (venue.archivedAt !== null) {
-      throw toRestHttpException(restRequestError(409, "VENUE_ARCHIVED", "An archived venue cannot be used for a match."));
     }
   }
 

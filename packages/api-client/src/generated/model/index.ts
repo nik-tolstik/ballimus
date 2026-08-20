@@ -7,15 +7,14 @@
  */
 
 export * from './archiveOwnerPollHeaders.js';
-export * from './archiveOwnerVenueHeaders.js';
 export * from './bootstrapResponseDto.js';
 export * from './createOwnerMatchHeaders.js';
 export * from './createOwnerPollHeaders.js';
 export * from './createOwnerVenueHeaders.js';
 export * from './deleteOwnerMatchHeaders.js';
+export * from './deleteOwnerVenueHeaders.js';
 export * from './groupConfigurationResponseDto.js';
 export * from './listOwnerMatchesParams.js';
-export * from './listOwnerVenuesParams.js';
 export * from './matchCreateDto.js';
 export * from './matchEnvelopeResponseDto.js';
 export * from './matchListResponseDto.js';
@@ -34,7 +33,6 @@ export * from './publicCardResponseDto.js';
 export * from './publicCardResponseDtoPublicationState.js';
 export * from './republishOwnerMatchHeaders.js';
 export * from './republishOwnerPollHeaders.js';
-export * from './restoreOwnerVenueHeaders.js';
 export * from './updateOwnerMatchHeaders.js';
 export * from './updateOwnerVenueHeaders.js';
 export * from './venueBookingContactDto.js';

@@ -20,13 +20,13 @@ Railway Cron or local command ------------------------------> apps/api jobs:run
 The generated OpenAPI contract exposes only:
 
 - match information-card CRUD;
-- venue catalog CRUD/archive/restore;
+- venue catalog CRUD and permanent deletion;
 - native poll creation, listing, manual republishing, and archiving;
 - `POST /v1/weather/current`.
 
 Match creation requires an exact date/time and an active venue. It writes the match, a pending public-card reference, and a `publish_public_card` outbox event in one transaction. A best-effort delivery is attempted after commit; the jobs process provides retry recovery.
 
-Edits enqueue a refresh of the existing message. Deletes mark the match as deletion-requested and queue `delete_public_card`. Repeating the deletion is safe. Poll creation writes an independent `telegram_polls` row and makes one bounded Telegram publication attempt after the transaction commits. There are no player, roster, match-vote, forecast, history, or lifecycle endpoints.
+Edits enqueue a refresh of the existing message. Deletes mark the match as deletion-requested and queue `delete_public_card`. Repeating the deletion is safe. Poll creation writes an independent `telegram_polls` row and makes one bounded Telegram publication attempt after the transaction commits. A venue can be permanently deleted only when no match references it; referenced venues and existing matches are preserved. There are no player, roster, match-vote, forecast, or match-history endpoints.
 
 ## Telegram delivery
 
@@ -48,7 +48,7 @@ The current application tables are:
 - `outbox` — durable information-card delivery queue;
 - `job_claims` — jobs lease.
 
-Migration `0010_information_cards` queues deletion of legacy Telegram card messages before deleting legacy match, player, vote, roster, notification, webhook-update, and old-outbox data. Migration `0014_native_telegram_polls` adds the isolated poll store. Migration `0016_non_anonymous_general_polls` changes the default for newly created poll records without rewriting already published Telegram polls. Migration `0017_archive_native_polls` adds poll archival state. Migration `0018_manual_poll_publication` converts incomplete legacy poll sends into terminal states so the owner can republish explicitly. Migration `0019_remove_poll_outbox` deletes legacy poll events and restricts the outbox to information-card work. Migration `0020_poll_voter_answers` retains the latest answer per voter for active polls and supports idempotent below-threshold withdrawal alerts. `pnpm db:cleanup-legacy-cards` removes only delivered migration-only card deletion events.
+Migration `0010_information_cards` queues deletion of legacy Telegram card messages before deleting legacy match, player, vote, roster, notification, webhook-update, and old-outbox data. Migration `0014_native_telegram_polls` adds the isolated poll store. Migration `0016_non_anonymous_general_polls` changes the default for newly created poll records without rewriting already published Telegram polls. Migration `0017_archive_native_polls` adds poll archival state. Migration `0018_manual_poll_publication` converts incomplete legacy poll sends into terminal states so the owner can republish explicitly. Migration `0019_remove_poll_outbox` deletes legacy poll events and restricts the outbox to information-card work. Migration `0020_poll_voter_answers` retains the latest answer per voter for active polls and supports idempotent below-threshold withdrawal alerts. Migration `0021_remove_venue_archiving` removes the obsolete venue archive marker and deletes only archived venues that are not referenced by a match; referenced venues and their matches are preserved. `pnpm db:cleanup-legacy-cards` removes only delivered migration-only card deletion events.
 
 ## Security and environments
 

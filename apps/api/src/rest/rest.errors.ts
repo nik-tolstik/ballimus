@@ -3,6 +3,7 @@ import {
   IdempotencyConflictError,
   isPersistenceError,
   OptimisticConcurrencyError,
+  VenueInUseRepositoryError,
   type PersistenceError,
 } from "@football/db";
 
@@ -115,6 +116,15 @@ export function mapRestError(error: unknown): RestErrorMapping {
           expectedVersion: error.expectedVersion,
           ...(error.actualVersion === undefined ? {} : { actualVersion: error.actualVersion }),
         },
+      },
+    };
+  }
+  if (error instanceof VenueInUseRepositoryError) {
+    return {
+      status: 409,
+      body: {
+        code: "VENUE_IN_USE",
+        message: "The venue cannot be deleted while it is used by an existing match.",
       },
     };
   }
