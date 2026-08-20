@@ -21,6 +21,7 @@ export interface EditorValues {
 
 interface MatchEditorProps {
   readonly match?: NormalizedMatch
+  readonly initialValues?: EditorValues
   readonly onSave: (values: EditorValues) => void
   readonly onOpenActions?: () => void
   readonly conflict: string
@@ -46,12 +47,12 @@ export function currentHourTime(now = new Date()): string {
   return `${String(now.getHours()).padStart(2, '0')}:00`
 }
 
-export function MatchEditor({ match, onSave, onOpenActions, conflict, onClearConflict, saving, venues, onCreateVenue }: MatchEditorProps) {
-  const [date, setDate] = useState(match?.date ?? '')
-  const [time, setTime] = useState(match?.time ?? currentHourTime())
-  const [durationMinutes, setDurationMinutes] = useState(String(match?.durationMinutes ?? 90))
-  const [venueId, setVenueId] = useState<string | null>(match?.venue.id ?? null)
-  const [fieldPriceByn, setFieldPriceByn] = useState(match?.fieldPriceByn === undefined ? '' : String(match.fieldPriceByn))
+export function MatchEditor({ match, initialValues, onSave, onOpenActions, conflict, onClearConflict, saving, venues, onCreateVenue }: MatchEditorProps) {
+  const [date, setDate] = useState(match?.date ?? initialValues?.date ?? '')
+  const [time, setTime] = useState(match?.time ?? initialValues?.time ?? currentHourTime())
+  const [durationMinutes, setDurationMinutes] = useState(String(match?.durationMinutes ?? initialValues?.durationMinutes ?? 90))
+  const [venueId, setVenueId] = useState<string | null>(match?.venue.id ?? initialValues?.venueId ?? null)
+  const [fieldPriceByn, setFieldPriceByn] = useState(match?.fieldPriceByn === undefined ? initialValues?.fieldPriceByn ?? '' : String(match.fieldPriceByn))
   const [venueCreateOpen, setVenueCreateOpen] = useState(false)
   const [validation, setValidation] = useState('')
 

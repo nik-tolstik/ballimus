@@ -108,6 +108,7 @@ export class OutboxDispatcher {
   private async dispatchPublish(event: OutboxEvent, now: Date): Promise<OutboxDispatchResult> {
     const result = await this.cards.publishInitialCard(requiredMatchId(event));
     if (result.status === "published") return this.markDelivered(event, now);
+    if (result.status === "skipped") return this.markDelivered(event, now);
     const reason = uncertainReason(event, result);
     await this.markInitialPublicationUncertain(event, reason, now);
     return this.markUncertain(event, reason, now);

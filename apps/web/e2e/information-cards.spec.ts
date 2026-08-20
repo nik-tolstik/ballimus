@@ -9,7 +9,7 @@ const venue = {
 const match = {
   id: '1', chatId: '-100', scheduledAt: '2026-08-12T17:00:00.000Z',
   schedule: { date: '2026-08-12', time: '20:00', timezone: 'Europe/Minsk' }, durationMinutes: 90, venue,
-  fieldPriceRubles: 120, version: 1, creatorTelegramUserId: '1', deletionRequestedAt: null,
+  fieldPriceRubles: 120, version: 1, creatorTelegramUserId: '1', archivedAt: null, deletionRequestedAt: null,
   createdAt: '2026-08-01T12:00:00.000Z', updatedAt: '2026-08-01T12:00:00.000Z',
   publicCard: { publicationState: 'pending', telegramMessageId: '10', publicationAttemptedAt: '2026-08-01T12:00:01.000Z', lastError: null },
 }
@@ -25,17 +25,31 @@ const poll = {
   createdAt: '2026-08-11T12:00:00.000Z', updatedAt: '2026-08-11T12:00:00.000Z',
 }
 
-async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boolean; readonly failedPoll?: boolean } = {}): Promise<{ readonly weatherRequests: string[]; readonly republishRequests: string[]; readonly republishPollRequests: string[]; readonly pollRequests: unknown[]; readonly archivePollRequests: string[]; readonly deleteVenueRequests: string[] }> {
+async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boolean; readonly failedPoll?: boolean } = {}): Promise<{ readonly weatherRequests: string[]; readonly republishRequests: string[]; readonly republishPollRequests: string[]; readonly pollRequests: unknown[]; readonly archivePollRequests: string[]; readonly deleteVenueRequests: string[]; readonly archiveMatchRequests: string[]; readonly deleteArchivedMatchRequests: string[]; readonly createMatchRequests: unknown[] }> {
   const weatherRequests: string[] = []
   const republishRequests: string[] = []
   const republishPollRequests: string[] = []
   const pollRequests: unknown[] = []
   const archivePollRequests: string[] = []
   const deleteVenueRequests: string[] = []
+  let venueDeleted = false
+  const archiveMatchRequests: string[] = []
+  const deleteArchivedMatchRequests: string[] = []
+  const createMatchRequests: unknown[] = []
   let pollListRequests = 0
   let pollArchived = false
   let pollRepublished = false
-  let venueDeleted = false
+  let matchArchived = false
+  let archivedMatchDeleted = false
+  const archivedMatch = {
+    ...match,
+    id: '4',
+    schedule: { ...match.schedule, date: '2026-08-10', time: '18:30' },
+    durationMinutes: 120,
+    fieldPriceRubles: 75,
+    archivedAt: '2026-08-14T12:00:00.000Z',
+    publicCard: { ...match.publicCard, publicationState: 'deleted' },
+  }
   await page.route('https://telegram.org/js/telegram-web-app.js', (route) => route.fulfill({ contentType: 'application/javascript', body: '' }))
   await page.addInitScript(() => {
     Object.defineProperty(window, '__FOOTBALL_API_BASE_URL__', { configurable: true, value: 'http://127.0.0.1:6174' })
@@ -45,11 +59,14 @@ async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boole
     const request = route.request()
     const pathname = new URL(request.url()).pathname
     const json = (body: unknown) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) })
-    if (request.method() === 'GET' && pathname === '/v1/matches') return json({ matches: [
-      match,
-      { ...match, id: '2', schedule: { ...match.schedule, time: '21:00' }, venue: { ...venue, id: '2', name: 'BOX365 Второй' }, fieldPriceRubles: 121, publicCard: { ...match.publicCard, publicationState: 'published' } },
-      { ...match, id: '3', schedule: { ...match.schedule, time: '22:00' }, venue: { ...venue, id: '3', name: 'BOX365 Третий' }, fieldPriceRubles: 122, publicCard: { ...match.publicCard, publicationState: 'failed', lastError: 'Telegram unavailable' } },
-    ] })
+    if (request.method() === 'GET' && pathname === '/v1/matches') {
+      if (new URL(request.url()).searchParams.get('archived') === 'true') return json({ matches: archivedMatchDeleted ? [] : [archivedMatch, ...(matchArchived ? [{ ...match, archivedAt: '2026-08-15T12:00:00.000Z', version: 2, publicCard: { ...match.publicCard, publicationState: 'deleted' } }] : [])] })
+      return json({ matches: [
+        ...(matchArchived ? [] : [match]),
+        { ...match, id: '2', schedule: { ...match.schedule, time: '21:00' }, venue: { ...venue, id: '2', name: 'BOX365 Второй' }, fieldPriceRubles: 121, publicCard: { ...match.publicCard, publicationState: 'published' } },
+        { ...match, id: '3', schedule: { ...match.schedule, time: '22:00' }, venue: { ...venue, id: '3', name: 'BOX365 Третий' }, fieldPriceRubles: 122, publicCard: { ...match.publicCard, publicationState: 'failed', lastError: 'Telegram unavailable' } },
+      ] })
+    }
     if (request.method() === 'GET' && pathname === '/v1/venues') return json({ venues: venueDeleted ? [] : [venue] })
     if (request.method() === 'GET' && pathname === '/v1/polls') {
       pollListRequests += 1
@@ -66,10 +83,13 @@ async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boole
     if (request.method() === 'POST' && pathname === '/v1/polls/1/archive') { archivePollRequests.push(pathname); pollArchived = true; return json({ poll: { ...poll, archivedAt: '2026-08-11T12:30:00.000Z' } }) }
     if (request.method() === 'POST' && pathname === '/v1/weather/current') { weatherRequests.push(pathname); return json({ sent: true, observedAt: '2026-08-10T12:00' }) }
     if (request.method() === 'DELETE' && pathname === '/v1/venues/1') { deleteVenueRequests.push(pathname); venueDeleted = true; return json({ deleted: true, venueId: '1' }) }
+    if (request.method() === 'POST' && pathname === '/v1/matches') { const body = request.postDataJSON(); createMatchRequests.push(body); return json({ match: { ...match, ...body, id: '5', archivedAt: null, schedule: { date: (body as { date: string }).date, time: (body as { time: string }).time, timezone: 'Europe/Minsk' } } }) }
     if (request.method() === 'POST' && pathname === '/v1/matches/1/republish') { republishRequests.push(pathname); return json({ match: { ...match, version: 2 } }) }
+    if (request.method() === 'POST' && pathname === '/v1/matches/1/archive') { archiveMatchRequests.push(pathname); matchArchived = true; return json({ match: { ...match, archivedAt: '2026-08-15T12:00:00.000Z', version: 2, publicCard: { ...match.publicCard, publicationState: 'deleted' } } }) }
+    if (request.method() === 'DELETE' && pathname === '/v1/matches/4/archive') { deleteArchivedMatchRequests.push(pathname); archivedMatchDeleted = true; return json({ deleted: true, matchId: '4' }) }
     return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ code: 'NOT_FOUND' }) })
   })
-  return { weatherRequests, republishRequests, republishPollRequests, pollRequests, archivePollRequests, deleteVenueRequests }
+  return { weatherRequests, republishRequests, republishPollRequests, pollRequests, archivePollRequests, deleteVenueRequests, archiveMatchRequests, deleteArchivedMatchRequests, createMatchRequests }
 }
 
 async function faviconCornerAlpha(page: Page): Promise<number> {
@@ -124,6 +144,48 @@ test('shows static information cards without roster or voting controls', async (
   await expect(page.getByText(/Игроки|Голосования|Состав/u)).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Игроки', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'История', exact: true })).toHaveCount(0)
+})
+
+test('archives a match, repeats it, and permanently deletes an archived record', async ({ page }) => {
+  const mocked = await mockOwnerApp(page)
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Открыть матч Среда, 12 августа · 20:00-21:30', exact: true }).click()
+  await page.getByRole('button', { name: 'Действия матча', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'В архив', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'В архив', exact: true }).click()
+  await expect.poll(() => mocked.archiveMatchRequests).toEqual(['/v1/matches/1/archive'])
+  await expect(page.getByRole('button', { name: 'Открыть матч Среда, 12 августа · 20:00-21:30', exact: true })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Архив матчей', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Архив матчей', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Открыть архивный матч Понедельник, 10 августа · 18:30-20:30', exact: true }).click({ position: { x: 16, y: 16 } })
+  await expect(page.getByRole('heading', { name: 'Архивный матч', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Повторить', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Удалить', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Переопубликовать матч', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'В архив', exact: true })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Повторить', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Новый матч', exact: true })).toBeVisible()
+  await expect(page.locator('input[type="date"]')).toHaveValue('2026-08-10')
+  await expect(page.getByLabel('Время матча', { exact: true })).toHaveValue('18:30')
+  await expect(page.getByLabel('Длительность матча в минутах', { exact: true })).toHaveValue('120')
+  await expect(page.getByRole('combobox', { name: 'Выбор места', exact: true })).toContainText('BOX365 Пушкинская')
+  await expect(page.getByLabel('Стоимость поля в белорусских рублях', { exact: true })).toHaveValue('75')
+  await page.getByRole('button', { name: 'Опубликовать матч', exact: true }).click()
+  await expect.poll(() => mocked.createMatchRequests).toEqual([{ date: '2026-08-10', time: '18:30', durationMinutes: 120, venueId: '1', fieldPriceRubles: 75 }])
+
+  await page.getByRole('button', { name: 'Архив матчей', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Открыть архивный матч Понедельник, 10 августа · 18:30-20:30', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Открыть архивный матч Понедельник, 10 августа · 18:30-20:30', exact: true }).click({ position: { x: 16, y: 16 } })
+  page.once('dialog', async (dialog) => {
+    expect(dialog.message()).toContain('Это действие нельзя отменить')
+    await dialog.accept()
+  })
+  await page.getByRole('button', { name: 'Удалить', exact: true }).click()
+  await expect.poll(() => mocked.deleteArchivedMatchRequests).toEqual(['/v1/matches/4/archive'])
+  await expect(page.getByRole('button', { name: 'Открыть архивный матч Понедельник, 10 августа · 18:30-20:30', exact: true })).toHaveCount(0)
 })
 
 test('sends current weather globally and keeps the venue catalog available', async ({ page }) => {

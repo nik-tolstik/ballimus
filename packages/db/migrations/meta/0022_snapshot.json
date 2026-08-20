@@ -1,6 +1,6 @@
 {
-  "id": "30379e61-84d2-4b5e-89c2-67a609748ae5",
-  "prevId": "7f82d470-6345-48b3-9cd6-a48dc8844d26",
+  "id": "c8424826-642a-4420-a31c-515d70472e62",
+  "prevId": "30379e61-84d2-4b5e-89c2-67a609748ae5",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -453,6 +453,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "deletion_requested_at": {
           "name": "deletion_requested_at",
           "type": "timestamp with time zone",
@@ -514,6 +520,27 @@
             },
             {
               "expression": "scheduled_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "matches_archived_at_idx": {
+          "name": "matches_archived_at_idx",
+          "columns": [
+            {
+              "expression": "telegram_chat_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "archived_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

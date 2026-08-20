@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { matches, type Match } from "../schema.js";
 import {
@@ -37,6 +37,7 @@ export interface UpdateMatchInput {
 export interface MatchListOptions {
   readonly telegramChatId?: DatabaseIdentifier;
   readonly venueId?: DatabaseIdentifier;
+  readonly archived?: boolean;
   readonly includeDeletionRequested?: boolean;
 }
 
@@ -112,6 +113,7 @@ export class MatchesRepository {
       venueId: positiveBigInt(input.venueId, "venueId"),
       fieldPriceRubles: price ?? null,
       creatorTelegramUserId: positiveBigInt(input.creatorTelegramUserId, "creatorTelegramUserId"),
+      archivedAt: null,
       deletionRequestedAt: null,
       createdAt: now,
       updatedAt: now,
@@ -126,8 +128,8 @@ export class MatchesRepository {
     if (version !== undefined && current.version !== version) {
       throw new OptimisticConcurrencyError(version, current.version);
     }
-    if (current.deletionRequestedAt !== null) {
-      throw new RepositoryConflictError("The match is already being deleted");
+    if (current.deletionRequestedAt !== null || current.archivedAt !== null) {
+      throw new RepositoryConflictError("The match is no longer active");
     }
     if (input.scheduledAt !== undefined) validDate(input.scheduledAt, "scheduledAt");
     if (input.durationMinutes !== undefined) duration(input.durationMinutes);
@@ -146,6 +148,7 @@ export class MatchesRepository {
   public async requestDeletion(id: DatabaseIdentifier, expected?: number, now?: Date): Promise<Match> {
     const parsedId = matchId(id);
     const current = await this.getForUpdate(parsedId);
+    if (current.archivedAt !== null) throw new RepositoryConflictError("An archived match cannot be deleted this way");
     if (current.deletionRequestedAt !== null) return current;
     const version = expectedVersion(expected);
     if (version !== undefined && current.version !== version) {
@@ -158,13 +161,50 @@ export class MatchesRepository {
     return requireRecord(rows[0], parsedId);
   }
 
+  /** Hides a match from active lists while retaining it as reusable history. */
+  public async archive(id: DatabaseIdentifier, expected?: number, archivedAt?: Date): Promise<Match> {
+    const parsedId = matchId(id);
+    const current = await this.getForUpdate(parsedId);
+    if (current.deletionRequestedAt !== null) throw new RepositoryConflictError("The match is already being deleted");
+    if (current.archivedAt !== null) throw new RepositoryConflictError("The match is already archived");
+    const version = expectedVersion(expected);
+    if (version !== undefined && current.version !== version) {
+      throw new OptimisticConcurrencyError(version, current.version);
+    }
+    const now = effectiveNow(archivedAt);
+    const rows = await this.db.update(matches).set({
+      archivedAt: now,
+      version: sql`${matches.version} + 1`,
+      updatedAt: now,
+    }).where(and(eq(matches.id, parsedId), isNull(matches.archivedAt))).returning();
+    return requireRecord(rows[0], parsedId);
+  }
+
   public async list(options: MatchListOptions = {}): Promise<Match[]> {
     const conditions = [
       ...(options.telegramChatId === undefined ? [] : [eq(matches.telegramChatId, nonZero(options.telegramChatId, "telegramChatId"))]),
       ...(options.venueId === undefined ? [] : [eq(matches.venueId, positiveBigInt(options.venueId, "venueId"))]),
+      ...(options.archived === true ? [isNotNull(matches.archivedAt)] : [isNull(matches.archivedAt)]),
       ...(options.includeDeletionRequested === true ? [] : [isNull(matches.deletionRequestedAt)]),
     ];
-    return this.db.select().from(matches).where(and(...conditions)).orderBy(asc(matches.scheduledAt), asc(matches.id));
+    return this.db.select().from(matches).where(and(...conditions)).orderBy(
+      ...(options.archived === true ? [desc(matches.archivedAt), desc(matches.id)] : [asc(matches.scheduledAt), asc(matches.id)]),
+    );
+  }
+
+  /** Permanently removes a match only after it has been archived. */
+  public async deleteArchived(id: DatabaseIdentifier, expected?: number): Promise<boolean> {
+    const parsedId = matchId(id);
+    const current = await this.getForUpdate(parsedId);
+    const version = expectedVersion(expected);
+    if (current.archivedAt === null || current.deletionRequestedAt !== null) {
+      throw new RepositoryConflictError("Only an archived match can be permanently deleted");
+    }
+    if (version !== undefined && current.version !== version) {
+      throw new OptimisticConcurrencyError(version, current.version);
+    }
+    const rows = await this.db.delete(matches).where(and(eq(matches.id, parsedId), isNotNull(matches.archivedAt))).returning({ id: matches.id });
+    return rows.length > 0;
   }
 
   /** Removes one match only after its queued Telegram deletion was delivered. */

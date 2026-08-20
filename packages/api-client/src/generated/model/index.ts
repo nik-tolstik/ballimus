@@ -6,11 +6,13 @@
  * OpenAPI spec version: 1.0.0
  */
 
+export * from './archiveOwnerMatchHeaders.js';
 export * from './archiveOwnerPollHeaders.js';
 export * from './bootstrapResponseDto.js';
 export * from './createOwnerMatchHeaders.js';
 export * from './createOwnerPollHeaders.js';
 export * from './createOwnerVenueHeaders.js';
+export * from './deleteArchivedOwnerMatchHeaders.js';
 export * from './deleteOwnerMatchHeaders.js';
 export * from './deleteOwnerVenueHeaders.js';
 export * from './groupConfigurationResponseDto.js';

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Banknote, CalendarDays, LoaderCircle, MapPin, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Archive, Banknote, CalendarDays, LoaderCircle, MapPin, Plus, RefreshCw, Repeat2, Trash2 } from 'lucide-react'
 
 import type { NormalizedMatch, NormalizedVenue } from '@/normalize'
 import type { EditorValues } from './match-editor'
@@ -13,10 +13,13 @@ import { MatchEditor } from './match-editor'
 
 interface MatchesPanelProps {
   readonly matches: readonly NormalizedMatch[]
+  readonly archivedMatches: readonly NormalizedMatch[]
   readonly venues: readonly NormalizedVenue[]
   readonly onCreate: (values: EditorValues) => void
   readonly onUpdate: (match: NormalizedMatch, values: EditorValues) => void
   readonly onDelete: (match: NormalizedMatch) => Promise<boolean>
+  readonly onArchive: (match: NormalizedMatch) => Promise<boolean>
+  readonly onDeleteArchived: (match: NormalizedMatch) => Promise<boolean>
   readonly onRepublish: (match: NormalizedMatch) => Promise<boolean>
   readonly onCreateVenue: (values: VenueFormValues) => Promise<NormalizedVenue>
   readonly saving: boolean
@@ -44,19 +47,73 @@ function publicationVariant(match: NormalizedMatch) {
   return 'secondary'
 }
 
-export function MatchesPanel({ matches, venues, onCreate, onUpdate, onDelete, onRepublish, onCreateVenue, saving, conflict, onClearConflict }: MatchesPanelProps) {
+function repeatValues(match: NormalizedMatch): EditorValues {
+  return {
+    date: match.date,
+    time: match.time,
+    durationMinutes: String(match.durationMinutes),
+    venueId: match.venue.id,
+    fieldPriceByn: match.fieldPriceByn === undefined ? '' : String(match.fieldPriceByn),
+  }
+}
+
+function MatchSummary({ match, archived = false }: { readonly match: NormalizedMatch; readonly archived?: boolean }) {
+  return <Card size="sm" className="relative">
+    <CardHeader>
+      <div>
+        <CardTitle>{match.dateLabel}</CardTitle>
+        <CardDescription className="mt-1"><a className="relative z-20 inline-flex items-center gap-1.5 hover:text-foreground" href={match.venue.mapUrl} target="_blank" rel="noreferrer"><MapPin className="size-3.5" />{match.venue.name} · {venueTypeLabel(match.venue)}</a></CardDescription>
+        <CardDescription className="mt-1 flex items-center gap-1.5"><Banknote className="size-3.5" />{match.fieldPriceByn === undefined ? 'Стоимость уточняется' : `${match.fieldPriceByn} руб.`}</CardDescription>
+      </div>
+    </CardHeader>
+    {!archived ? <CardContent className="pt-0"><Badge variant={publicationVariant(match)}>{match.publicCardState === 'pending' || match.publicCardState === 'uncertain' ? <LoaderCircle role="status" aria-label="Публикация карточки" className="animate-spin" /> : null}{publicationLabel(match)}</Badge></CardContent> : null}
+  </Card>
+}
+
+export function MatchesPanel({ matches, archivedMatches, venues, onCreate, onUpdate, onDelete, onArchive, onDeleteArchived, onRepublish, onCreateVenue, saving, conflict, onClearConflict }: MatchesPanelProps) {
   const [editorOpen, setEditorOpen] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
+  const [archiveOpen, setArchiveOpen] = useState(false)
+  const [archivedActionsOpen, setArchivedActionsOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | undefined>()
+  const [repeatSource, setRepeatSource] = useState<NormalizedMatch | undefined>()
+  const [archivedId, setArchivedId] = useState<string | undefined>()
   const editing = matches.find((match) => match.id === editingId)
-  const openCreate = () => { setEditingId(undefined); setActionsOpen(false); setEditorOpen(true) }
-  const openEdit = (match: NormalizedMatch) => { setEditingId(match.id); setActionsOpen(false); setEditorOpen(true) }
-  const closeEditor = (open: boolean) => { setEditorOpen(open); if (!open) setActionsOpen(false) }
+  const archivedEditing = archivedMatches.find((match) => match.id === archivedId)
+
+  const openCreate = () => {
+    setEditingId(undefined)
+    setRepeatSource(undefined)
+    setActionsOpen(false)
+    setEditorOpen(true)
+  }
+  const openEdit = (match: NormalizedMatch) => {
+    setEditingId(match.id)
+    setRepeatSource(undefined)
+    setActionsOpen(false)
+    setEditorOpen(true)
+  }
+  const openRepeat = (match: NormalizedMatch) => {
+    setEditingId(undefined)
+    setRepeatSource(match)
+    setArchivedActionsOpen(false)
+    setArchiveOpen(false)
+    setEditorOpen(true)
+  }
+  const closeEditor = (open: boolean) => {
+    setEditorOpen(open)
+    if (!open) {
+      setActionsOpen(false)
+      setRepeatSource(undefined)
+    }
+  }
 
   return <section className="flex flex-col gap-5">
-    <div className="flex items-end justify-between gap-4"><h1 className="text-2xl font-semibold tracking-tight">Матчи</h1><Button className="h-10 px-3" onClick={openCreate}><Plus data-icon="inline-start" />Новый матч</Button></div>
-    {matches.length === 0 ? <Empty><EmptyHeader><EmptyMedia variant="icon"><CalendarDays /></EmptyMedia><EmptyTitle>Матчей пока нет</EmptyTitle></EmptyHeader><EmptyContent><Button onClick={openCreate}><Plus data-icon="inline-start" />Создать матч</Button></EmptyContent></Empty> : <div className="flex flex-col gap-2">{matches.map((match) => <Card key={match.id} size="sm" className="relative"><CardHeader><div><CardTitle>{match.dateLabel}</CardTitle><CardDescription className="mt-1"><a className="relative z-20 inline-flex items-center gap-1.5 hover:text-foreground" href={match.venue.mapUrl} target="_blank" rel="noreferrer"><MapPin className="size-3.5" />{match.venue.name} · {venueTypeLabel(match.venue)}</a></CardDescription><CardDescription className="mt-1 flex items-center gap-1.5"><Banknote className="size-3.5" />{match.fieldPriceByn === undefined ? 'Стоимость уточняется' : `${match.fieldPriceByn} руб.`}</CardDescription></div></CardHeader><CardContent className="pt-0"><Badge variant={publicationVariant(match)}>{match.publicCardState === 'pending' || match.publicCardState === 'uncertain' ? <LoaderCircle role="status" aria-label="Публикация карточки" className="animate-spin" /> : null}{publicationLabel(match)}</Badge></CardContent><button type="button" className="absolute inset-0 z-10 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50" aria-label={`Открыть матч ${match.dateLabel}`} onClick={() => openEdit(match)} /></Card>)}</div>}
-    <Sheet open={editorOpen} onOpenChange={closeEditor}><SheetContent side="bottom" className="mx-auto max-h-[92svh] w-full max-w-[480px] gap-0 rounded-t-2xl p-0"><div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/35" /><SheetHeader className="px-4 pt-3 pb-4"><SheetTitle className="text-lg">{editing === undefined ? 'Новый матч' : 'Редактировать матч'}</SheetTitle></SheetHeader><MatchEditor key={editing?.id ?? 'new'} {...(editing === undefined ? {} : { match: editing })} venues={venues} saving={saving} conflict={conflict} onClearConflict={onClearConflict} onCreateVenue={onCreateVenue} onSave={(values) => { if (editing === undefined) onCreate(values); else onUpdate(editing, values); setEditorOpen(false) }} {...(editing === undefined ? {} : { onOpenActions: () => setActionsOpen(true) })} /></SheetContent></Sheet>
-    <Sheet open={actionsOpen} onOpenChange={setActionsOpen}><SheetContent side="bottom" className="mx-auto w-full max-w-[480px] gap-0 rounded-t-2xl p-0"><div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/35" /><SheetHeader className="px-4 pt-3 pb-4"><SheetTitle className="text-lg">Действия с матчем</SheetTitle></SheetHeader><div className="flex flex-col gap-1 px-2 pb-[max(1rem,calc(1rem+var(--tg-safe-bottom)))]">{editing === undefined ? null : <><Button type="button" variant="ghost" className="h-11 justify-start" disabled={saving} onClick={() => { void onRepublish(editing).then((republished) => { if (republished) setActionsOpen(false) }) }}><RefreshCw data-icon="inline-start" />Переопубликовать матч</Button><Button type="button" variant="ghost" className="h-11 justify-start text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={saving} onClick={() => { void onDelete(editing).then((deleted) => { if (deleted) { setActionsOpen(false); setEditorOpen(false) } }) }}><Trash2 data-icon="inline-start" />Удалить</Button></>}</div></SheetContent></Sheet>
+    <div className="flex items-end justify-between gap-4"><h1 className="text-2xl font-semibold tracking-tight">Матчи</h1><div className="flex items-center gap-1"><Button variant="ghost" size="icon-lg" aria-label="Архив матчей" onClick={() => setArchiveOpen(true)}><Archive /></Button><Button className="h-10 px-3" onClick={openCreate}><Plus data-icon="inline-start" />Новый матч</Button></div></div>
+    {matches.length === 0 ? <Empty><EmptyHeader><EmptyMedia variant="icon"><CalendarDays /></EmptyMedia><EmptyTitle>Матчей пока нет</EmptyTitle></EmptyHeader><EmptyContent><Button onClick={openCreate}><Plus data-icon="inline-start" />Создать матч</Button></EmptyContent></Empty> : <div className="flex flex-col gap-2">{matches.map((match) => <div key={match.id} className="relative"><MatchSummary match={match} /><button type="button" className="absolute inset-0 z-10 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50" aria-label={`Открыть матч ${match.dateLabel}`} onClick={() => openEdit(match)} /></div>)}</div>}
+    <Sheet open={editorOpen} onOpenChange={closeEditor}><SheetContent side="bottom" className="mx-auto max-h-[92svh] w-full max-w-[480px] gap-0 rounded-t-2xl p-0"><div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/35" /><SheetHeader className="px-4 pt-3 pb-4"><SheetTitle className="text-lg">{editing === undefined ? 'Новый матч' : 'Редактировать матч'}</SheetTitle></SheetHeader><MatchEditor key={editing?.id ?? repeatSource?.id ?? 'new'} {...(editing === undefined ? {} : { match: editing })} {...(repeatSource === undefined ? {} : { initialValues: repeatValues(repeatSource) })} venues={venues} saving={saving} conflict={conflict} onClearConflict={onClearConflict} onCreateVenue={onCreateVenue} onSave={(values) => { if (editing === undefined) onCreate(values); else onUpdate(editing, values); setEditorOpen(false); setRepeatSource(undefined) }} {...(editing === undefined ? {} : { onOpenActions: () => setActionsOpen(true) })} /></SheetContent></Sheet>
+    <Sheet open={actionsOpen} onOpenChange={setActionsOpen}><SheetContent side="bottom" className="mx-auto w-full max-w-[480px] gap-0 rounded-t-2xl p-0"><div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/35" /><SheetHeader className="px-4 pt-3 pb-4"><SheetTitle className="text-lg">Действия с матчем</SheetTitle></SheetHeader><div className="flex flex-col gap-1 px-2 pb-[max(1rem,calc(1rem+var(--tg-safe-bottom)))]">{editing === undefined ? null : <><Button type="button" variant="ghost" className="h-11 justify-start" disabled={saving} onClick={() => { void onRepublish(editing).then((republished) => { if (republished) setActionsOpen(false) }) }}><RefreshCw data-icon="inline-start" />Переопубликовать матч</Button><Button type="button" variant="ghost" className="h-11 justify-start" disabled={saving} onClick={() => { void onArchive(editing).then((archived) => { if (archived) { setActionsOpen(false); setEditorOpen(false) } }) }}><Archive data-icon="inline-start" />В архив</Button><Button type="button" variant="ghost" className="h-11 justify-start text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={saving} onClick={() => { void onDelete(editing).then((deleted) => { if (deleted) { setActionsOpen(false); setEditorOpen(false) } }) }}><Trash2 data-icon="inline-start" />Удалить</Button></>}</div></SheetContent></Sheet>
+    <Sheet open={archiveOpen} onOpenChange={setArchiveOpen}><SheetContent side="bottom" className="mx-auto max-h-[92svh] w-full max-w-[480px] gap-0 rounded-t-2xl p-0"><div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/35" /><SheetHeader className="px-4 pt-3 pb-4"><SheetTitle className="text-lg">Архив матчей</SheetTitle></SheetHeader><div className="min-h-0 overflow-y-auto px-4 pb-[max(1rem,calc(1rem+var(--tg-safe-bottom)))]">{archivedMatches.length === 0 ? <Empty><EmptyHeader><EmptyMedia variant="icon"><Archive /></EmptyMedia><EmptyTitle>Архив пуст</EmptyTitle></EmptyHeader></Empty> : <div className="flex flex-col gap-2">{archivedMatches.map((match) => <div key={match.id} className="relative"><MatchSummary match={match} archived /><button type="button" className="absolute inset-0 z-10 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50" aria-label={`Открыть архивный матч ${match.dateLabel}`} onClick={() => { setArchivedId(match.id); setArchivedActionsOpen(true) }} /></div>)}</div>}</div></SheetContent></Sheet>
+    <Sheet open={archivedActionsOpen} onOpenChange={setArchivedActionsOpen}><SheetContent side="bottom" className="mx-auto w-full max-w-[480px] gap-0 rounded-t-2xl p-0"><div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/35" /><SheetHeader className="px-4 pt-3 pb-4"><SheetTitle className="text-lg">Архивный матч</SheetTitle></SheetHeader><div className="flex flex-col gap-1 px-2 pb-[max(1rem,calc(1rem+var(--tg-safe-bottom)))]">{archivedEditing === undefined ? null : <><Button type="button" variant="ghost" className="h-11 justify-start" disabled={saving} onClick={() => openRepeat(archivedEditing)}><Repeat2 data-icon="inline-start" />Повторить</Button><Button type="button" variant="ghost" className="h-11 justify-start text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={saving} onClick={() => { void onDeleteArchived(archivedEditing).then((deleted) => { if (deleted) { setArchivedActionsOpen(false); setArchiveOpen(false) } }) }}><Trash2 data-icon="inline-start" />Удалить</Button></>}</div></SheetContent></Sheet>
   </section>
 }

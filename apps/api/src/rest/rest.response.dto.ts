@@ -175,6 +175,9 @@ export class MatchResponseDto {
   creatorTelegramUserId!: string;
 
   @ApiProperty({ type: String, nullable: true, format: "date-time" })
+  archivedAt!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, format: "date-time" })
   deletionRequestedAt!: string | null;
 
   @ApiProperty({ type: String, format: "date-time" })
