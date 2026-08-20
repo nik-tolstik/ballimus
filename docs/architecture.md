@@ -24,9 +24,9 @@ The generated OpenAPI contract exposes only:
 - native poll creation, listing, manual republishing, and archiving;
 - `POST /v1/weather/current`.
 
-Match creation requires an exact date/time and an active venue. It writes the match, a pending public-card reference, and a `publish_public_card` outbox event in one transaction. A best-effort delivery is attempted after commit; the jobs process provides retry recovery.
+Match creation requires an exact date/time and an active venue. It writes the match, a pending public-card reference, and a `publish_public_card` outbox event in one transaction. A best-effort delivery is attempted after commit; the jobs process provides retry recovery. Manual archival marks the match archived, removes it from active lists, and queues deletion of its Telegram card while retaining the match as repeatable history. Archived records are listed newest first and can be permanently removed; that removal preserves a matchless deletion event when a Telegram message still needs deleting.
 
-Edits enqueue a refresh of the existing message. Deletes mark the match as deletion-requested and queue `delete_public_card`. Repeating the deletion is safe. Poll creation writes an independent `telegram_polls` row and makes one bounded Telegram publication attempt after the transaction commits. There are no player, roster, match-vote, forecast, history, or lifecycle endpoints.
+Edits enqueue a refresh of the existing message. Active-card deletes mark the match as deletion-requested and queue `delete_public_card`. Archiving never restores a match or runs automatically. Repeating an archived match creates a separate new card from its saved schedule, duration, venue, and price. Poll creation writes an independent `telegram_polls` row and makes one bounded Telegram publication attempt after the transaction commits. There are no player, roster, match-vote, or forecast endpoints.
 
 ## Telegram delivery
 
@@ -41,7 +41,7 @@ Current weather is fetched from Open-Meteo for Minsk only when the owner invokes
 The current application tables are:
 
 - `venues` — owner-maintained venue catalog;
-- `matches` — exact schedule, required venue, price, owner, version, and deletion marker;
+- `matches` — exact schedule, required venue, price, owner, version, archival state, and deletion marker;
 - `match_messages` — durable Telegram card references and publication state;
 - `telegram_polls` — independent native poll settings, Telegram references, option counts, and queued threshold markers;
 - `http_idempotency_keys` — replay-safe owner mutations;

@@ -99,6 +99,7 @@ export const matches = pgTable(
     venueId: bigint("venue_id", { mode: "bigint" }).notNull().references(() => venues.id, { onDelete: "restrict", onUpdate: "cascade" }),
     fieldPriceRubles: integer("field_price_rubles"),
     creatorTelegramUserId: bigint("creator_telegram_user_id", { mode: "bigint" }).notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }),
     deletionRequestedAt: timestamp("deletion_requested_at", { withTimezone: true, mode: "date" }),
     version: integer("version").notNull().default(1),
     createdAt: createdAt(),
@@ -113,6 +114,7 @@ export const matches = pgTable(
     unique("matches_id_chat_unique").on(table.id, table.telegramChatId),
     index("matches_venue_id_idx").on(table.venueId),
     index("matches_active_idx").on(table.telegramChatId, table.deletionRequestedAt, table.scheduledAt),
+    index("matches_archived_at_idx").on(table.telegramChatId, table.archivedAt),
   ],
 );
 

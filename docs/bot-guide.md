@@ -13,7 +13,7 @@ Creating a match publishes one read-only Telegram card in the configured General
 
 The card has no inline keyboard, vote status, player list, threshold, or lifecycle controls. Polls remain separate from cards and matches.
 
-Editing or republishing a match updates the same Telegram message. Deleting a match marks it unavailable in the Mini App and queues deletion of the Telegram message. A jobs invocation retries transient Telegram failures. There is no match history.
+Editing or republishing a match updates the same Telegram message. Deleting a match marks it unavailable in the Mini App and queues deletion of the Telegram message. A jobs invocation retries transient Telegram failures. The owner can manually archive a match from its actions: the Telegram card is deleted, the match disappears from the active list, and its details remain available in the Mini App archive. Archived matches can be repeated into a new card or permanently deleted after confirmation; they cannot be restored and are never archived automatically.
 
 ## Owner Mini App
 
@@ -21,7 +21,7 @@ The configured owner opens the Mini App from Telegram. Signed Telegram `initData
 
 The Mini App has three sections:
 
-- **Matches** — create and edit information cards; the actions menu republishes or deletes a card;
+- **Matches** — create and edit information cards; the actions menu republishes, archives, or deletes a card. The archive button beside **New match** opens archived matches, newest first;
 - **Polls** — create native regular Telegram polls in the configured General topic;
 - **Venues** — maintain the reusable venue catalog; the actions menu archives or restores a venue.
 

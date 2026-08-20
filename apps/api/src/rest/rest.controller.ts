@@ -68,8 +68,9 @@ export class MatchesController {
   public constructor(@Inject(OwnerRestService) private readonly service: OwnerRestService) {}
 
   @Get()
-  @ApiOperation({ operationId: "listOwnerMatches", summary: "List current information cards" })
+  @ApiOperation({ operationId: "listOwnerMatches", summary: "List active or archived information cards" })
   @ApiQuery({ name: "venueId", required: false, type: String })
+  @ApiQuery({ name: "archived", required: false, type: Boolean })
   @ApiOkResponse({ type: MatchListResponseDto })
   public list(
     @CurrentOwnerId() ownerTelegramUserId: bigint,
@@ -118,6 +119,38 @@ export class MatchesController {
     @Body() input: PatchMatchDto,
   ): Promise<Record<string, unknown>> {
     return this.service.patchMatch(ownerTelegramUserId, idempotencyKey, ifMatch, matchId, input);
+  }
+
+  @Post(":id/archive")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ operationId: "archiveOwnerMatch", summary: "Archive an information card and delete its Telegram message" })
+  @ApiParam({ name: "id", type: String })
+  @ApiHeader({ name: "Idempotency-Key", required: true })
+  @ApiHeader({ name: "If-Match", required: true })
+  @ApiOkResponse({ type: MatchEnvelopeResponseDto })
+  public archive(
+    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Headers("if-match") ifMatch: string | undefined,
+    @Param("id", PositiveBigIntPipe) matchId: bigint,
+  ): Promise<Record<string, unknown>> {
+    return this.service.archiveMatch(ownerTelegramUserId, idempotencyKey, ifMatch, matchId);
+  }
+
+  @Delete(":id/archive")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ operationId: "deleteArchivedOwnerMatch", summary: "Permanently delete an archived match" })
+  @ApiParam({ name: "id", type: String })
+  @ApiHeader({ name: "Idempotency-Key", required: true })
+  @ApiHeader({ name: "If-Match", required: true })
+  @ApiOkResponse({ schema: { example: { deleted: true, matchId: "42" } } })
+  public deleteArchived(
+    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Headers("if-match") ifMatch: string | undefined,
+    @Param("id", PositiveBigIntPipe) matchId: bigint,
+  ): Promise<Record<string, unknown>> {
+    return this.service.deleteArchivedMatch(ownerTelegramUserId, idempotencyKey, ifMatch, matchId);
   }
 
   @Delete(":id")

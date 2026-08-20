@@ -17,9 +17,10 @@ export type TelegramCardPublicationState = PublicationState | "missing";
 export type TelegramCardRefreshResult =
   | { readonly status: "refreshed"; readonly matchId: bigint; readonly messageId: bigint }
   | { readonly status: "reconciliation_required"; readonly matchId: bigint; readonly publicationState: TelegramCardPublicationState }
-  | { readonly status: "skipped"; readonly matchId: bigint; readonly reason: "deleted" };
+  | { readonly status: "skipped"; readonly matchId: bigint; readonly reason: "archived" | "deleted" };
 export type TelegramCardPublicationResult =
   | { readonly status: "published"; readonly reference: MatchMessage }
+  | { readonly status: "skipped"; readonly matchId: bigint; readonly reason: "archived" | "deleted" }
   | { readonly status: "reconciliation_required"; readonly reference?: MatchMessage; readonly publicationState: TelegramCardPublicationState };
 
 /** Omits the thread parameter for Telegram's special General topic ID 1. */
@@ -63,6 +64,10 @@ export class TelegramCardService {
   }
 
   public async refreshPublicCard(matchId: bigint): Promise<TelegramCardRefreshResult> {
+    const match = await this.matches.getById(matchId);
+    if (match.archivedAt !== null || match.deletionRequestedAt !== null) {
+      return { status: "skipped", matchId, reason: match.archivedAt === null ? "deleted" : "archived" };
+    }
     const reference = await this.matchMessages.findByMatchId(matchId);
     if (reference === undefined || reference.telegramMessageId === null) {
       return { status: "reconciliation_required", matchId, publicationState: reference?.publicationState ?? "missing" };
@@ -87,6 +92,10 @@ export class TelegramCardService {
   }
 
   public async publishInitialCard(matchId: bigint): Promise<TelegramCardPublicationResult> {
+    const match = await this.matches.getById(matchId);
+    if (match.archivedAt !== null || match.deletionRequestedAt !== null) {
+      return { status: "skipped", matchId, reason: match.archivedAt === null ? "deleted" : "archived" };
+    }
     const reference = await this.matchMessages.findByMatchId(matchId);
     if (reference === undefined) return { status: "reconciliation_required", publicationState: "missing" };
     if (reference.publicationState !== "pending") {

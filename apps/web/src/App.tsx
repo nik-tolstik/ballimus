@@ -8,12 +8,14 @@ import {
   getListOwnerMatchesQueryKey,
   getListOwnerPollsQueryKey,
   getListOwnerVenuesQueryKey,
+  useArchiveOwnerMatch,
   useArchiveOwnerPoll,
   useArchiveOwnerVenue,
   useCreateOwnerMatch,
   useCreateOwnerPoll,
   useCreateOwnerVenue,
   useDeleteOwnerMatch,
+  useDeleteArchivedOwnerMatch,
   useListOwnerMatches,
   useListOwnerPolls,
   useListOwnerVenues,
@@ -80,12 +82,15 @@ export function App({ telegramSession }: AppProps = {}) {
   const [authFailure, setAuthFailure] = useState<AuthFailure>()
   const queryEnabled = session.status === 'ready' && session.initData !== undefined && authFailure === undefined
   const matchesQuery = useListOwnerMatches(undefined, { query: { enabled: queryEnabled } })
+  const archivedMatchesQuery = useListOwnerMatches({ archived: true }, { query: { enabled: queryEnabled } })
   const pollsQuery = useListOwnerPolls({ query: { enabled: queryEnabled, refetchInterval: tab === 'polls' ? POLL_RESULTS_REFRESH_INTERVAL_MS : false, refetchOnWindowFocus: true } })
   const venuesQuery = useListOwnerVenues({ includeArchived: true }, { query: { enabled: queryEnabled } })
   const matches = useMemo(() => matchesQuery.data?.matches.map(normalizeMatch) ?? [], [matchesQuery.data])
+  const archivedMatches = useMemo(() => archivedMatchesQuery.data?.matches.map(normalizeMatch) ?? [], [archivedMatchesQuery.data])
   const venues = useMemo(() => venuesQuery.data?.venues.map(normalizeVenue) ?? [], [venuesQuery.data])
 
   const invalidateMatches = () => void queryClient.invalidateQueries({ queryKey: getListOwnerMatchesQueryKey() })
+  const invalidateArchivedMatches = () => void queryClient.invalidateQueries({ queryKey: getListOwnerMatchesQueryKey({ archived: true }) })
   const invalidatePolls = () => void queryClient.invalidateQueries({ queryKey: getListOwnerPollsQueryKey() })
   const invalidateVenues = () => void queryClient.invalidateQueries({ queryKey: getListOwnerVenuesQueryKey({ includeArchived: true }) })
   const handleMutationError = (error: unknown) => {
@@ -104,6 +109,8 @@ export function App({ telegramSession }: AppProps = {}) {
   const republishPollMutation = useRepublishOwnerPoll(mutationOptions)
   const updateMatchMutation = useUpdateOwnerMatch(mutationOptions)
   const deleteMatchMutation = useDeleteOwnerMatch(mutationOptions)
+  const archiveMatchMutation = useArchiveOwnerMatch(mutationOptions)
+  const deleteArchivedMatchMutation = useDeleteArchivedOwnerMatch(mutationOptions)
   const republishMatchMutation = useRepublishOwnerMatch(mutationOptions)
   const weatherMutation = useSendCurrentWeather({ mutation: { onError: handleMutationError } })
   const createVenueMutation = useCreateOwnerVenue(mutationOptions)
@@ -111,7 +118,7 @@ export function App({ telegramSession }: AppProps = {}) {
   const archiveVenueMutation = useArchiveOwnerVenue(mutationOptions)
   const restoreVenueMutation = useRestoreOwnerVenue(mutationOptions)
 
-  const queryAuthFailure = [matchesQuery.error, pollsQuery.error, venuesQuery.error].map(authFailureFor).find((value) => value !== undefined)
+  const queryAuthFailure = [matchesQuery.error, archivedMatchesQuery.error, pollsQuery.error, venuesQuery.error].map(authFailureFor).find((value) => value !== undefined)
   const effectiveAuthFailure = authFailure ?? queryAuthFailure
   if (session.status === 'loading') return <StateScreen kind="loading" title="Подготавливаем команду" copy="Подключаемся к Telegram…" />
   if (session.status === 'outside-telegram') return <StateScreen kind="outside" title="Откройте приложение в Telegram" copy="Это закрытое мини-приложение. Запустите его из Telegram." />
@@ -168,6 +175,28 @@ export function App({ telegramSession }: AppProps = {}) {
       return false
     }
   }
+  const handleArchiveMatch = async (match: NormalizedMatch): Promise<boolean> => {
+    try {
+      await archiveMatchMutation.mutateAsync({ id: match.id, headers: { 'Idempotency-Key': requestKey(), 'If-Match': String(match.version) } })
+      invalidateMatches()
+      invalidateArchivedMatches()
+      toast.success('Матч перемещён в архив.')
+      return true
+    } catch {
+      return false
+    }
+  }
+  const handleDeleteArchivedMatch = async (match: NormalizedMatch): Promise<boolean> => {
+    if (!window.confirm(`Удалить архивный матч ${match.dateLabel}? Это действие нельзя отменить.`)) return false
+    try {
+      await deleteArchivedMatchMutation.mutateAsync({ id: match.id, headers: { 'Idempotency-Key': requestKey(), 'If-Match': String(match.version) } })
+      invalidateArchivedMatches()
+      toast.success('Архивный матч удалён.')
+      return true
+    } catch {
+      return false
+    }
+  }
   const handleRepublishMatch = async (match: NormalizedMatch): Promise<boolean> => {
     try {
       await republishMatchMutation.mutateAsync({ id: match.id, headers: { 'Idempotency-Key': requestKey(), 'If-Match': String(match.version) } })
@@ -205,17 +234,17 @@ export function App({ telegramSession }: AppProps = {}) {
       return false
     }
   }
-  const matchSaving = [createMatchMutation, updateMatchMutation, deleteMatchMutation, republishMatchMutation].some((mutation) => mutation.isPending)
+  const matchSaving = [createMatchMutation, updateMatchMutation, deleteMatchMutation, archiveMatchMutation, deleteArchivedMatchMutation, republishMatchMutation].some((mutation) => mutation.isPending)
   const pollSaving = createPollMutation.isPending || archivePollMutation.isPending || republishPollMutation.isPending
   const venueSaving = [createVenueMutation, updateVenueMutation, archiveVenueMutation, restoreVenueMutation].some((mutation) => mutation.isPending)
-  const loading = matchesQuery.isLoading || pollsQuery.isLoading || venuesQuery.isLoading
-  const failure = [matchesQuery.error, pollsQuery.error, venuesQuery.error].find((error) => error !== null && error !== undefined)
+  const loading = matchesQuery.isLoading || archivedMatchesQuery.isLoading || pollsQuery.isLoading || venuesQuery.isLoading
+  const failure = [matchesQuery.error, archivedMatchesQuery.error, pollsQuery.error, venuesQuery.error].find((error) => error !== null && error !== undefined)
 
   return <div className="mx-auto flex min-h-svh w-full max-w-[480px] flex-col bg-background">
     <header className="flex h-14 items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur-sm"><div className="flex items-center gap-2.5"><img src={applicationBrand.logo} alt="" width="36" height="36" className="size-9 rounded-full object-cover" /><p className="text-base font-semibold leading-none">{applicationBrand.name}</p></div><div className="flex items-center gap-1"><Button variant="ghost" size="sm" onClick={() => weatherMutation.mutate()} disabled={weatherMutation.isPending}><CloudSun data-icon="inline-start" />Погода</Button><ThemeToggle /></div></header>
     <main className="min-h-0 flex-1 overflow-y-auto px-4 pt-4 pb-5">
       {failure !== undefined ? <Alert variant="destructive" className="mb-4"><TriangleAlert /><AlertTitle>Не удалось загрузить данные</AlertTitle><AlertDescription>{errorMessage(failure)}</AlertDescription></Alert> : null}
-      {loading ? <StateScreen kind="loading" title="Загружаем данные" copy="Синхронизируем данные…" /> : tab === 'matches' ? <MatchesPanel matches={matches} venues={venues} saving={matchSaving} conflict={conflict} onClearConflict={() => setConflict('')} onCreate={handleCreateMatch} onUpdate={handleUpdateMatch} onDelete={handleDeleteMatch} onRepublish={handleRepublishMatch} onCreateVenue={handleCreateVenue} /> : tab === 'polls' ? <PollsPanel polls={pollsQuery.data?.polls ?? []} saving={pollSaving} onCreate={handleCreatePoll} onRepublish={handleRepublishPoll} onArchive={handleArchivePoll} /> : <VenuesPanel venues={venues} saving={venueSaving} onCreate={handleCreateVenue} onUpdate={handleUpdateVenue} onArchive={handleArchiveVenue} onRestore={handleRestoreVenue} />}
+      {loading ? <StateScreen kind="loading" title="Загружаем данные" copy="Синхронизируем данные…" /> : tab === 'matches' ? <MatchesPanel matches={matches} archivedMatches={archivedMatches} venues={venues} saving={matchSaving} conflict={conflict} onClearConflict={() => setConflict('')} onCreate={handleCreateMatch} onUpdate={handleUpdateMatch} onDelete={handleDeleteMatch} onArchive={handleArchiveMatch} onDeleteArchived={handleDeleteArchivedMatch} onRepublish={handleRepublishMatch} onCreateVenue={handleCreateVenue} /> : tab === 'polls' ? <PollsPanel polls={pollsQuery.data?.polls ?? []} saving={pollSaving} onCreate={handleCreatePoll} onRepublish={handleRepublishPoll} onArchive={handleArchivePoll} /> : <VenuesPanel venues={venues} saving={venueSaving} onCreate={handleCreateVenue} onUpdate={handleUpdateVenue} onArchive={handleArchiveVenue} onRestore={handleRestoreVenue} />}
     </main>
     <TabBar value={tab} onChange={setTab} />
   </div>

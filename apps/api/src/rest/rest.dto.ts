@@ -141,6 +141,12 @@ export class MatchListQueryDto {
   @IsString()
   @Matches(DECIMAL_ID_PATTERN)
   venueId?: string;
+
+  @ApiPropertyOptional({ type: Boolean, default: false })
+  @IsOptional()
+  @Transform(({ value }: { readonly value: unknown }) => value === true || value === "true")
+  @IsBoolean()
+  archived?: boolean;
 }
 
 export class VenueBookingContactDto {

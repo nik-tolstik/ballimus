@@ -92,6 +92,49 @@ describe("information-card PostgreSQL schema", () => {
     expect((await outbox.findByDeduplicationKey(`match:${match.id.toString(10)}:delete`))?.eventType).toBe("delete_public_card");
   });
 
+  it("isolates archived matches from active cards, orders them newest first, and permits permanent deletion", async () => {
+    const venues = new VenuesRepository(database.db);
+    const matches = new MatchesRepository(database.db);
+    const venue = await venues.create({
+      name: "Archive test venue",
+      mapUrl: "https://maps.example.test/archive-test-venue",
+      venueType: "indoor",
+    });
+    const first = await matches.create({
+      telegramChatId: CHAT_ID,
+      scheduledAt: new Date("2026-08-02T17:00:00.000Z"),
+      durationMinutes: 90,
+      venueId: venue.id,
+      creatorTelegramUserId: OWNER_ID,
+    });
+    const second = await matches.create({
+      telegramChatId: CHAT_ID,
+      scheduledAt: new Date("2026-08-03T17:00:00.000Z"),
+      durationMinutes: 120,
+      venueId: venue.id,
+      creatorTelegramUserId: OWNER_ID,
+    });
+    const active = await matches.create({
+      telegramChatId: CHAT_ID,
+      scheduledAt: new Date("2026-08-04T17:00:00.000Z"),
+      durationMinutes: 60,
+      venueId: venue.id,
+      creatorTelegramUserId: OWNER_ID,
+    });
+
+    const archivedFirst = await matches.archive(first.id, first.version, new Date("2026-08-10T12:00:00.000Z"));
+    const archivedSecond = await matches.archive(second.id, second.version, new Date("2026-08-11T12:00:00.000Z"));
+
+    expect((await matches.list({ telegramChatId: CHAT_ID })).map((match) => match.id)).toEqual([active.id]);
+    expect((await matches.list({ telegramChatId: CHAT_ID, archived: true })).map((match) => match.id)).toEqual([archivedSecond.id, archivedFirst.id]);
+    await expect(matches.deleteArchived(active.id, active.version)).rejects.toThrow("Only an archived match");
+    await expect(matches.update(archivedFirst.id, { durationMinutes: 120, expectedVersion: archivedFirst.version })).rejects.toThrow("no longer active");
+
+    await expect(matches.deleteArchived(archivedSecond.id, archivedSecond.version)).resolves.toBe(true);
+    await expect(matches.getById(archivedSecond.id)).rejects.toThrow("was not found");
+    expect((await matches.list({ telegramChatId: CHAT_ID, archived: true })).map((match) => match.id)).toEqual([archivedFirst.id]);
+  });
+
   it("emits once per upward threshold crossing and ignores disabled options", async () => {
     const polls = new TelegramPollsRepository(database.db);
     const poll = await polls.create({
