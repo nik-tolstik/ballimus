@@ -123,10 +123,27 @@ test('shows static information cards without roster or voting controls', async (
   await expect(page.getByRole('button', { name: 'История', exact: true })).toHaveCount(0)
 })
 
-test('sends current weather globally and keeps the venue catalog available', async ({ page }) => {
+test('does not send current weather when its confirmation is cancelled', async ({ page }) => {
   const mocked = await mockOwnerApp(page)
   await page.goto('/')
 
+  page.once('dialog', async (dialog) => {
+    expect(dialog.message()).toBe('Отправить текущую погоду в Telegram?')
+    await dialog.dismiss()
+  })
+  await page.getByRole('button', { name: 'Погода', exact: true }).click()
+
+  await expect.poll(() => mocked.weatherRequests).toEqual([])
+})
+
+test('sends current weather after its confirmation and keeps the venue catalog available', async ({ page }) => {
+  const mocked = await mockOwnerApp(page)
+  await page.goto('/')
+
+  page.once('dialog', async (dialog) => {
+    expect(dialog.message()).toBe('Отправить текущую погоду в Telegram?')
+    await dialog.accept()
+  })
   await page.getByRole('button', { name: 'Погода', exact: true }).click()
   await expect.poll(() => mocked.weatherRequests).toEqual(['/v1/weather/current'])
   await page.getByRole('button', { name: 'Места', exact: true }).click()
