@@ -25,15 +25,9 @@
 - The command reads only public verifier settings from the ignored `.env.production.local`; do not put Telegram or PostgreSQL secrets in those verifier settings. It requires authenticated `gh` and `railway` CLIs.
 - A full information-card create/edit/delete/weather smoke test is an extended check. Run it only in `Футбол тест` and only after separate explicit owner authorization; never create smoke-test matches in the real group.
 
-## Browser verification
+## Testing
 
-- For every rendered frontend task, run Playwright verification before completion with `pnpm test:e2e` (or a focused Playwright command when appropriate). Local Playwright is confirmed to work with the repository's mocked API and Telegram WebApp fixture.
-- When the Chrome plugin is connected and Telegram Web is already signed in, also run a read-only smoke check through the real Telegram Mini App after `pnpm dev` reports that local development is ready.
-- Before opening the Mini App, inspect the bot profile and require both the display name `Ballimus Dev` and the exact username `@ballimus_dev_bot`. Never open the production bot or any bot whose exact username differs, even if its display name is similar.
-- After launch, inspect only the iframe origin and require it to equal the configured local `CLOUDFLARE_TUNNEL_URL`. Never read, print, or store the iframe query, fragment, or signed Telegram `initData`.
-- Chrome smoke checks are read-only by default: navigation, opening sheets, temporary unsaved UI changes, console inspection, and screenshots are allowed. Creating, saving, archiving, deleting, republishing, voting, or sending weather requires separate explicit owner authorization and must target only the local bot, database, and `Футбол тест` group.
-- If the Chrome plugin is unavailable, Telegram Web is signed out, the exact bot identity cannot be verified, or the Mini App iframe cannot be controlled, report the limitation and rely on Playwright. Never fall back to the production bot.
-- Report any Playwright limitation and do not claim visual QA passed when the relevant check could not run.
+- Follow [docs/testing.md](docs/testing.md) for required automated checks and safe Telegram Mini App verification.
 
 ## Documentation
 
@@ -42,6 +36,7 @@
 - [Architecture](docs/architecture.md)
 - [Project structure](docs/project-structure.md)
 - [Development guide](docs/development.md)
+- [Testing guide](docs/testing.md)
 
 ## UI copy
 
