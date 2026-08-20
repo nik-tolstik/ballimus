@@ -28,7 +28,6 @@
 ## Browser verification
 
 - For every rendered frontend task, run Playwright verification before completion with `pnpm test:e2e` (or a focused Playwright command when appropriate). Local Playwright is confirmed to work with the repository's mocked API and Telegram WebApp fixture.
-- Browser QA is disabled for this repository because Codex has a known runtime blocker: `sandboxCwd is not a local file URI`. Do not use Browser QA as a substitute for Playwright unless the user explicitly requests it.
 - Report any Playwright limitation and do not claim visual QA passed when the relevant check could not run.
 
 ## Documentation
