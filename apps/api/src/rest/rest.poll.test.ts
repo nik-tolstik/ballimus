@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { pollCreationInput } from "./rest.service.js";
+import { pollCreationInput, pollNotificationSettingsInput } from "./rest.service.js";
 
 describe("native poll creation", () => {
   it("publishes a non-anonymous poll to General while preserving notification settings", () => {
@@ -30,5 +30,16 @@ describe("native poll creation", () => {
       allowsRevoting: true,
       creatorTelegramUserId: 123n,
     });
+  });
+});
+
+describe("native poll notification settings", () => {
+  it("maps only the ordered option notification toggles to persistence", () => {
+    expect(pollNotificationSettingsInput({
+      options: [
+        { notificationEnabled: false },
+        { notificationEnabled: true },
+      ],
+    })).toEqual({ notificationEnabled: [false, true] });
   });
 });

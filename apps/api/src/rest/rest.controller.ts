@@ -30,6 +30,7 @@ import {
   MatchListQueryDto,
   PatchMatchDto,
   PollCreateDto,
+  PollNotificationSettingsUpdateDto,
   VenueCreateDto,
   VenueListQueryDto,
   VenueUpdateDto,
@@ -178,6 +179,21 @@ export class PollsController {
     @Body() input: PollCreateDto,
   ): Promise<Record<string, unknown>> {
     return this.service.createPoll(ownerTelegramUserId, idempotencyKey, input);
+  }
+
+  @Patch(":id/notification-settings")
+  @ApiOperation({ operationId: "updateOwnerPollNotificationSettings", summary: "Update native poll option notification settings" })
+  @ApiParam({ name: "id", type: String })
+  @ApiHeader({ name: "Idempotency-Key", required: true })
+  @ApiBody({ type: PollNotificationSettingsUpdateDto })
+  @ApiOkResponse({ type: PollEnvelopeResponseDto })
+  public updateNotificationSettings(
+    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Param("id", PositiveBigIntPipe) pollId: bigint,
+    @Body() input: PollNotificationSettingsUpdateDto,
+  ): Promise<Record<string, unknown>> {
+    return this.service.updatePollNotificationSettings(ownerTelegramUserId, idempotencyKey, pollId, input);
   }
 
   @Post(":id/republish")

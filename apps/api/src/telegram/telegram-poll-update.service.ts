@@ -242,6 +242,13 @@ export class TelegramPollUpdateService implements OnModuleDestroy {
     this.delayedWithdrawals.close();
   }
 
+  /** Cancels withdrawal grace-period checks for options whose notifications were disabled. */
+  public cancelWithdrawalNotifications(pollId: bigint, optionIndexes: readonly number[]): void {
+    for (const optionIndex of optionIndexes) {
+      this.delayedWithdrawals.cancel(this.withdrawalKey(pollId, optionIndex));
+    }
+  }
+
   public async handle(secret: string | undefined, body: unknown): Promise<{ readonly ok: true }> {
     if (!secretMatches(secret, this.config.telegramWebhookSecret)) {
       throw new UnauthorizedException({ code: "TELEGRAM_WEBHOOK_UNAUTHORIZED", message: "Telegram webhook authentication failed." });
@@ -270,11 +277,7 @@ export class TelegramPollUpdateService implements OnModuleDestroy {
           pollId: current.id,
         };
       });
-      if (result.pollId !== undefined) {
-        for (const optionIndex of result.restoredOptionIndexes) {
-          this.delayedWithdrawals.cancel(this.withdrawalKey(result.pollId, optionIndex));
-        }
-      }
+      if (result.pollId !== undefined) this.cancelWithdrawalNotifications(result.pollId, result.restoredOptionIndexes);
       await sendPollThresholdNotifications(this.effects, result.notifications);
       return { ok: true };
     }

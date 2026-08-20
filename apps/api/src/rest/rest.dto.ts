@@ -67,6 +67,22 @@ export class PollCreateDto {
   allowsMultipleAnswers!: boolean;
 }
 
+export class PollNotificationOptionUpdateDto {
+  @ApiProperty({ type: Boolean })
+  @IsBoolean()
+  notificationEnabled!: boolean;
+}
+
+export class PollNotificationSettingsUpdateDto {
+  @ApiProperty({ type: [PollNotificationOptionUpdateDto], minItems: 2, maxItems: 12 })
+  @IsArray()
+  @ArrayMinSize(2)
+  @ArrayMaxSize(12)
+  @ValidateNested({ each: true })
+  @Type(() => PollNotificationOptionUpdateDto)
+  options!: PollNotificationOptionUpdateDto[];
+}
+
 export class MatchCreateDto {
   @ApiProperty({ type: String, example: "2026-08-03", pattern: "^\\d{4}-\\d{2}-\\d{2}$" })
   @IsString()

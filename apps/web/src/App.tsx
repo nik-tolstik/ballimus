@@ -22,6 +22,7 @@ import {
   useRestoreOwnerVenue,
   useSendCurrentWeather,
   useUpdateOwnerMatch,
+  useUpdateOwnerPollNotificationSettings,
   useUpdateOwnerVenue,
 } from '@football/api-client'
 
@@ -102,6 +103,7 @@ export function App({ telegramSession }: AppProps = {}) {
   const createPollMutation = useCreateOwnerPoll(mutationOptions)
   const archivePollMutation = useArchiveOwnerPoll(mutationOptions)
   const republishPollMutation = useRepublishOwnerPoll(mutationOptions)
+  const updatePollNotificationSettingsMutation = useUpdateOwnerPollNotificationSettings(mutationOptions)
   const updateMatchMutation = useUpdateOwnerMatch(mutationOptions)
   const deleteMatchMutation = useDeleteOwnerMatch(mutationOptions)
   const republishMatchMutation = useRepublishOwnerMatch(mutationOptions)
@@ -141,6 +143,20 @@ export function App({ telegramSession }: AppProps = {}) {
       if (response.poll.publicationState === 'published') toast.success('Опрос опубликован в Telegram.')
       else if (response.poll.publicationState === 'failed') toast.error('Не удалось опубликовать опрос.')
       else toast.warning('Telegram не подтвердил отправку. Проверьте General перед повторной публикацией.')
+      return true
+    } catch {
+      return false
+    }
+  }
+  const handleUpdatePollNotificationSettings = async (pollId: string, notificationEnabled: readonly boolean[]): Promise<boolean> => {
+    try {
+      await updatePollNotificationSettingsMutation.mutateAsync({
+        id: pollId,
+        data: { options: notificationEnabled.map((enabled) => ({ notificationEnabled: enabled })) },
+        headers: { 'Idempotency-Key': requestKey() },
+      })
+      invalidatePolls()
+      toast.success('Оповещения обновлены.')
       return true
     } catch {
       return false
@@ -206,7 +222,7 @@ export function App({ telegramSession }: AppProps = {}) {
     }
   }
   const matchSaving = [createMatchMutation, updateMatchMutation, deleteMatchMutation, republishMatchMutation].some((mutation) => mutation.isPending)
-  const pollSaving = createPollMutation.isPending || archivePollMutation.isPending || republishPollMutation.isPending
+  const pollSaving = createPollMutation.isPending || archivePollMutation.isPending || republishPollMutation.isPending || updatePollNotificationSettingsMutation.isPending
   const venueSaving = [createVenueMutation, updateVenueMutation, archiveVenueMutation, restoreVenueMutation].some((mutation) => mutation.isPending)
   const loading = matchesQuery.isLoading || pollsQuery.isLoading || venuesQuery.isLoading
   const failure = [matchesQuery.error, pollsQuery.error, venuesQuery.error].find((error) => error !== null && error !== undefined)
@@ -215,7 +231,7 @@ export function App({ telegramSession }: AppProps = {}) {
     <header className="flex h-14 items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur-sm"><div className="flex items-center gap-2.5"><img src={applicationBrand.logo} alt="" width="36" height="36" className="size-9 rounded-full object-cover" /><p className="text-base font-semibold leading-none">{applicationBrand.name}</p></div><div className="flex items-center gap-1"><Button variant="ghost" size="sm" onClick={() => weatherMutation.mutate()} disabled={weatherMutation.isPending}><CloudSun data-icon="inline-start" />Погода</Button><ThemeToggle /></div></header>
     <main className="min-h-0 flex-1 overflow-y-auto px-4 pt-4 pb-5">
       {failure !== undefined ? <Alert variant="destructive" className="mb-4"><TriangleAlert /><AlertTitle>Не удалось загрузить данные</AlertTitle><AlertDescription>{errorMessage(failure)}</AlertDescription></Alert> : null}
-      {loading ? <StateScreen kind="loading" title="Загружаем данные" copy="Синхронизируем данные…" /> : tab === 'matches' ? <MatchesPanel matches={matches} venues={venues} saving={matchSaving} conflict={conflict} onClearConflict={() => setConflict('')} onCreate={handleCreateMatch} onUpdate={handleUpdateMatch} onDelete={handleDeleteMatch} onRepublish={handleRepublishMatch} onCreateVenue={handleCreateVenue} /> : tab === 'polls' ? <PollsPanel polls={pollsQuery.data?.polls ?? []} saving={pollSaving} onCreate={handleCreatePoll} onRepublish={handleRepublishPoll} onArchive={handleArchivePoll} /> : <VenuesPanel venues={venues} saving={venueSaving} onCreate={handleCreateVenue} onUpdate={handleUpdateVenue} onArchive={handleArchiveVenue} onRestore={handleRestoreVenue} />}
+      {loading ? <StateScreen kind="loading" title="Загружаем данные" copy="Синхронизируем данные…" /> : tab === 'matches' ? <MatchesPanel matches={matches} venues={venues} saving={matchSaving} conflict={conflict} onClearConflict={() => setConflict('')} onCreate={handleCreateMatch} onUpdate={handleUpdateMatch} onDelete={handleDeleteMatch} onRepublish={handleRepublishMatch} onCreateVenue={handleCreateVenue} /> : tab === 'polls' ? <PollsPanel polls={pollsQuery.data?.polls ?? []} saving={pollSaving} onCreate={handleCreatePoll} onUpdateNotificationSettings={handleUpdatePollNotificationSettings} onRepublish={handleRepublishPoll} onArchive={handleArchivePoll} /> : <VenuesPanel venues={venues} saving={venueSaving} onCreate={handleCreateVenue} onUpdate={handleUpdateVenue} onArchive={handleArchiveVenue} onRestore={handleRestoreVenue} />}
     </main>
     <TabBar value={tab} onChange={setTab} />
   </div>

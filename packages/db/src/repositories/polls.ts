@@ -45,6 +45,11 @@ export interface TelegramPollUpdateOptionInput {
   readonly voterCount: number;
 }
 
+/** Ordered notification settings for an existing native poll's immutable options. */
+export interface TelegramPollNotificationSettingsInput {
+  readonly notificationEnabled: readonly boolean[];
+}
+
 export interface TelegramPollThresholdTrigger {
   readonly optionIndex: number;
   readonly optionText: string;
@@ -197,6 +202,15 @@ export class TelegramPollsRepository {
     return requirePoll(rows[0], parsed.toString(10));
   }
 
+  public async getByIdForUpdate(id: DatabaseIdentifier): Promise<TelegramPoll> {
+    const parsed = positiveBigInt(id, "pollId");
+    const rows = await this.db.select().from(telegramPolls)
+      .where(eq(telegramPolls.id, parsed))
+      .limit(1)
+      .for("update");
+    return requirePoll(rows[0], parsed.toString(10));
+  }
+
   public async listByChat(telegramChatId: DatabaseIdentifier, limit = 100): Promise<TelegramPoll[]> {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 250) {
       throw new ValidationRepositoryError("poll list limit must be between 1 and 250");
@@ -330,6 +344,31 @@ export class TelegramPollsRepository {
       .limit(1)
       .for("update");
     return rows[0];
+  }
+
+  /**
+   * Updates only the owner-controlled option notification toggles. The caller
+   * must lock the row first so concurrent Telegram count updates preserve them.
+   */
+  public async updateNotificationSettings(
+    poll: TelegramPoll,
+    input: TelegramPollNotificationSettingsInput,
+    updatedAt?: Date,
+  ): Promise<TelegramPoll> {
+    if (poll.archivedAt !== null) throw new RepositoryConflictError("An archived poll cannot be edited");
+    if (!Array.isArray(input.notificationEnabled) || input.notificationEnabled.length !== poll.options.length) {
+      throw new ValidationRepositoryError("notificationEnabled must contain one value for every poll option");
+    }
+    const options = poll.options.map((option, index) => ({
+      ...option,
+      notificationEnabled: notificationEnabled(input.notificationEnabled[index]!, `notificationEnabled[${index}]`),
+    }));
+    const now = effectiveNow(updatedAt);
+    const rows = await this.db.update(telegramPolls).set({
+      options,
+      updatedAt: now,
+    }).where(eq(telegramPolls.id, poll.id)).returning();
+    return requirePoll(rows[0], poll.id.toString(10));
   }
 
   public async getVoterAnswer(
