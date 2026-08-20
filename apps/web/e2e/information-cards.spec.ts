@@ -399,7 +399,8 @@ test('opens a poll, refreshes Telegram vote counts, and archives it', async ({ p
   await page.getByRole('button', { name: 'Опросы', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Опросы', exact: true })).toBeVisible()
   await page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Опрос', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Оповещения', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Редактировать оповещения', exact: true })).toHaveCount(0)
   await expect(page.getByText('Неанонимное голосование', { exact: true })).toBeVisible()
   await expect(page.getByText('Голос можно отменять', { exact: true })).toBeVisible()
   await expect(page.getByText('Оповестить о количестве', { exact: true })).toBeVisible()
@@ -420,11 +421,9 @@ test('edits only existing poll option notification toggles', async ({ page }) =>
 
   await page.getByRole('button', { name: 'Опросы', exact: true }).click()
   await page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true }).click()
-  const editNotifications = page.getByRole('button', { name: 'Редактировать оповещения', exact: true })
-  await expect(editNotifications).toBeInViewport()
-  await editNotifications.click()
   await expect(page.getByRole('heading', { name: 'Оповещения', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Опрос', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Редактировать оповещения', exact: true })).toHaveCount(0)
   const firstBell = page.getByRole('button', { name: 'Оповещение для варианта 1', exact: true })
   const secondBell = page.getByRole('button', { name: 'Оповещение для варианта 2', exact: true })
   await expect(firstBell).toHaveAttribute('aria-pressed', 'true')
@@ -456,11 +455,25 @@ test('keeps poll notification editing visible above long poll details', async ({
 
   await page.getByRole('button', { name: 'Опросы', exact: true }).click()
   await page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true }).click()
-  const editNotifications = page.getByRole('button', { name: 'Редактировать оповещения', exact: true })
-  await expect(editNotifications).toBeInViewport()
-  await editNotifications.click()
   await expect(page.getByRole('heading', { name: 'Оповещения', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Оповещение для варианта 12', exact: true })).toBeVisible()
+})
+
+test('cancels direct poll notification editing without saving', async ({ page }) => {
+  const mocked = await mockOwnerApp(page, { existingPoll: true })
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Опросы', exact: true }).click()
+  await page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true }).click()
+  const firstBell = page.getByRole('button', { name: 'Оповещение для варианта 1', exact: true })
+  await firstBell.click()
+  await expect(firstBell).toHaveAttribute('aria-pressed', 'false')
+  await page.getByRole('button', { name: 'Отмена', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Оповещения', exact: true })).toHaveCount(0)
+  await expect.poll(() => mocked.notificationSettingsRequests).toEqual([])
+
+  await page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Оповещение для варианта 1', exact: true })).toHaveAttribute('aria-pressed', 'true')
 })
 
 test('manually republishes a poll after a failed first attempt', async ({ page }) => {
@@ -504,7 +517,7 @@ test('confirms uncertain poll republishing without a native dialog', async ({ pa
   await expect(page.getByText('Сначала проверьте General: Telegram мог получить опрос, даже если не подтвердил отправку.', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Отмена', exact: true }).click()
   await expect.poll(() => mocked.republishPollRequests).toEqual([])
-  await expect(page.getByRole('heading', { name: 'Опрос', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Оповещения', exact: true })).toBeVisible()
 
   await page.getByRole('button', { name: 'Переопубликовать', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Переопубликовать опрос?', exact: true })).toBeVisible()
