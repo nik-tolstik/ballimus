@@ -16,7 +16,7 @@ The repository pins Railway CLI v5. Its required postinstall binary is explicitl
 
 1. Finish the release PR: green GitHub CI, green Vercel preview, and no unresolved review comments.
 2. Obtain authorization for this specific production release.
-3. Pause automatic production deployments in Railway and Vercel. Keep the Vercel production deployment held while the API migration is applied; the new Mini App must not reach an older API.
+3. Pause automatic production deployments in Railway and Vercel. Keep Vercel production held while the API migration is applied; the new Mini App must not reach an older API.
 4. Merge the approved PR, check out a clean and current local `main`, then run:
 
    ```sh
@@ -25,7 +25,7 @@ The repository pins Railway CLI v5. Its required postinstall binary is explicitl
    ```
 
    Preflight fails before production is changed unless the checkout exactly matches `origin/main`, the worktree is clean, Railway CLI is v5, and the configured scale region is a supported alias. Cutover stops API and jobs using that alias, deploys API (including its pre-deploy migration), deploys jobs, then verifies Railway service status, API health, and the migration ledger.
-5. Promote the held Vercel production deployment only after cutover passes.
+5. Only after cutover passes, run `git rev-parse HEAD`, open Vercel's **Create Deployment** dialog, paste that full SHA, verify that Vercel resolves it to `main` and `Production`, and choose **Deploy to Production**. Do not promote a release-branch preview.
 6. Run:
 
    ```sh
@@ -34,7 +34,9 @@ The repository pins Railway CLI v5. Its required postinstall binary is explicitl
 
    This read-only verifier checks GitHub CI, Vercel status and URL, Railway services, API health, CORS, the migration ledger, and the exact production poll webhook URL. It reads only public settings from `.env.production.local`; the Telegram token stays inside the API container and is never printed.
 
-The Railway cutover command never deploys Vercel, changes BotFather settings, registers or deletes a Telegram webhook, or sends Telegram messages. The Vercel promotion remains a deliberate provider action because it controls the public Mini App entry point.
+The Railway cutover command never deploys Vercel, changes BotFather settings, registers or deletes a Telegram webhook, or sends Telegram messages. The exact-commit Vercel deployment remains a deliberate provider action because it controls the public Mini App entry point.
+
+If a merge or deployment step fails or behaves differently from this runbook, stop and report the problem to the owner before attempting a workaround.
 
 Native polls require one separately authorized Telegram operation after the API deployment. Run the bundled command inside the Railway API service with the exact production API URL and explicit confirmation flag:
 

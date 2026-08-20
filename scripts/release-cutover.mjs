@@ -19,13 +19,13 @@ const confirmationFlag = "--confirm-production-cutover";
 
 export function createCutoverPlan(config) {
   const railwayArguments = ["exec", "railway"];
-  const serviceArguments = ["--project", config.railwayProjectId, "--environment", config.railwayEnvironment];
+  const serviceArguments = ["-p", config.railwayProjectId, "-e", config.railwayEnvironment];
   const scale = (service) => [
     ...railwayArguments,
     "service",
     "scale",
     ...serviceArguments,
-    "--service",
+    "-s",
     service,
     `${config.railwayRegionAlias}=0`,
   ];
@@ -36,7 +36,7 @@ export function createCutoverPlan(config) {
     "--path-as-root",
     "--ci",
     ...serviceArguments,
-    "--service",
+    "-s",
     service,
   ];
   return [
@@ -81,8 +81,8 @@ async function committedMigrationCount() {
 
 async function verifyRailwayCutover(config) {
   const serviceStatus = parseJsonOutput(await runCommand("pnpm", [
-    "exec", "railway", "service", "status", "--all", "--json", "--project", config.railwayProjectId,
-    "--environment", config.railwayEnvironment,
+    "exec", "railway", "service", "status", "--all", "--json", "-p", config.railwayProjectId,
+    "-e", config.railwayEnvironment,
   ]), "Railway services");
   const services = evaluateRailwayServices(serviceStatus, config.railwayApiService, config.railwayJobsService);
   if (!services.ok) throw new Error(services.summary);
@@ -92,8 +92,8 @@ async function verifyRailwayCutover(config) {
   if (!health.ok) throw new Error(health.summary);
 
   const migrationStatus = parseJsonOutput(await runCommand("pnpm", [
-    "exec", "railway", "ssh", "--project", config.railwayProjectId, "--environment", config.railwayEnvironment,
-    "--service", config.railwayApiService, "--", "node", "packages/db/dist/migration-status-cli.js",
+    "exec", "railway", "ssh", "-p", config.railwayProjectId, "-e", config.railwayEnvironment,
+    "-s", config.railwayApiService, "--", "node", "packages/db/dist/migration-status-cli.js",
   ]), "Migration status");
   const migrations = evaluateMigrationStatus(migrationStatus, await committedMigrationCount());
   if (!migrations.ok) throw new Error(migrations.summary);
@@ -116,7 +116,7 @@ async function main() {
 
   await verifyRailwayCutover(config);
   console.info("PASS Railway API health, services, and database migrations");
-  console.info("Railway cutover completed. Promote the held Vercel deployment, then run pnpm release:verify-production.");
+  console.info("Railway cutover completed. Deploy the exact checked-out main commit to Vercel production, then run pnpm release:verify-production.");
 }
 
 const runsDirectly = process.argv[1] !== undefined && resolve(process.argv[1]) === resolve(import.meta.filename);
