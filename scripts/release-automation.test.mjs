@@ -34,6 +34,18 @@ test("builds a cutover plan that never scales by Railway's internal region ID", 
   assert.equal(plan.some((step) => step.argumentsToRun.some((argument) => argument.includes("europe-west4"))), false);
 });
 
+test("uses Railway's Windows-safe short service selectors", () => {
+  const plan = createCutoverPlan(parseProductionCutoverConfig(publicConfig));
+  for (const step of plan) {
+    assert.ok(step.argumentsToRun.includes("-p"));
+    assert.ok(step.argumentsToRun.includes("-e"));
+    assert.ok(step.argumentsToRun.includes("-s"));
+    assert.equal(step.argumentsToRun.includes("--project"), false);
+    assert.equal(step.argumentsToRun.includes("--environment"), false);
+    assert.equal(step.argumentsToRun.includes("--service"), false);
+  }
+});
+
 test("requires an explicit production confirmation", () => {
   assert.equal(cutoverIsConfirmed([]), false);
   assert.equal(cutoverIsConfirmed(["--confirm-production-cutover"]), true);
