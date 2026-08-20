@@ -25,7 +25,9 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ArchiveOwnerMatchHeaders,
   CreateOwnerMatchHeaders,
+  DeleteArchivedOwnerMatchHeaders,
   DeleteOwnerMatchHeaders,
   ListOwnerMatchesParams,
   MatchCreateDto,
@@ -48,7 +50,7 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 /**
- * @summary List current information cards
+ * @summary List active or archived information cards
  */
 export const listOwnerMatches = (
     params?: ListOwnerMatchesParams,
@@ -120,7 +122,7 @@ export function useListOwnerMatches<TData = Awaited<ReturnType<typeof listOwnerM
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary List current information cards
+ * @summary List active or archived information cards
  */
 
 export function useListOwnerMatches<TData = Awaited<ReturnType<typeof listOwnerMatches>>, TError = unknown>(
@@ -422,6 +424,133 @@ export const useDeleteOwnerMatch = <TError = unknown,
       > => {
 
       const mutationOptions = getDeleteOwnerMatchMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * @summary Archive an information card and delete its Telegram message
+ */
+export const archiveOwnerMatch = (
+    id: string,
+    headers: ArchiveOwnerMatchHeaders,
+ options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
+) => {
+
+
+      return customInstance<MatchEnvelopeResponseDto>(
+      {url: `/v1/matches/${id}/archive`, method: 'POST',
+      headers, ...(signal ? { signal }: {})
+    },
+      options);
+    }
+
+
+
+export const getArchiveOwnerMatchMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveOwnerMatch>>, TError,{id: string;headers: ArchiveOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof archiveOwnerMatch>>, TError,{id: string;headers: ArchiveOwnerMatchHeaders}, TContext> => {
+
+const mutationKey = ['archiveOwnerMatch'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof archiveOwnerMatch>>, {id: string;headers: ArchiveOwnerMatchHeaders}> = (props) => {
+          const {id,headers} = props ?? {};
+
+          return  archiveOwnerMatch(id,headers,requestOptions)
+        }
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ArchiveOwnerMatchMutationResult = NonNullable<Awaited<ReturnType<typeof archiveOwnerMatch>>>
+
+    export type ArchiveOwnerMatchMutationError = unknown
+
+    /**
+ * @summary Archive an information card and delete its Telegram message
+ */
+export const useArchiveOwnerMatch = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveOwnerMatch>>, TError,{id: string;headers: ArchiveOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof archiveOwnerMatch>>,
+        TError,
+        {id: string;headers: ArchiveOwnerMatchHeaders},
+        TContext
+      > => {
+
+      const mutationOptions = getArchiveOwnerMatchMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * @summary Permanently delete an archived match
+ */
+export const deleteArchivedOwnerMatch = (
+    id: string,
+    headers: DeleteArchivedOwnerMatchHeaders,
+ options?: SecondParameter<typeof customInstance>,) => {
+
+
+      return customInstance<unknown>(
+      {url: `/v1/matches/${id}/archive`, method: 'DELETE',
+      headers
+    },
+      options);
+    }
+
+
+
+export const getDeleteArchivedOwnerMatchMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteArchivedOwnerMatch>>, TError,{id: string;headers: DeleteArchivedOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteArchivedOwnerMatch>>, TError,{id: string;headers: DeleteArchivedOwnerMatchHeaders}, TContext> => {
+
+const mutationKey = ['deleteArchivedOwnerMatch'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteArchivedOwnerMatch>>, {id: string;headers: DeleteArchivedOwnerMatchHeaders}> = (props) => {
+          const {id,headers} = props ?? {};
+
+          return  deleteArchivedOwnerMatch(id,headers,requestOptions)
+        }
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteArchivedOwnerMatchMutationResult = NonNullable<Awaited<ReturnType<typeof deleteArchivedOwnerMatch>>>
+
+    export type DeleteArchivedOwnerMatchMutationError = unknown
+
+    /**
+ * @summary Permanently delete an archived match
+ */
+export const useDeleteArchivedOwnerMatch = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteArchivedOwnerMatch>>, TError,{id: string;headers: DeleteArchivedOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteArchivedOwnerMatch>>,
+        TError,
+        {id: string;headers: DeleteArchivedOwnerMatchHeaders},
+        TContext
+      > => {
+
+      const mutationOptions = getDeleteArchivedOwnerMatchMutationOptions(options);
 
       return useMutation(mutationOptions, queryClient);
     }

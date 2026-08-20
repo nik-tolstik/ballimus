@@ -29,6 +29,8 @@ export interface MatchResponseDto {
   version: number;
   creatorTelegramUserId: string;
   /** @nullable */
+  archivedAt: string | null;
+  /** @nullable */
   deletionRequestedAt: string | null;
   createdAt: string;
   updatedAt: string;

@@ -6,7 +6,6 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type ArchiveOwnerVenueHeaders = {
-'If-Match': string;
+export type UpdateOwnerPollNotificationSettingsHeaders = {
 'Idempotency-Key': string;
 };

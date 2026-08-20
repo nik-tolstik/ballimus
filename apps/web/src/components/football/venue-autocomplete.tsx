@@ -22,7 +22,7 @@ export function VenueAutocomplete({ venues, value, onValueChange, onCreate, plac
   const selected = venues.find((venue) => venue.id === value)
   const results = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase()
-    return venues.filter((venue) => venue.archivedAt === undefined && (needle === '' || venue.name.toLocaleLowerCase().includes(needle)))
+    return venues.filter((venue) => needle === '' || venue.name.toLocaleLowerCase().includes(needle))
   }, [search, venues])
 
   const choose = (venueId: string) => {

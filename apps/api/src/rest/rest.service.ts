@@ -15,6 +15,7 @@ import {
   type Match as DbMatch,
   type MatchMessage,
   type CreateTelegramPollInput,
+  type TelegramPollNotificationSettingsInput,
   type TelegramPoll as DbTelegramPoll,
   type TransactionRepositories,
   type Venue as DbVenue,
@@ -24,6 +25,7 @@ import { API_CONFIG, type ApiConfig } from "../config/api-config.js";
 import { APP_DATABASE } from "../database/database.constants.js";
 import { OutboxBestEffortService } from "../telegram/outbox-best-effort.service.js";
 import { TelegramPollPublicationService } from "../telegram/telegram-poll-publication.service.js";
+import { TelegramPollUpdateService } from "../telegram/telegram-poll-update.service.js";
 import { CurrentWeatherService } from "../weather/current-weather.service.js";
 import { canonicalRequestHash } from "./rest.canonical.js";
 import {
@@ -31,8 +33,8 @@ import {
   type MatchListQueryDto,
   type PatchMatchDto,
   type PollCreateDto,
+  type PollNotificationSettingsUpdateDto,
   type VenueCreateDto,
-  type VenueListQueryDto,
   type VenueUpdateDto,
 } from "./rest.dto.js";
 import { restRequestError, toRestHttpException } from "./rest.errors.js";
@@ -59,6 +61,10 @@ export function pollCreationInput(
     allowsRevoting: true,
     creatorTelegramUserId: ownerTelegramUserId,
   };
+}
+
+export function pollNotificationSettingsInput(input: PollNotificationSettingsUpdateDto): TelegramPollNotificationSettingsInput {
+  return { notificationEnabled: input.options.map((option) => option.notificationEnabled) };
 }
 
 function readRepositories(db: AppDatabase): ReadRepositories {
@@ -112,13 +118,14 @@ export class OwnerRestService {
     @Inject(API_CONFIG) private readonly config: ApiConfig,
     @Inject(OutboxBestEffortService) private readonly bestEffort: OutboxBestEffortService,
     @Inject(TelegramPollPublicationService) private readonly pollPublication: TelegramPollPublicationService,
+    @Inject(TelegramPollUpdateService) private readonly pollUpdates: TelegramPollUpdateService,
     @Inject(CurrentWeatherService) private readonly weather: CurrentWeatherService,
   ) {}
 
   public async getBootstrap(ownerTelegramUserId: bigint): Promise<Record<string, unknown>> {
     this.assertOwner(ownerTelegramUserId);
     const repositories = readRepositories(this.db);
-    const matches = await repositories.matches.list({ telegramChatId: this.config.telegramGroupChatId });
+    const matches = await repositories.matches.list({ telegramChatId: this.config.telegramGroupChatId, archived: false });
     return serializeRestObject({
       owner: { telegramUserId: ownerTelegramUserId },
       group: {
@@ -136,6 +143,7 @@ export class OwnerRestService {
     const repositories = readRepositories(this.db);
     const matches = await repositories.matches.list({
       telegramChatId: this.config.telegramGroupChatId,
+      archived: query.archived === true,
       ...(query.venueId === undefined ? {} : { venueId: BigInt(query.venueId) }),
     });
     return serializeRestObject({ matches: await Promise.all(matches.map(async (match) => this.matchBody(match, repositories))) });
@@ -146,7 +154,7 @@ export class OwnerRestService {
     try {
       const repositories = readRepositories(this.db);
       const match = await repositories.matches.getById(matchId);
-      this.assertCurrentMatch(match);
+      this.assertAccessibleMatch(match);
       return serializeRestObject({ match: await this.matchBody(match, repositories) });
     } catch (error) {
       throw toRestHttpException(error);
@@ -185,6 +193,37 @@ export class OwnerRestService {
       ? await new TelegramPollsRepository(this.db).getById(responsePollId)
       : await this.pollPublication.publishPending(responsePollId);
     return serializeRestObject({ poll: this.pollBody(poll) });
+  }
+
+  public async updatePollNotificationSettings(
+    ownerTelegramUserId: bigint,
+    idempotencyKey: string | undefined,
+    pollId: bigint,
+    input: PollNotificationSettingsUpdateDto,
+  ): Promise<Record<string, unknown>> {
+    this.assertOwner(ownerTelegramUserId);
+    let disabledOptionIndexes: readonly number[] = [];
+    let updatedPollId: bigint | undefined;
+    const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "update-poll-notification-settings", pollId, input }, 200, async (repositories) => {
+      try {
+        const current = await repositories.polls.getByIdForUpdate(pollId);
+        if (current.telegramChatId !== this.config.telegramGroupChatId) {
+          throw toRestHttpException(restRequestError(404, "RESOURCE_NOT_FOUND", "The requested resource was not found."));
+        }
+        const updated = await repositories.polls.updateNotificationSettings(current, pollNotificationSettingsInput(input));
+        disabledOptionIndexes = current.options.flatMap((option, index) => (
+          option.notificationEnabled && input.options[index]?.notificationEnabled === false ? [index] : []
+        ));
+        updatedPollId = updated.id;
+        return serializeRestObject({ poll: this.pollBody(updated) });
+      } catch (error) {
+        throw toRestHttpException(error);
+      }
+    });
+    if (updatedPollId !== undefined && disabledOptionIndexes.length > 0) {
+      this.pollUpdates.cancelWithdrawalNotifications(updatedPollId, disabledOptionIndexes);
+    }
+    return body;
   }
 
   public async republishPoll(
@@ -240,7 +279,6 @@ export class OwnerRestService {
     const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "create-match", input }, 201, async (repositories) => {
       try {
         const venue = await repositories.venues.getForUpdate(BigInt(input.venueId));
-        this.assertActiveVenue(venue);
         const match = await repositories.matches.create({
           telegramChatId: this.config.telegramGroupChatId,
           scheduledAt,
@@ -286,7 +324,7 @@ export class OwnerRestService {
         const date = input.date ?? calendarDateInTimeZone(current.scheduledAt, this.config.groupTimezone);
         const time = input.time ?? formatTimeInTimeZone(current.scheduledAt, this.config.groupTimezone);
         const venueId = input.venueId === undefined ? undefined : BigInt(input.venueId);
-        if (venueId !== undefined) this.assertActiveVenue(await repositories.venues.getForUpdate(venueId));
+        if (venueId !== undefined) await repositories.venues.getForUpdate(venueId);
         const updated = await repositories.matches.update(matchId, {
           expectedVersion,
           ...(input.date === undefined && input.time === undefined ? {} : { scheduledAt: this.toScheduledAt(date, time) }),
@@ -316,6 +354,7 @@ export class OwnerRestService {
     if (expectedVersion === undefined) throw new Error("If-Match was required but not provided");
     const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "delete-match", matchId, expectedVersion }, 200, async (repositories) => {
       try {
+        this.assertCurrentMatch(await repositories.matches.getForUpdate(matchId));
         const deleted = await repositories.matches.requestDeletion(matchId, expectedVersion);
         const reference = await repositories.matchMessages.findByMatchId(matchId);
         await repositories.outbox.insertInTransaction({
@@ -328,6 +367,73 @@ export class OwnerRestService {
             ? {}
             : { telegramMessageId: reference.telegramMessageId.toString(10) },
         });
+        return serializeRestObject({ deleted: true, matchId });
+      } catch (error) {
+        throw toRestHttpException(error);
+      }
+    });
+    await this.tryDeliverOutbox();
+    return body;
+  }
+
+  public async archiveMatch(
+    ownerTelegramUserId: bigint,
+    idempotencyKey: string | undefined,
+    ifMatch: string | undefined,
+    matchId: bigint,
+  ): Promise<Record<string, unknown>> {
+    this.assertOwner(ownerTelegramUserId);
+    const expectedVersion = parseIfMatch(ifMatch, true);
+    if (expectedVersion === undefined) throw new Error("If-Match was required but not provided");
+    const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "archive-match", matchId, expectedVersion }, 200, async (repositories) => {
+      try {
+        this.assertCurrentMatch(await repositories.matches.getForUpdate(matchId));
+        const archived = await repositories.matches.archive(matchId, expectedVersion);
+        const reference = await repositories.matchMessages.findByMatchId(matchId);
+        if (reference?.telegramMessageId === null) await repositories.matchMessages.markDeleted(matchId);
+        await repositories.outbox.insertInTransaction({
+          eventType: "delete_public_card",
+          deduplicationKey: `match:${matchId.toString(10)}:archive-delete`,
+          matchId,
+          telegramChatId: archived.telegramChatId,
+          telegramTopicId: reference?.telegramTopicId ?? this.config.telegramGeneralTopicId,
+          payload: reference?.telegramMessageId === null || reference?.telegramMessageId === undefined
+            ? {}
+            : { telegramMessageId: reference.telegramMessageId.toString(10) },
+        });
+        return serializeRestObject({ match: await this.matchBody(archived, repositories) });
+      } catch (error) {
+        throw toRestHttpException(error);
+      }
+    });
+    await this.tryDeliverOutbox();
+    return body;
+  }
+
+  public async deleteArchivedMatch(
+    ownerTelegramUserId: bigint,
+    idempotencyKey: string | undefined,
+    ifMatch: string | undefined,
+    matchId: bigint,
+  ): Promise<Record<string, unknown>> {
+    this.assertOwner(ownerTelegramUserId);
+    const expectedVersion = parseIfMatch(ifMatch, true);
+    if (expectedVersion === undefined) throw new Error("If-Match was required but not provided");
+    const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "delete-archived-match", matchId, expectedVersion }, 200, async (repositories) => {
+      try {
+        const current = await repositories.matches.getForUpdate(matchId);
+        this.assertArchivedMatch(current);
+        const reference = await repositories.matchMessages.findByMatchId(matchId);
+        if (reference?.telegramMessageId !== null && reference?.telegramMessageId !== undefined) {
+          await repositories.outbox.insertInTransaction({
+            eventType: "delete_public_card",
+            deduplicationKey: `archived-match:${matchId.toString(10)}:delete-card`,
+            telegramChatId: current.telegramChatId,
+            telegramTopicId: reference.telegramTopicId ?? this.config.telegramGeneralTopicId,
+            payload: { telegramMessageId: reference.telegramMessageId.toString(10) },
+          });
+        }
+        await repositories.matches.deleteArchived(matchId, expectedVersion);
         return serializeRestObject({ deleted: true, matchId });
       } catch (error) {
         throw toRestHttpException(error);
@@ -372,10 +478,10 @@ export class OwnerRestService {
     return body;
   }
 
-  public async listVenues(ownerTelegramUserId: bigint, query: VenueListQueryDto): Promise<Record<string, unknown>> {
+  public async listVenues(ownerTelegramUserId: bigint): Promise<Record<string, unknown>> {
     this.assertOwner(ownerTelegramUserId);
     try {
-      const venues = await new VenuesRepository(this.db).list({ includeArchived: query.includeArchived === true });
+      const venues = await new VenuesRepository(this.db).list();
       return serializeRestObject({ venues: venues.map((venue) => this.venueBody(venue)) });
     } catch (error) {
       throw toRestHttpException(error);
@@ -421,19 +527,18 @@ export class OwnerRestService {
     return body;
   }
 
-  public async setVenueArchived(
+  public async deleteVenue(
     ownerTelegramUserId: bigint,
     idempotencyKey: string | undefined,
     ifMatch: string | undefined,
     venueId: bigint,
-    archived: boolean,
   ): Promise<Record<string, unknown>> {
     this.assertOwner(ownerTelegramUserId);
     const expectedVersion = parseIfMatch(ifMatch, true);
-    return this.mutate(ownerTelegramUserId, idempotencyKey, { operation: archived ? "archive-venue" : "restore-venue", venueId, expectedVersion }, 200, async (repositories) => {
+    return this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "delete-venue", venueId, expectedVersion }, 200, async (repositories) => {
       try {
-        const venue = await repositories.venues.setArchived(venueId, archived, expectedVersion);
-        return serializeRestObject({ venue: this.venueBody(venue) });
+        const deleted = await repositories.venues.delete(venueId, expectedVersion);
+        return serializeRestObject({ deleted, venueId });
       } catch (error) {
         throw toRestHttpException(error);
       }
@@ -503,6 +608,7 @@ export class OwnerRestService {
       fieldPriceRubles: match.fieldPriceRubles,
       version: match.version,
       creatorTelegramUserId: match.creatorTelegramUserId,
+      archivedAt: match.archivedAt,
       deletionRequestedAt: match.deletionRequestedAt,
       createdAt: match.createdAt,
       updatedAt: match.updatedAt,
@@ -518,7 +624,6 @@ export class OwnerRestService {
       venueType: venue.venueType,
       bookingContacts: venue.bookingContacts,
       websiteUrl: venue.websiteUrl,
-      archivedAt: venue.archivedAt,
       version: venue.version,
       createdAt: venue.createdAt,
       updatedAt: venue.updatedAt,
@@ -586,15 +691,23 @@ export class OwnerRestService {
     }
   }
 
-  private assertCurrentMatch(match: DbMatch): void {
+  private assertAccessibleMatch(match: DbMatch): void {
     if (match.telegramChatId !== this.config.telegramGroupChatId || match.deletionRequestedAt !== null) {
       throw toRestHttpException(restRequestError(404, "RESOURCE_NOT_FOUND", "The requested resource was not found."));
     }
   }
 
-  private assertActiveVenue(venue: DbVenue): void {
-    if (venue.archivedAt !== null) {
-      throw toRestHttpException(restRequestError(409, "VENUE_ARCHIVED", "An archived venue cannot be used for a match."));
+  private assertCurrentMatch(match: DbMatch): void {
+    this.assertAccessibleMatch(match);
+    if (match.archivedAt !== null) {
+      throw toRestHttpException(restRequestError(404, "RESOURCE_NOT_FOUND", "The requested resource was not found."));
+    }
+  }
+
+  private assertArchivedMatch(match: DbMatch): void {
+    this.assertAccessibleMatch(match);
+    if (match.archivedAt === null) {
+      throw toRestHttpException(restRequestError(404, "RESOURCE_NOT_FOUND", "The requested resource was not found."));
     }
   }
 

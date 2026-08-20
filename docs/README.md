@@ -6,7 +6,8 @@ This index describes the maintained Telegram Mini App platform. The current impl
 
 - [Bot and Mini App guide](bot-guide.md) — information cards, native polls, venue catalog, weather, and owner flow.
 - [Architecture](architecture.md) — runtime boundaries, authentication, REST contract, persistence, outbox, and jobs.
-- [Development guide](development.md) — local PostgreSQL setup, environment variables, exact pnpm commands, quality gates, and acceptance checks.
+- [Development guide](development.md) — local PostgreSQL setup, environment variables, and development commands.
+- [Testing guide](testing.md) — required automated checks and safe Chrome verification in the local Telegram Mini App.
 - [Local PostgreSQL](local-postgres.md) — the local-only database lifecycle and separation rules.
 - [Project structure](project-structure.md) — the maintained workspace tree and module responsibilities.
 - [Vercel and Railway production runbook](railway.md) — authorized release order, Railway CLI safety checks, Vercel promotion, verification, and authorization gates.

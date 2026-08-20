@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type ListOwnerVenuesParams = {
-includeArchived?: boolean;
+export type DeleteOwnerVenueHeaders = {
+'If-Match': string;
+'Idempotency-Key': string;
 };

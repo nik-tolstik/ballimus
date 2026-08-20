@@ -67,6 +67,22 @@ export class PollCreateDto {
   allowsMultipleAnswers!: boolean;
 }
 
+export class PollNotificationOptionUpdateDto {
+  @ApiProperty({ type: Boolean })
+  @IsBoolean()
+  notificationEnabled!: boolean;
+}
+
+export class PollNotificationSettingsUpdateDto {
+  @ApiProperty({ type: [PollNotificationOptionUpdateDto], minItems: 2, maxItems: 12 })
+  @IsArray()
+  @ArrayMinSize(2)
+  @ArrayMaxSize(12)
+  @ValidateNested({ each: true })
+  @Type(() => PollNotificationOptionUpdateDto)
+  options!: PollNotificationOptionUpdateDto[];
+}
+
 export class MatchCreateDto {
   @ApiProperty({ type: String, example: "2026-08-03", pattern: "^\\d{4}-\\d{2}-\\d{2}$" })
   @IsString()
@@ -141,6 +157,12 @@ export class MatchListQueryDto {
   @IsString()
   @Matches(DECIMAL_ID_PATTERN)
   venueId?: string;
+
+  @ApiPropertyOptional({ type: Boolean, default: false })
+  @IsOptional()
+  @Transform(({ value }: { readonly value: unknown }) => value === true || value === "true")
+  @IsBoolean()
+  archived?: boolean;
 }
 
 export class VenueBookingContactDto {
@@ -226,12 +248,4 @@ export class VenueUpdateDto {
   @IsUrl({ require_protocol: true })
   @MaxLength(2_000)
   websiteUrl?: string | null;
-}
-
-export class VenueListQueryDto {
-  @ApiPropertyOptional({ type: Boolean, default: false })
-  @IsOptional()
-  @Transform(({ value }: { readonly value: unknown }) => value === true || value === "true")
-  @IsBoolean()
-  includeArchived?: boolean;
 }

@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   DelayedTaskRegistry,
+  POLL_WITHDRAWAL_GRACE_PERIOD_MS,
   parseTelegramPollAnswerUpdate,
   parseTelegramPollUpdate,
   pollThresholdNotificationTarget,
   sendPollThresholdNotifications,
   sendPollWithdrawalNotifications,
+  TelegramPollUpdateService,
 } from "./telegram-poll-update.service.js";
 
 describe("Telegram poll webhook parsing", () => {
@@ -126,6 +128,24 @@ describe("Telegram poll webhook parsing", () => {
       expect(replacement).toHaveBeenCalledTimes(1);
       expect(cancelled).not.toHaveBeenCalled();
       registry.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("cancels a pending withdrawal check when an option notification is disabled", async () => {
+    vi.useFakeTimers();
+    try {
+      const service = new TelegramPollUpdateService({} as never, {} as never, {} as never);
+      const registry = (service as unknown as { delayedWithdrawals: DelayedTaskRegistry }).delayedWithdrawals;
+      const task = vi.fn().mockResolvedValue(undefined);
+      registry.schedule("1:0", task);
+
+      service.cancelWithdrawalNotifications(1n, [0]);
+      await vi.advanceTimersByTimeAsync(POLL_WITHDRAWAL_GRACE_PERIOD_MS);
+
+      expect(task).not.toHaveBeenCalled();
+      service.onModuleDestroy();
     } finally {
       vi.useRealTimers();
     }

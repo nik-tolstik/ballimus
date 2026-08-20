@@ -47,16 +47,7 @@ pnpm db:cleanup-legacy-cards
 
 The cleanup command is for the migration-only legacy card deletion queue. Run it only after the jobs process has delivered all legacy deletion events.
 
-## Local acceptance
-
-1. Create a venue, then create a match with an exact time and venue.
-2. Verify Telegram receives one card with a `17:00-18:30`-style time range and no keyboard.
-3. Edit the match and confirm the same message changes.
-4. Delete the match and run `pnpm --filter @football/api jobs:run` if a retry is needed.
-5. Use the global Weather button and verify a current Minsk weather message appears in the configured topic.
-6. Create a non-anonymous native poll with one option notification enabled. Verify the poll appears in General, its option counts refresh in the Mini App, the default threshold is 10, and the first upward crossing makes one notification attempt in Chat only. Remove enough tracked votes to fall below the threshold, restore the count, and verify the next upward crossing notifies again. Remove a tracked vote and restore it within 10 seconds to verify the delayed shortage alert is suppressed; remove it again without restoring it and verify the alert appears after the grace period with the voter's `@username` or display-name fallback. If Telegram rejects or does not confirm publication, verify the poll reaches a terminal status and use the manual Republish action after checking General. Open the poll card, archive it, and verify it disappears from the active list; archival makes one direct Telegram deletion attempt and removes retained voter-answer state. Poll effects are never added to the outbox.
-
-Playwright is the supported rendered frontend check. Codex Browser QA remains unavailable in this repository because of the `sandboxCwd is not a local file URI` runtime limitation; it is not a substitute for Playwright.
+Testing requirements and the local Telegram acceptance workflow live in the [testing guide](testing.md).
 
 ## Production boundary
 

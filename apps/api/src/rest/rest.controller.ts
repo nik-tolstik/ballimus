@@ -30,8 +30,8 @@ import {
   MatchListQueryDto,
   PatchMatchDto,
   PollCreateDto,
+  PollNotificationSettingsUpdateDto,
   VenueCreateDto,
-  VenueListQueryDto,
   VenueUpdateDto,
 } from "./rest.dto.js";
 import { PositiveBigIntPipe, RestQueryPipe } from "./rest.pipe.js";
@@ -68,8 +68,9 @@ export class MatchesController {
   public constructor(@Inject(OwnerRestService) private readonly service: OwnerRestService) {}
 
   @Get()
-  @ApiOperation({ operationId: "listOwnerMatches", summary: "List current information cards" })
+  @ApiOperation({ operationId: "listOwnerMatches", summary: "List active or archived information cards" })
   @ApiQuery({ name: "venueId", required: false, type: String })
+  @ApiQuery({ name: "archived", required: false, type: Boolean })
   @ApiOkResponse({ type: MatchListResponseDto })
   public list(
     @CurrentOwnerId() ownerTelegramUserId: bigint,
@@ -118,6 +119,38 @@ export class MatchesController {
     @Body() input: PatchMatchDto,
   ): Promise<Record<string, unknown>> {
     return this.service.patchMatch(ownerTelegramUserId, idempotencyKey, ifMatch, matchId, input);
+  }
+
+  @Post(":id/archive")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ operationId: "archiveOwnerMatch", summary: "Archive an information card and delete its Telegram message" })
+  @ApiParam({ name: "id", type: String })
+  @ApiHeader({ name: "Idempotency-Key", required: true })
+  @ApiHeader({ name: "If-Match", required: true })
+  @ApiOkResponse({ type: MatchEnvelopeResponseDto })
+  public archive(
+    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Headers("if-match") ifMatch: string | undefined,
+    @Param("id", PositiveBigIntPipe) matchId: bigint,
+  ): Promise<Record<string, unknown>> {
+    return this.service.archiveMatch(ownerTelegramUserId, idempotencyKey, ifMatch, matchId);
+  }
+
+  @Delete(":id/archive")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ operationId: "deleteArchivedOwnerMatch", summary: "Permanently delete an archived match" })
+  @ApiParam({ name: "id", type: String })
+  @ApiHeader({ name: "Idempotency-Key", required: true })
+  @ApiHeader({ name: "If-Match", required: true })
+  @ApiOkResponse({ schema: { example: { deleted: true, matchId: "42" } } })
+  public deleteArchived(
+    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Headers("if-match") ifMatch: string | undefined,
+    @Param("id", PositiveBigIntPipe) matchId: bigint,
+  ): Promise<Record<string, unknown>> {
+    return this.service.deleteArchivedMatch(ownerTelegramUserId, idempotencyKey, ifMatch, matchId);
   }
 
   @Delete(":id")
@@ -180,6 +213,21 @@ export class PollsController {
     return this.service.createPoll(ownerTelegramUserId, idempotencyKey, input);
   }
 
+  @Patch(":id/notification-settings")
+  @ApiOperation({ operationId: "updateOwnerPollNotificationSettings", summary: "Update native poll option notification settings" })
+  @ApiParam({ name: "id", type: String })
+  @ApiHeader({ name: "Idempotency-Key", required: true })
+  @ApiBody({ type: PollNotificationSettingsUpdateDto })
+  @ApiOkResponse({ type: PollEnvelopeResponseDto })
+  public updateNotificationSettings(
+    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Param("id", PositiveBigIntPipe) pollId: bigint,
+    @Body() input: PollNotificationSettingsUpdateDto,
+  ): Promise<Record<string, unknown>> {
+    return this.service.updatePollNotificationSettings(ownerTelegramUserId, idempotencyKey, pollId, input);
+  }
+
   @Post(":id/republish")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ operationId: "republishOwnerPoll", summary: "Make one new attempt to publish a native Telegram poll" })
@@ -232,13 +280,9 @@ export class VenuesController {
 
   @Get()
   @ApiOperation({ operationId: "listOwnerVenues", summary: "List venue catalog entries" })
-  @ApiQuery({ name: "includeArchived", required: false, type: Boolean })
   @ApiOkResponse({ type: VenueListResponseDto })
-  public list(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
-    @Query(new RestQueryPipe(VenueListQueryDto)) query: VenueListQueryDto,
-  ): Promise<Record<string, unknown>> {
-    return this.service.listVenues(ownerTelegramUserId, query);
+  public list(@CurrentOwnerId() ownerTelegramUserId: bigint): Promise<Record<string, unknown>> {
+    return this.service.listVenues(ownerTelegramUserId);
   }
 
   @Post()
@@ -272,35 +316,19 @@ export class VenuesController {
     return this.service.updateVenue(ownerTelegramUserId, idempotencyKey, ifMatch, venueId, input);
   }
 
-  @Post(":id/archive")
+  @Delete(":id")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ operationId: "archiveOwnerVenue", summary: "Archive a venue catalog entry" })
+  @ApiOperation({ operationId: "deleteOwnerVenue", summary: "Permanently delete a venue catalog entry" })
   @ApiParam({ name: "id", type: String })
   @ApiHeader({ name: "Idempotency-Key", required: true })
   @ApiHeader({ name: "If-Match", required: true })
-  @ApiOkResponse({ type: VenueEnvelopeResponseDto })
-  public archive(
+  @ApiOkResponse({ schema: { example: { deleted: true, venueId: "42" } } })
+  public delete(
     @CurrentOwnerId() ownerTelegramUserId: bigint,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Headers("if-match") ifMatch: string | undefined,
     @Param("id", PositiveBigIntPipe) venueId: bigint,
   ): Promise<Record<string, unknown>> {
-    return this.service.setVenueArchived(ownerTelegramUserId, idempotencyKey, ifMatch, venueId, true);
-  }
-
-  @Post(":id/restore")
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ operationId: "restoreOwnerVenue", summary: "Restore a venue catalog entry" })
-  @ApiParam({ name: "id", type: String })
-  @ApiHeader({ name: "Idempotency-Key", required: true })
-  @ApiHeader({ name: "If-Match", required: true })
-  @ApiOkResponse({ type: VenueEnvelopeResponseDto })
-  public restore(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
-    @Headers("idempotency-key") idempotencyKey: string | undefined,
-    @Headers("if-match") ifMatch: string | undefined,
-    @Param("id", PositiveBigIntPipe) venueId: bigint,
-  ): Promise<Record<string, unknown>> {
-    return this.service.setVenueArchived(ownerTelegramUserId, idempotencyKey, ifMatch, venueId, false);
+    return this.service.deleteVenue(ownerTelegramUserId, idempotencyKey, ifMatch, venueId);
   }
 }

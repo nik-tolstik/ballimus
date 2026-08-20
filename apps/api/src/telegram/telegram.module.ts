@@ -14,6 +14,6 @@ import { TelegramPollUpdateService } from "./telegram-poll-update.service.js";
   imports: [ApiConfigModule, DatabaseModule],
   controllers: [TelegramPollController],
   providers: [TelegramBotService, TelegramEffects, TelegramCardService, TelegramPollPublicationService, TelegramPollUpdateService, OutboxDispatcher, OutboxBestEffortService],
-  exports: [TelegramEffects, TelegramCardService, TelegramPollPublicationService, OutboxDispatcher, OutboxBestEffortService],
+  exports: [TelegramEffects, TelegramCardService, TelegramPollPublicationService, TelegramPollUpdateService, OutboxDispatcher, OutboxBestEffortService],
 })
 export class TelegramModule {}

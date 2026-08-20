@@ -33,6 +33,14 @@
         "operationId": "listOwnerMatches",
         "parameters": [
           {
+            "name": "archived",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "venueId",
             "required": false,
             "in": "query",
@@ -58,7 +66,7 @@
             "telegramMiniApp": []
           }
         ],
-        "summary": "List current information cards",
+        "summary": "List active or archived information cards",
         "tags": [
           "matches"
         ]
@@ -257,6 +265,111 @@
         ]
       }
     },
+    "/v1/matches/{id}/archive": {
+      "post": {
+        "operationId": "archiveOwnerMatch",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchEnvelopeResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "Archive an information card and delete its Telegram message",
+        "tags": [
+          "matches"
+        ]
+      },
+      "delete": {
+        "operationId": "deleteArchivedOwnerMatch",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "deleted": true,
+                    "matchId": "42"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "Permanently delete an archived match",
+        "tags": [
+          "matches"
+        ]
+      }
+    },
     "/v1/matches/{id}/republish": {
       "post": {
         "operationId": "republishOwnerMatch",
@@ -380,6 +493,60 @@
         ]
       }
     },
+    "/v1/polls/{id}/notification-settings": {
+      "patch": {
+        "operationId": "updateOwnerPollNotificationSettings",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PollNotificationSettingsUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PollEnvelopeResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "Update native poll option notification settings",
+        "tags": [
+          "polls"
+        ]
+      }
+    },
     "/v1/polls/{id}/republish": {
       "post": {
         "operationId": "republishOwnerPoll",
@@ -498,16 +665,7 @@
     "/v1/venues": {
       "get": {
         "operationId": "listOwnerVenues",
-        "parameters": [
-          {
-            "name": "includeArchived",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "boolean"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": "",
@@ -635,11 +793,9 @@
         "tags": [
           "venues"
         ]
-      }
-    },
-    "/v1/venues/{id}/archive": {
-      "post": {
-        "operationId": "archiveOwnerVenue",
+      },
+      "delete": {
+        "operationId": "deleteOwnerVenue",
         "parameters": [
           {
             "name": "If-Match",
@@ -672,7 +828,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VenueEnvelopeResponseDto"
+                  "example": {
+                    "deleted": true,
+                    "venueId": "42"
+                  }
                 }
               }
             }
@@ -683,59 +842,7 @@
             "telegramMiniApp": []
           }
         ],
-        "summary": "Archive a venue catalog entry",
-        "tags": [
-          "venues"
-        ]
-      }
-    },
-    "/v1/venues/{id}/restore": {
-      "post": {
-        "operationId": "restoreOwnerVenue",
-        "parameters": [
-          {
-            "name": "If-Match",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VenueEnvelopeResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Restore a venue catalog entry",
+        "summary": "Permanently delete a venue catalog entry",
         "tags": [
           "venues"
         ]
@@ -867,11 +974,6 @@
             "nullable": true,
             "format": "uri"
           },
-          "archivedAt": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time"
-          },
           "version": {
             "type": "number",
             "minimum": 1
@@ -892,7 +994,6 @@
           "venueType",
           "bookingContacts",
           "websiteUrl",
-          "archivedAt",
           "version",
           "createdAt",
           "updatedAt"
@@ -972,6 +1073,11 @@
             "type": "string",
             "example": "123456789"
           },
+          "archivedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
           "deletionRequestedAt": {
             "type": "string",
             "nullable": true,
@@ -999,6 +1105,7 @@
           "fieldPriceRubles",
           "version",
           "creatorTelegramUserId",
+          "archivedAt",
           "deletionRequestedAt",
           "createdAt",
           "updatedAt",
@@ -1305,6 +1412,33 @@
         },
         "required": [
           "poll"
+        ]
+      },
+      "PollNotificationOptionUpdateDto": {
+        "type": "object",
+        "properties": {
+          "notificationEnabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "notificationEnabled"
+        ]
+      },
+      "PollNotificationSettingsUpdateDto": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "minItems": 2,
+            "maxItems": 12,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PollNotificationOptionUpdateDto"
+            }
+          }
+        },
+        "required": [
+          "options"
         ]
       },
       "WeatherCurrentResponseDto": {

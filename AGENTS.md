@@ -14,7 +14,7 @@
 - When creating a worktree, copy every existing non-example `.env*` file from the source checkout before starting the project. Keep those files local, do not print their contents, and never commit them.
 - After a worktree branch is merged into `main`, remove that worktree and its local branch unless the user explicitly asks to keep them.
 - Start every non-trivial implementation task with an issue in the `FBOT` team and Football Bot project. Before implementation, verify the issue has no active executor, move it to `In Progress`, and assign it to the agent when possible. Use a dedicated worktree and an issue-based branch name; move the issue to `Done` only after the pull request is merged, CI is green, and the change is in `main`. See `docs/linear.md` for the complete workflow and exceptions.
-- When the user specifies a branch name, use it verbatim without adding a prefix or changing its spelling. For the current task, the branch is `fbot-23-fix-windows-workspace-commands-and-browser-development`.
+- When the user specifies a branch name, use it verbatim without adding a prefix or changing its spelling.
 
 ## Production verification
 
@@ -25,11 +25,9 @@
 - The command reads only public verifier settings from the ignored `.env.production.local`; do not put Telegram or PostgreSQL secrets in those verifier settings. It requires authenticated `gh` and `railway` CLIs.
 - A full information-card create/edit/delete/weather smoke test is an extended check. Run it only in `Футбол тест` and only after separate explicit owner authorization; never create smoke-test matches in the real group.
 
-## Browser verification
+## Testing
 
-- For every rendered frontend task, run Playwright verification before completion with `pnpm test:e2e` (or a focused Playwright command when appropriate). Local Playwright is confirmed to work with the repository's mocked API and Telegram WebApp fixture.
-- Browser QA is disabled for this repository because Codex has a known runtime blocker: `sandboxCwd is not a local file URI`. Do not use Browser QA as a substitute for Playwright unless the user explicitly requests it.
-- Report any Playwright limitation and do not claim visual QA passed when the relevant check could not run.
+- Follow [docs/testing.md](docs/testing.md) for required automated checks and safe Telegram Mini App verification.
 
 ## Documentation
 
@@ -38,6 +36,7 @@
 - [Architecture](docs/architecture.md)
 - [Project structure](docs/project-structure.md)
 - [Development guide](docs/development.md)
+- [Testing guide](docs/testing.md)
 
 ## UI copy
 
