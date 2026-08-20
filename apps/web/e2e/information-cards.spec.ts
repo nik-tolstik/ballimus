@@ -25,7 +25,7 @@ const poll = {
   createdAt: '2026-08-11T12:00:00.000Z', updatedAt: '2026-08-11T12:00:00.000Z',
 }
 
-async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boolean; readonly failedPoll?: boolean } = {}): Promise<{ readonly weatherRequests: string[]; readonly republishRequests: string[]; readonly republishPollRequests: string[]; readonly pollRequests: unknown[]; readonly notificationSettingsRequests: unknown[]; readonly archivePollRequests: string[]; readonly deleteVenueRequests: string[]; readonly archiveMatchRequests: string[]; readonly deleteArchivedMatchRequests: string[]; readonly createMatchRequests: unknown[] }> {
+async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boolean; readonly existingPollOptions?: typeof poll.options; readonly failedPoll?: boolean } = {}): Promise<{ readonly weatherRequests: string[]; readonly republishRequests: string[]; readonly republishPollRequests: string[]; readonly pollRequests: unknown[]; readonly notificationSettingsRequests: unknown[]; readonly archivePollRequests: string[]; readonly deleteVenueRequests: string[]; readonly archiveMatchRequests: string[]; readonly deleteArchivedMatchRequests: string[]; readonly createMatchRequests: unknown[] }> {
   const weatherRequests: string[] = []
   const republishRequests: string[] = []
   const republishPollRequests: string[] = []
@@ -51,7 +51,8 @@ async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boole
     archivedAt: '2026-08-14T12:00:00.000Z',
     publicCard: { ...match.publicCard, publicationState: 'deleted' },
   }
-  let notificationEnabled = poll.options.map((option) => option.notificationEnabled)
+  const existingPoll = { ...poll, options: options.existingPollOptions ?? poll.options }
+  let notificationEnabled = existingPoll.options.map((option) => option.notificationEnabled)
   await page.route('https://telegram.org/js/telegram-web-app.js', (route) => route.fulfill({ contentType: 'application/javascript', body: '' }))
   await page.addInitScript(() => {
     Object.defineProperty(window, '__FOOTBALL_API_BASE_URL__', { configurable: true, value: 'http://127.0.0.1:6174' })
@@ -72,9 +73,9 @@ async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boole
     if (request.method() === 'GET' && pathname === '/v1/venues') return json({ venues: venueDeleted ? [] : [venue] })
     if (request.method() === 'GET' && pathname === '/v1/polls') {
       pollListRequests += 1
-      const notificationPoll = { ...poll, options: poll.options.map((option, index) => ({ ...option, notificationEnabled: notificationEnabled[index] ?? option.notificationEnabled })) }
+      const notificationPoll = { ...existingPoll, options: existingPoll.options.map((option, index) => ({ ...option, notificationEnabled: notificationEnabled[index] ?? option.notificationEnabled })) }
       const publicationPoll = options.failedPoll === true && !pollRepublished ? { ...notificationPoll, publicationState: 'failed', lastError: 'Telegram rejected the poll' } : notificationPoll
-      const currentPoll = pollListRequests < 2 || options.failedPoll === true ? publicationPoll : { ...publicationPoll, options: [{ ...publicationPoll.options[0], voterCount: 1 }, publicationPoll.options[1]] }
+      const currentPoll = pollListRequests < 2 || options.failedPoll === true ? publicationPoll : { ...publicationPoll, options: publicationPoll.options.map((option, index) => index === 0 ? { ...option, voterCount: 1 } : option) }
       return json({ polls: options.existingPoll === true && !pollArchived ? [currentPoll] : [] })
     }
     if (request.method() === 'POST' && pathname === '/v1/polls') {
@@ -87,7 +88,7 @@ async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boole
       const body = request.postDataJSON() as { options: { notificationEnabled: boolean }[] }
       notificationSettingsRequests.push(body)
       notificationEnabled = body.options.map((option) => option.notificationEnabled)
-      return json({ poll: { ...poll, options: poll.options.map((option, index) => ({ ...option, notificationEnabled: notificationEnabled[index] ?? option.notificationEnabled })) } })
+      return json({ poll: { ...existingPoll, options: existingPoll.options.map((option, index) => ({ ...option, notificationEnabled: notificationEnabled[index] ?? option.notificationEnabled })) } })
     }
     if (request.method() === 'POST' && pathname === '/v1/polls/1/archive') { archivePollRequests.push(pathname); pollArchived = true; return json({ poll: { ...poll, archivedAt: '2026-08-11T12:30:00.000Z' } }) }
     if (request.method() === 'POST' && pathname === '/v1/weather/current') { weatherRequests.push(pathname); return json({ sent: true, observedAt: '2026-08-10T12:00' }) }
@@ -412,8 +413,11 @@ test('edits only existing poll option notification toggles', async ({ page }) =>
 
   await page.getByRole('button', { name: 'Опросы', exact: true }).click()
   await page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true }).click()
-  await page.getByRole('button', { name: 'Редактировать оповещения', exact: true }).click()
+  const editNotifications = page.getByRole('button', { name: 'Редактировать оповещения', exact: true })
+  await expect(editNotifications).toBeInViewport()
+  await editNotifications.click()
   await expect(page.getByRole('heading', { name: 'Оповещения', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Опрос', exact: true })).toHaveCount(0)
   const firstBell = page.getByRole('button', { name: 'Оповещение для варианта 1', exact: true })
   const secondBell = page.getByRole('button', { name: 'Оповещение для варианта 2', exact: true })
   await expect(firstBell).toHaveAttribute('aria-pressed', 'true')
@@ -429,6 +433,27 @@ test('edits only existing poll option notification toggles', async ({ page }) =>
   }])
   await expect(page.getByText('Оповещения обновлены.', { exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Оповещения', exact: true })).toHaveCount(0)
+})
+
+test('keeps poll notification editing visible above long poll details', async ({ page }) => {
+  await mockOwnerApp(page, {
+    existingPoll: true,
+    existingPollOptions: Array.from({ length: 12 }, (_, index) => ({
+      text: `Вариант ${String(index + 1)}`,
+      notificationEnabled: index === 0,
+      voterCount: index,
+      notificationQueuedAt: null,
+    })),
+  })
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Опросы', exact: true }).click()
+  await page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true }).click()
+  const editNotifications = page.getByRole('button', { name: 'Редактировать оповещения', exact: true })
+  await expect(editNotifications).toBeInViewport()
+  await editNotifications.click()
+  await expect(page.getByRole('heading', { name: 'Оповещения', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Оповещение для варианта 12', exact: true })).toBeVisible()
 })
 
 test('manually republishes a poll after a failed first attempt', async ({ page }) => {
