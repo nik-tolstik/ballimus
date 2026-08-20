@@ -56,7 +56,19 @@ The cleanup command is for the migration-only legacy card deletion queue. Run it
 5. Use the global Weather button and verify a current Minsk weather message appears in the configured topic.
 6. Create a non-anonymous native poll with one option notification enabled. Verify the poll appears in General, its option counts refresh in the Mini App, the default threshold is 10, and the first upward crossing makes one notification attempt in Chat only. Open the poll card and use **Редактировать оповещения** to disable a bell; verify the question, option text and order, counts, threshold, and Telegram poll remain unchanged. Disable a bell while a withdrawal alert is in its 10-second grace period and verify no alert is sent. Re-enable a bell while its count is above the threshold, verify no immediate message is sent, then drop the count below and cross upward again to verify the next notification. Remove a tracked vote and restore it within 10 seconds to verify the delayed shortage alert is suppressed; remove it again without restoring it and verify the alert appears after the grace period with the voter's `@username` or display-name fallback. If Telegram rejects or does not confirm publication, verify the poll reaches a terminal status and use the manual Republish action after checking General. Open the poll card, archive it, and verify it disappears from the active list; archival makes one direct Telegram deletion attempt and removes retained voter-answer state. Poll effects are never added to the outbox.
 
-Playwright is the supported rendered frontend check. Codex Browser QA remains unavailable in this repository because of the `sandboxCwd is not a local file URI` runtime limitation; it is not a substitute for Playwright.
+Playwright remains the required rendered frontend check because it provides deterministic mocked API and Telegram WebApp fixtures, including native confirmation dialogs and mutation assertions.
+
+## Chrome Telegram Mini App smoke check
+
+When the Chrome plugin is connected and Telegram Web is already signed in, supplement Playwright with a smoke check inside the real local Telegram Mini App:
+
+1. Start `pnpm dev` and wait for the `Local Telegram development is ready` message. Do not use the loopback Vite URL as a standalone session.
+2. In the existing Telegram Web session, open the bot profile and verify both `Ballimus Dev` and the exact username `@ballimus_dev_bot`. Never open `Ballimus`, the production bot, or any bot whose exact username differs.
+3. Click **Open App** only after the bot identity is verified. Telegram sends signed owner `initData` to the local application during this step.
+4. Inspect only the Mini App iframe origin, discard its query and fragment, and require the origin to equal `CLOUDFLARE_TUNNEL_URL`. Never print, save, or copy the full iframe URL or Telegram `initData`.
+5. Confirm the app identifies itself as `Ballimus Dev`, owner-only data loads, the Matches, Polls, and Venues sections open, the relevant sheet or editor renders, and the Chrome console has no related errors. Capture a screenshot when visual evidence is useful.
+6. Keep this smoke check read-only unless the owner separately authorizes a specific mutation. Opening sheets and changing a control without saving are safe. Creating, saving, archiving, deleting, republishing, voting, or confirming Weather sends may change the local database or send Telegram messages and must target only the local bot and `Футбол тест` group.
+7. If Chrome cannot control the Mini App iframe or a native confirmation dialog, record that limitation and use Playwright for the affected interaction. If Chrome is unavailable, Telegram Web is signed out, or the exact test bot cannot be verified, skip this smoke check rather than using any other bot.
 
 ## Production boundary
 
