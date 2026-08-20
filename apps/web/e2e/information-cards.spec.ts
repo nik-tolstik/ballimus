@@ -25,7 +25,7 @@ const poll = {
   createdAt: '2026-08-11T12:00:00.000Z', updatedAt: '2026-08-11T12:00:00.000Z',
 }
 
-async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boolean; readonly existingPollOptions?: typeof poll.options; readonly failedPoll?: boolean } = {}): Promise<{ readonly weatherRequests: string[]; readonly republishRequests: string[]; readonly republishPollRequests: string[]; readonly pollRequests: unknown[]; readonly notificationSettingsRequests: unknown[]; readonly archivePollRequests: string[]; readonly deleteVenueRequests: string[]; readonly archiveMatchRequests: string[]; readonly deleteArchivedMatchRequests: string[]; readonly createMatchRequests: unknown[] }> {
+async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boolean; readonly existingPollOptions?: typeof poll.options; readonly failedPoll?: boolean; readonly uncertainPoll?: boolean } = {}): Promise<{ readonly weatherRequests: string[]; readonly republishRequests: string[]; readonly republishPollRequests: string[]; readonly pollRequests: unknown[]; readonly notificationSettingsRequests: unknown[]; readonly archivePollRequests: string[]; readonly deleteVenueRequests: string[]; readonly deleteMatchRequests: string[]; readonly archiveMatchRequests: string[]; readonly deleteArchivedMatchRequests: string[]; readonly createMatchRequests: unknown[] }> {
   const weatherRequests: string[] = []
   const republishRequests: string[] = []
   const republishPollRequests: string[] = []
@@ -34,12 +34,14 @@ async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boole
   const archivePollRequests: string[] = []
   const deleteVenueRequests: string[] = []
   let venueDeleted = false
+  const deleteMatchRequests: string[] = []
   const archiveMatchRequests: string[] = []
   const deleteArchivedMatchRequests: string[] = []
   const createMatchRequests: unknown[] = []
   let pollListRequests = 0
   let pollArchived = false
   let pollRepublished = false
+  let matchDeleted = false
   let matchArchived = false
   let archivedMatchDeleted = false
   const archivedMatch = {
@@ -65,7 +67,7 @@ async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boole
     if (request.method() === 'GET' && pathname === '/v1/matches') {
       if (new URL(request.url()).searchParams.get('archived') === 'true') return json({ matches: archivedMatchDeleted ? [] : [archivedMatch, ...(matchArchived ? [{ ...match, archivedAt: '2026-08-15T12:00:00.000Z', version: 2, publicCard: { ...match.publicCard, publicationState: 'deleted' } }] : [])] })
       return json({ matches: [
-        ...(matchArchived ? [] : [match]),
+        ...(matchArchived || matchDeleted ? [] : [match]),
         { ...match, id: '2', schedule: { ...match.schedule, time: '21:00' }, venue: { ...venue, id: '2', name: 'BOX365 Второй' }, fieldPriceRubles: 121, publicCard: { ...match.publicCard, publicationState: 'published' } },
         { ...match, id: '3', schedule: { ...match.schedule, time: '22:00' }, venue: { ...venue, id: '3', name: 'BOX365 Третий' }, fieldPriceRubles: 122, publicCard: { ...match.publicCard, publicationState: 'failed', lastError: 'Telegram unavailable' } },
       ] })
@@ -74,8 +76,12 @@ async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boole
     if (request.method() === 'GET' && pathname === '/v1/polls') {
       pollListRequests += 1
       const notificationPoll = { ...existingPoll, options: existingPoll.options.map((option, index) => ({ ...option, notificationEnabled: notificationEnabled[index] ?? option.notificationEnabled })) }
-      const publicationPoll = options.failedPoll === true && !pollRepublished ? { ...notificationPoll, publicationState: 'failed', lastError: 'Telegram rejected the poll' } : notificationPoll
-      const currentPoll = pollListRequests < 2 || options.failedPoll === true ? publicationPoll : { ...publicationPoll, options: publicationPoll.options.map((option, index) => index === 0 ? { ...option, voterCount: 1 } : option) }
+      const publicationPoll = options.failedPoll === true && !pollRepublished
+        ? { ...notificationPoll, publicationState: 'failed', lastError: 'Telegram rejected the poll' }
+        : options.uncertainPoll === true && !pollRepublished
+          ? { ...notificationPoll, publicationState: 'uncertain', lastError: 'Telegram did not confirm the poll' }
+          : notificationPoll
+      const currentPoll = pollListRequests < 2 || options.failedPoll === true || options.uncertainPoll === true ? publicationPoll : { ...publicationPoll, options: publicationPoll.options.map((option, index) => index === 0 ? { ...option, voterCount: 1 } : option) }
       return json({ polls: options.existingPoll === true && !pollArchived ? [currentPoll] : [] })
     }
     if (request.method() === 'POST' && pathname === '/v1/polls') {
@@ -95,11 +101,12 @@ async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boole
     if (request.method() === 'DELETE' && pathname === '/v1/venues/1') { deleteVenueRequests.push(pathname); venueDeleted = true; return json({ deleted: true, venueId: '1' }) }
     if (request.method() === 'POST' && pathname === '/v1/matches') { const body = request.postDataJSON(); createMatchRequests.push(body); return json({ match: { ...match, ...body, id: '5', archivedAt: null, schedule: { date: (body as { date: string }).date, time: (body as { time: string }).time, timezone: 'Europe/Minsk' } } }) }
     if (request.method() === 'POST' && pathname === '/v1/matches/1/republish') { republishRequests.push(pathname); return json({ match: { ...match, version: 2 } }) }
+    if (request.method() === 'DELETE' && pathname === '/v1/matches/1') { deleteMatchRequests.push(pathname); matchDeleted = true; return json({ deleted: true, matchId: '1' }) }
     if (request.method() === 'POST' && pathname === '/v1/matches/1/archive') { archiveMatchRequests.push(pathname); matchArchived = true; return json({ match: { ...match, archivedAt: '2026-08-15T12:00:00.000Z', version: 2, publicCard: { ...match.publicCard, publicationState: 'deleted' } } }) }
     if (request.method() === 'DELETE' && pathname === '/v1/matches/4/archive') { deleteArchivedMatchRequests.push(pathname); archivedMatchDeleted = true; return json({ deleted: true, matchId: '4' }) }
     return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ code: 'NOT_FOUND' }) })
   })
-  return { weatherRequests, republishRequests, republishPollRequests, pollRequests, notificationSettingsRequests, archivePollRequests, deleteVenueRequests, archiveMatchRequests, deleteArchivedMatchRequests, createMatchRequests }
+  return { weatherRequests, republishRequests, republishPollRequests, pollRequests, notificationSettingsRequests, archivePollRequests, deleteVenueRequests, deleteMatchRequests, archiveMatchRequests, deleteArchivedMatchRequests, createMatchRequests }
 }
 
 async function faviconCornerAlpha(page: Page): Promise<number> {
@@ -148,6 +155,12 @@ test('shows static information cards without roster or voting controls', async (
   await expect(page.getByRole('heading', { name: 'Действия с матчем', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Переопубликовать матч', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Удалить', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Удалить', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Удалить матч?', exact: true })).toBeVisible()
+  await expect(page.getByText('Среда, 12 августа · 20:00-21:30 будет удалён из Telegram.', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Отмена', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Удалить матч?', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Действия с матчем', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Переопубликовать матч', exact: true }).click()
   await expect.poll(() => mocked.republishRequests).toEqual(['/v1/matches/1/republish'])
   await expect(page.getByRole('heading', { name: 'Действия с матчем', exact: true })).toHaveCount(0)
@@ -189,10 +202,9 @@ test('archives a match, repeats it, and permanently deletes an archived record',
   await page.getByRole('button', { name: 'Архив матчей', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Открыть архивный матч Понедельник, 10 августа · 18:30-20:30', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Открыть архивный матч Понедельник, 10 августа · 18:30-20:30', exact: true }).click({ position: { x: 16, y: 16 } })
-  page.once('dialog', async (dialog) => {
-    expect(dialog.message()).toContain('Это действие нельзя отменить')
-    await dialog.accept()
-  })
+  await page.getByRole('button', { name: 'Удалить', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Удалить матч навсегда?', exact: true })).toBeVisible()
+  await expect(page.getByText('Действие нельзя отменить.', { exact: false })).toBeVisible()
   await page.getByRole('button', { name: 'Удалить', exact: true }).click()
   await expect.poll(() => mocked.deleteArchivedMatchRequests).toEqual(['/v1/matches/4/archive'])
   await expect(page.getByRole('button', { name: 'Открыть архивный матч Понедельник, 10 августа · 18:30-20:30', exact: true })).toHaveCount(0)
@@ -238,11 +250,10 @@ test('sends current weather after its confirmation and keeps the venue catalog a
   await page.getByRole('button', { name: 'Действия места', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Действия с местом', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Удалить навсегда', exact: true })).toBeVisible()
-  page.once('dialog', async (dialog) => {
-    expect(dialog.message()).toContain('Удалить площадку')
-    await dialog.accept()
-  })
   await page.getByRole('button', { name: 'Удалить навсегда', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Удалить место навсегда?', exact: true })).toBeVisible()
+  await expect(page.getByText('«BOX365 Пушкинская» больше нельзя будет выбрать для новых матчей.', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Удалить', exact: true }).click()
   await expect.poll(() => mocked.deleteVenueRequests).toEqual(['/v1/venues/1'])
   await expect(page.getByRole('heading', { name: 'Действия с местом', exact: true })).toHaveCount(0)
   await expect(page.getByText('Площадка удалена.', { exact: true })).toBeVisible()
@@ -393,10 +404,9 @@ test('opens a poll, refreshes Telegram vote counts, and archives it', async ({ p
   await expect(page.getByText('Голос можно отменять', { exact: true })).toBeVisible()
   await expect(page.getByText('Оповестить о количестве', { exact: true })).toBeVisible()
   await expect(page.getByLabel('1 голосов', { exact: true })).toBeVisible({ timeout: 5_000 })
-  page.once('dialog', async (dialog) => {
-    expect(dialog.message()).toContain('Опрос будет удалён из Telegram')
-    await dialog.accept()
-  })
+  await page.getByRole('button', { name: 'В архив', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Переместить опрос в архив?', exact: true })).toBeVisible()
+  await expect(page.getByText(`«${poll.question}» будет удалён из Telegram.`, { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'В архив', exact: true }).click()
   await expect.poll(() => mocked.archivePollRequests).toEqual(['/v1/polls/1/archive'])
   await expect(page.getByRole('heading', { name: 'Опрос', exact: true })).toHaveCount(0)
@@ -466,4 +476,39 @@ test('manually republishes a poll after a failed first attempt', async ({ page }
   await expect.poll(() => mocked.republishPollRequests).toEqual(['/v1/polls/1/republish'])
   await expect(page.getByText('Опрос опубликован в Telegram.', { exact: true })).toBeVisible()
   await expect(page.getByText('Опрос не опубликован', { exact: true })).toHaveCount(0)
+})
+
+test('deletes an active match after its in-app confirmation', async ({ page }) => {
+  const mocked = await mockOwnerApp(page)
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Открыть матч Среда, 12 августа · 20:00-21:30', exact: true }).click()
+  await page.getByRole('button', { name: 'Действия матча', exact: true }).click()
+  await page.getByRole('button', { name: 'Удалить', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Удалить матч?', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Удалить', exact: true }).click()
+
+  await expect.poll(() => mocked.deleteMatchRequests).toEqual(['/v1/matches/1'])
+  await expect(page.getByRole('button', { name: 'Открыть матч Среда, 12 августа · 20:00-21:30', exact: true })).toHaveCount(0)
+})
+
+test('confirms uncertain poll republishing without a native dialog', async ({ page }) => {
+  const mocked = await mockOwnerApp(page, { existingPoll: true, uncertainPoll: true })
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Опросы', exact: true }).click()
+  await page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true }).click()
+  await expect(page.getByText('Проверьте опрос в General', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Переопубликовать', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Переопубликовать опрос?', exact: true })).toBeVisible()
+  await expect(page.getByText('Сначала проверьте General: Telegram мог получить опрос, даже если не подтвердил отправку.', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Отмена', exact: true }).click()
+  await expect.poll(() => mocked.republishPollRequests).toEqual([])
+  await expect(page.getByRole('heading', { name: 'Опрос', exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Переопубликовать', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Переопубликовать опрос?', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Переопубликовать', exact: true }).click()
+  await expect.poll(() => mocked.republishPollRequests).toEqual(['/v1/polls/1/republish'])
+  await expect(page.getByRole('heading', { name: 'Переопубликовать опрос?', exact: true })).toHaveCount(0)
 })
