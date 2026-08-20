@@ -27,6 +27,7 @@ import {
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { MatchesPanel } from '@/components/football/panels'
 import { PollsPanel } from '@/components/football/polls-panel'
 import { StateScreen } from '@/components/football/state-screen'
@@ -78,6 +79,7 @@ export function App({ telegramSession }: AppProps = {}) {
   const [tab, setTab] = useState<Tab>('matches')
   const [conflict, setConflict] = useState('')
   const [authFailure, setAuthFailure] = useState<AuthFailure>()
+  const [weatherConfirmationOpen, setWeatherConfirmationOpen] = useState(false)
   const queryEnabled = session.status === 'ready' && session.initData !== undefined && authFailure === undefined
   const matchesQuery = useListOwnerMatches(undefined, { query: { enabled: queryEnabled } })
   const pollsQuery = useListOwnerPolls({ query: { enabled: queryEnabled, refetchInterval: tab === 'polls' ? POLL_RESULTS_REFRESH_INTERVAL_MS : false, refetchOnWindowFocus: true } })
@@ -212,12 +214,23 @@ export function App({ telegramSession }: AppProps = {}) {
   const failure = [matchesQuery.error, pollsQuery.error, venuesQuery.error].find((error) => error !== null && error !== undefined)
 
   return <div className="mx-auto flex min-h-svh w-full max-w-[480px] flex-col bg-background">
-    <header className="flex h-14 items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur-sm"><div className="flex items-center gap-2.5"><img src={applicationBrand.logo} alt="" width="36" height="36" className="size-9 rounded-full object-cover" /><p className="text-base font-semibold leading-none">{applicationBrand.name}</p></div><div className="flex items-center gap-1"><Button variant="ghost" size="sm" onClick={() => { if (window.confirm('Отправить текущую погоду в Telegram?')) weatherMutation.mutate() }} disabled={weatherMutation.isPending}><CloudSun data-icon="inline-start" />Погода</Button><ThemeToggle /></div></header>
+    <header className="flex h-14 items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur-sm"><div className="flex items-center gap-2.5"><img src={applicationBrand.logo} alt="" width="36" height="36" className="size-9 rounded-full object-cover" /><p className="text-base font-semibold leading-none">{applicationBrand.name}</p></div><div className="flex items-center gap-1"><Button variant="ghost" size="sm" onClick={() => setWeatherConfirmationOpen(true)} disabled={weatherMutation.isPending}><CloudSun data-icon="inline-start" />Погода</Button><ThemeToggle /></div></header>
     <main className="min-h-0 flex-1 overflow-y-auto px-4 pt-4 pb-5">
       {failure !== undefined ? <Alert variant="destructive" className="mb-4"><TriangleAlert /><AlertTitle>Не удалось загрузить данные</AlertTitle><AlertDescription>{errorMessage(failure)}</AlertDescription></Alert> : null}
       {loading ? <StateScreen kind="loading" title="Загружаем данные" copy="Синхронизируем данные…" /> : tab === 'matches' ? <MatchesPanel matches={matches} venues={venues} saving={matchSaving} conflict={conflict} onClearConflict={() => setConflict('')} onCreate={handleCreateMatch} onUpdate={handleUpdateMatch} onDelete={handleDeleteMatch} onRepublish={handleRepublishMatch} onCreateVenue={handleCreateVenue} /> : tab === 'polls' ? <PollsPanel polls={pollsQuery.data?.polls ?? []} saving={pollSaving} onCreate={handleCreatePoll} onRepublish={handleRepublishPoll} onArchive={handleArchivePoll} /> : <VenuesPanel venues={venues} saving={venueSaving} onCreate={handleCreateVenue} onUpdate={handleUpdateVenue} onArchive={handleArchiveVenue} onRestore={handleRestoreVenue} />}
     </main>
     <TabBar value={tab} onChange={setTab} />
+    <Sheet open={weatherConfirmationOpen} onOpenChange={setWeatherConfirmationOpen}>
+      <SheetContent side="bottom" className="mx-auto w-full max-w-[480px] rounded-t-2xl">
+        <SheetHeader>
+          <SheetTitle>Отправить погоду?</SheetTitle>
+        </SheetHeader>
+        <div className="flex flex-col gap-2 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+          <Button onClick={() => { setWeatherConfirmationOpen(false); weatherMutation.mutate() }} disabled={weatherMutation.isPending}>Отправить</Button>
+          <Button variant="ghost" onClick={() => setWeatherConfirmationOpen(false)} disabled={weatherMutation.isPending}>Отмена</Button>
+        </div>
+      </SheetContent>
+    </Sheet>
   </div>
 }
 
