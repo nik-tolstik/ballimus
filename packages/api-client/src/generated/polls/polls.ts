@@ -30,7 +30,9 @@ import type {
   PollCreateDto,
   PollEnvelopeResponseDto,
   PollListResponseDto,
-  RepublishOwnerPollHeaders
+  PollNotificationSettingsUpdateDto,
+  RepublishOwnerPollHeaders,
+  UpdateOwnerPollNotificationSettingsHeaders
 } from '.././model/index.js';
 
 import { customInstance } from '../../mutator.js';
@@ -198,6 +200,71 @@ export const useCreateOwnerPoll = <TError = unknown,
       > => {
 
       const mutationOptions = getCreateOwnerPollMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * @summary Update native poll option notification settings
+ */
+export const updateOwnerPollNotificationSettings = (
+    id: string,
+    pollNotificationSettingsUpdateDto: PollNotificationSettingsUpdateDto,
+    headers: UpdateOwnerPollNotificationSettingsHeaders,
+ options?: SecondParameter<typeof customInstance>,) => {
+
+
+      return customInstance<PollEnvelopeResponseDto>(
+      {url: `/v1/polls/${id}/notification-settings`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', ...headers},
+      data: pollNotificationSettingsUpdateDto
+    },
+      options);
+    }
+
+
+
+export const getUpdateOwnerPollNotificationSettingsMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOwnerPollNotificationSettings>>, TError,{id: string;data: PollNotificationSettingsUpdateDto;headers: UpdateOwnerPollNotificationSettingsHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateOwnerPollNotificationSettings>>, TError,{id: string;data: PollNotificationSettingsUpdateDto;headers: UpdateOwnerPollNotificationSettingsHeaders}, TContext> => {
+
+const mutationKey = ['updateOwnerPollNotificationSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateOwnerPollNotificationSettings>>, {id: string;data: PollNotificationSettingsUpdateDto;headers: UpdateOwnerPollNotificationSettingsHeaders}> = (props) => {
+          const {id,data,headers} = props ?? {};
+
+          return  updateOwnerPollNotificationSettings(id,data,headers,requestOptions)
+        }
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateOwnerPollNotificationSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateOwnerPollNotificationSettings>>>
+    export type UpdateOwnerPollNotificationSettingsMutationBody = PollNotificationSettingsUpdateDto
+    export type UpdateOwnerPollNotificationSettingsMutationError = unknown
+
+    /**
+ * @summary Update native poll option notification settings
+ */
+export const useUpdateOwnerPollNotificationSettings = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOwnerPollNotificationSettings>>, TError,{id: string;data: PollNotificationSettingsUpdateDto;headers: UpdateOwnerPollNotificationSettingsHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateOwnerPollNotificationSettings>>,
+        TError,
+        {id: string;data: PollNotificationSettingsUpdateDto;headers: UpdateOwnerPollNotificationSettingsHeaders},
+        TContext
+      > => {
+
+      const mutationOptions = getUpdateOwnerPollNotificationSettingsMutationOptions(options);
 
       return useMutation(mutationOptions, queryClient);
     }

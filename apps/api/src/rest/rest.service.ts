@@ -15,6 +15,7 @@ import {
   type Match as DbMatch,
   type MatchMessage,
   type CreateTelegramPollInput,
+  type TelegramPollNotificationSettingsInput,
   type TelegramPoll as DbTelegramPoll,
   type TransactionRepositories,
   type Venue as DbVenue,
@@ -24,6 +25,7 @@ import { API_CONFIG, type ApiConfig } from "../config/api-config.js";
 import { APP_DATABASE } from "../database/database.constants.js";
 import { OutboxBestEffortService } from "../telegram/outbox-best-effort.service.js";
 import { TelegramPollPublicationService } from "../telegram/telegram-poll-publication.service.js";
+import { TelegramPollUpdateService } from "../telegram/telegram-poll-update.service.js";
 import { CurrentWeatherService } from "../weather/current-weather.service.js";
 import { canonicalRequestHash } from "./rest.canonical.js";
 import {
@@ -31,6 +33,7 @@ import {
   type MatchListQueryDto,
   type PatchMatchDto,
   type PollCreateDto,
+  type PollNotificationSettingsUpdateDto,
   type VenueCreateDto,
   type VenueUpdateDto,
 } from "./rest.dto.js";
@@ -58,6 +61,10 @@ export function pollCreationInput(
     allowsRevoting: true,
     creatorTelegramUserId: ownerTelegramUserId,
   };
+}
+
+export function pollNotificationSettingsInput(input: PollNotificationSettingsUpdateDto): TelegramPollNotificationSettingsInput {
+  return { notificationEnabled: input.options.map((option) => option.notificationEnabled) };
 }
 
 function readRepositories(db: AppDatabase): ReadRepositories {
@@ -111,6 +118,7 @@ export class OwnerRestService {
     @Inject(API_CONFIG) private readonly config: ApiConfig,
     @Inject(OutboxBestEffortService) private readonly bestEffort: OutboxBestEffortService,
     @Inject(TelegramPollPublicationService) private readonly pollPublication: TelegramPollPublicationService,
+    @Inject(TelegramPollUpdateService) private readonly pollUpdates: TelegramPollUpdateService,
     @Inject(CurrentWeatherService) private readonly weather: CurrentWeatherService,
   ) {}
 
@@ -185,6 +193,37 @@ export class OwnerRestService {
       ? await new TelegramPollsRepository(this.db).getById(responsePollId)
       : await this.pollPublication.publishPending(responsePollId);
     return serializeRestObject({ poll: this.pollBody(poll) });
+  }
+
+  public async updatePollNotificationSettings(
+    ownerTelegramUserId: bigint,
+    idempotencyKey: string | undefined,
+    pollId: bigint,
+    input: PollNotificationSettingsUpdateDto,
+  ): Promise<Record<string, unknown>> {
+    this.assertOwner(ownerTelegramUserId);
+    let disabledOptionIndexes: readonly number[] = [];
+    let updatedPollId: bigint | undefined;
+    const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "update-poll-notification-settings", pollId, input }, 200, async (repositories) => {
+      try {
+        const current = await repositories.polls.getByIdForUpdate(pollId);
+        if (current.telegramChatId !== this.config.telegramGroupChatId) {
+          throw toRestHttpException(restRequestError(404, "RESOURCE_NOT_FOUND", "The requested resource was not found."));
+        }
+        const updated = await repositories.polls.updateNotificationSettings(current, pollNotificationSettingsInput(input));
+        disabledOptionIndexes = current.options.flatMap((option, index) => (
+          option.notificationEnabled && input.options[index]?.notificationEnabled === false ? [index] : []
+        ));
+        updatedPollId = updated.id;
+        return serializeRestObject({ poll: this.pollBody(updated) });
+      } catch (error) {
+        throw toRestHttpException(error);
+      }
+    });
+    if (updatedPollId !== undefined && disabledOptionIndexes.length > 0) {
+      this.pollUpdates.cancelWithdrawalNotifications(updatedPollId, disabledOptionIndexes);
+    }
+    return body;
   }
 
   public async republishPoll(
