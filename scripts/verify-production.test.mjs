@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  createRailwaySshArguments,
   evaluateCors,
   evaluateGitHubCi,
   evaluateMigrationStatus,
@@ -106,4 +107,22 @@ test("requires the production poll webhook to use the exact API URL", () => {
   assert.equal(evaluateTelegramWebhookStatus({ url: "", pendingUpdateCount: 0 }, expected).ok, false);
   assert.equal(evaluateTelegramWebhookStatus({ url: "https://other.example.test/hook", pendingUpdateCount: 0 }, expected).ok, false);
   assert.equal(evaluateTelegramWebhookStatus({ url: expected, pendingUpdateCount: -1 }, expected).ok, false);
+});
+
+test("uses an explicit Railway SSH identity in CI", () => {
+  const previousIdentity = process.env.RAILWAY_SSH_IDENTITY_FILE;
+  process.env.RAILWAY_SSH_IDENTITY_FILE = "/tmp/railway-ci";
+  try {
+    assert.deepEqual(createRailwaySshArguments({
+      railwayProjectId: "project",
+      railwayEnvironment: "production",
+      railwayApiService: "api",
+    }, ["node", "status.js"]), [
+      "exec", "railway", "ssh", "-p", "project", "-e", "production", "-s", "api",
+      "-i", "/tmp/railway-ci", "--", "node", "status.js",
+    ]);
+  } finally {
+    if (previousIdentity === undefined) delete process.env.RAILWAY_SSH_IDENTITY_FILE;
+    else process.env.RAILWAY_SSH_IDENTITY_FILE = previousIdentity;
+  }
 });

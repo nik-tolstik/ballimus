@@ -24,8 +24,7 @@
     "openapi:generate": "pnpm --filter @football/api run openapi:write",
     "api-client:generate": "pnpm --filter @football/api-client run generate",
     "api:contracts:check": "node scripts/check-api-contracts.mjs",
-    "release:preflight": "node scripts/release-preflight.mjs",
-    "release:cutover": "node scripts/release-cutover.mjs",
+    "release:wait-production": "node scripts/wait-production.mjs",
     "release:verify-production": "node scripts/verify-production.mjs"
   },
   "devDependencies": {

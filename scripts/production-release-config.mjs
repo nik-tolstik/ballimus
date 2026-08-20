@@ -10,8 +10,6 @@ export const publicProductionConfigNames = [
   "RAILWAY_JOBS_SERVICE",
 ];
 
-export const RAILWAY_REGION_ALIASES = ["us-west", "us-east", "eu-west", "southeast-asia"];
-
 function stringValue(value) {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
 }
@@ -85,15 +83,6 @@ export function validatePublicProductionConfig(values) {
 
 export function parsePublicProductionConfig(source, environment = {}) {
   return validatePublicProductionConfig(requiredValues(source, environment, publicProductionConfigNames));
-}
-
-export function parseProductionCutoverConfig(source, environment = {}) {
-  const regionAlias = requiredValues(source, environment, ["RAILWAY_PRODUCTION_REGION_ALIAS"])
-    .RAILWAY_PRODUCTION_REGION_ALIAS;
-  if (!RAILWAY_REGION_ALIASES.includes(regionAlias)) {
-    throw new Error(`RAILWAY_PRODUCTION_REGION_ALIAS must be one of: ${RAILWAY_REGION_ALIASES.join(", ")}`);
-  }
-  return { ...parsePublicProductionConfig(source, environment), railwayRegionAlias: regionAlias };
 }
 
 export async function loadProductionConfig(parseConfig, projectRoot, environment = process.env) {

@@ -152,6 +152,16 @@ async function committedMigrationCount() {
   return entries.filter((entry) => entry.isFile() && /^\d+_.+\.sql$/u.test(entry.name)).length;
 }
 
+export function createRailwaySshArguments(config, command) {
+  const identityFile = process.env.RAILWAY_SSH_IDENTITY_FILE?.trim();
+  return [
+    "exec", "railway", "ssh", "-p", config.railwayProjectId, "-e", config.railwayEnvironment,
+    "-s", config.railwayApiService,
+    ...(identityFile === undefined || identityFile === "" ? [] : ["-i", identityFile]),
+    "--", ...command,
+  ];
+}
+
 async function loadConfig() {
   return loadProductionConfig(parsePublicProductionConfig, projectRoot);
 }
@@ -219,17 +229,17 @@ async function main() {
     return evaluateCors(response, config.webUrl);
   }));
   checks.push(await result("Database migrations", async () => {
-    const status = parseJsonOutput(await runCommand("pnpm", [
-      "exec", "railway", "ssh", "--project", config.railwayProjectId, "--environment", config.railwayEnvironment,
-      "--service", config.railwayApiService, "--", "node", "packages/db/dist/migration-status-cli.js",
-    ]), "Migration status");
+    const status = parseJsonOutput(await runCommand("pnpm", createRailwaySshArguments(
+      config,
+      ["node", "packages/db/dist/migration-status-cli.js"],
+    )), "Migration status");
     return evaluateMigrationStatus(status, await committedMigrationCount());
   }));
   checks.push(await result("Telegram webhook", async () => {
-    const status = parseJsonOutput(await runCommand("pnpm", [
-      "exec", "railway", "ssh", "--project", config.railwayProjectId, "--environment", config.railwayEnvironment,
-      "--service", config.railwayApiService, "--", "node", "apps/api/dist/telegram/webhook-status-cli.js",
-    ]), "Telegram webhook status");
+    const status = parseJsonOutput(await runCommand("pnpm", createRailwaySshArguments(
+      config,
+      ["node", "apps/api/dist/telegram/webhook-status-cli.js"],
+    )), "Telegram webhook status");
     return evaluateTelegramWebhookStatus(status, `${config.apiUrl}/v1/telegram/webhook`);
   }));
   for (const check of checks) {

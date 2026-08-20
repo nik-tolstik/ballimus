@@ -8,35 +8,25 @@ This personal project deliberately has no database-backup step. A release can th
 
 Copy `.env.production.local.example` to the ignored `.env.production.local` and populate its public values. Do not add Telegram or PostgreSQL secrets.
 
-`RAILWAY_PRODUCTION_REGION_ALIAS` must be one of Railway CLI's scale aliases: `us-west`, `us-east`, `eu-west`, or `southeast-asia`. Use `eu-west` for the current production deployment. Do not pass Railway's internal region ID to `railway service scale`: Railway CLI can silently create an unwanted fallback deployment in another region.
-
 The repository pins Railway CLI v5. Its required postinstall binary is explicitly allowed in `pnpm-workspace.yaml`, so a normal `pnpm install --frozen-lockfile` is non-interactive.
+
+Keep Railway API, Railway jobs, and Vercel connected to the GitHub `main` branch. Configure the GitHub `Production` environment with the six public variables listed in `.env.production.local.example`, plus `RAILWAY_TOKEN` and a dedicated `RAILWAY_SSH_PRIVATE_KEY` secret. Register the corresponding public SSH key in Railway. The CI key has shell access, so use it only for this protected environment and rotate it independently from personal keys.
 
 ## Release procedure
 
 1. Finish the release PR: green GitHub CI, green Vercel preview, and no unresolved review comments.
 2. Obtain authorization for this specific production release.
-3. Pause automatic production deployments in Railway and Vercel. Keep Vercel production held while the API migration is applied; the new Mini App must not reach an older API.
-4. Merge the approved PR, check out a clean and current local `main`, then run:
+3. Merge the approved PR into `main`. This push is the production trigger: Railway deploys API and jobs, while Vercel deploys the Mini App.
+4. The `Production verification` GitHub Actions workflow waits for green CI, Vercel, Railway API, and Railway jobs records for the exact merge SHA. A Railway `SKIPPED` record is accepted when that commit does not change the service's watch paths.
+5. After every provider is ready, CI runs `pnpm release:verify-production`. This read-only verifier checks GitHub CI, Vercel status and URL, Railway services, API health, CORS, the migration ledger, and the exact production poll webhook URL. The Telegram token stays inside the API container and is never printed.
 
-   ```sh
-   pnpm release:preflight
-   pnpm release:cutover -- --confirm-production-cutover
-   ```
-
-   Preflight fails before production is changed unless the checkout exactly matches `origin/main`, the worktree is clean, Railway CLI is v5, and the configured scale region is a supported alias. Cutover stops API and jobs using that alias, deploys API (including its pre-deploy migration), deploys jobs, then verifies Railway service status, API health, and the migration ledger.
-5. Only after cutover passes, run `git rev-parse HEAD`, open Vercel's **Create Deployment** dialog, paste that full SHA, verify that Vercel resolves it to `main` and `Production`, and choose **Deploy to Production**. Do not promote a release-branch preview.
-6. Run:
-
-   ```sh
-   pnpm release:verify-production
-   ```
-
-   This read-only verifier checks GitHub CI, Vercel status and URL, Railway services, API health, CORS, the migration ledger, and the exact production poll webhook URL. It reads only public settings from `.env.production.local`; the Telegram token stays inside the API container and is never printed.
-
-The Railway cutover command never deploys Vercel, changes BotFather settings, registers or deletes a Telegram webhook, or sends Telegram messages. The exact-commit Vercel deployment remains a deliberate provider action because it controls the public Mini App entry point.
+`pnpm release:verify-production` remains available for local read-only diagnosis. Automatic release CI never changes BotFather settings, registers or deletes a Telegram webhook, or sends Telegram messages.
 
 If a merge or deployment step fails or behaves differently from this runbook, stop and report the problem to the owner before attempting a workaround.
+
+## Compatibility requirement
+
+Vercel and Railway deploy independently, so every release must tolerate a short mixed-version window. Add database structures before using them, keep old API fields while the new frontend rolls out, and ensure jobs support both schema versions. Remove or rename structures only in a later expand/contract release.
 
 Native polls require one separately authorized Telegram operation after the API deployment. Run the bundled command inside the Railway API service with the exact production API URL and explicit confirmation flag:
 
