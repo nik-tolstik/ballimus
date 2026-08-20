@@ -31,7 +31,6 @@ import {
   PatchMatchDto,
   PollCreateDto,
   VenueCreateDto,
-  VenueListQueryDto,
   VenueUpdateDto,
 } from "./rest.dto.js";
 import { PositiveBigIntPipe, RestQueryPipe } from "./rest.pipe.js";
@@ -232,13 +231,9 @@ export class VenuesController {
 
   @Get()
   @ApiOperation({ operationId: "listOwnerVenues", summary: "List venue catalog entries" })
-  @ApiQuery({ name: "includeArchived", required: false, type: Boolean })
   @ApiOkResponse({ type: VenueListResponseDto })
-  public list(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
-    @Query(new RestQueryPipe(VenueListQueryDto)) query: VenueListQueryDto,
-  ): Promise<Record<string, unknown>> {
-    return this.service.listVenues(ownerTelegramUserId, query);
+  public list(@CurrentOwnerId() ownerTelegramUserId: bigint): Promise<Record<string, unknown>> {
+    return this.service.listVenues(ownerTelegramUserId);
   }
 
   @Post()
@@ -272,35 +267,19 @@ export class VenuesController {
     return this.service.updateVenue(ownerTelegramUserId, idempotencyKey, ifMatch, venueId, input);
   }
 
-  @Post(":id/archive")
+  @Delete(":id")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ operationId: "archiveOwnerVenue", summary: "Archive a venue catalog entry" })
+  @ApiOperation({ operationId: "deleteOwnerVenue", summary: "Permanently delete a venue catalog entry" })
   @ApiParam({ name: "id", type: String })
   @ApiHeader({ name: "Idempotency-Key", required: true })
   @ApiHeader({ name: "If-Match", required: true })
-  @ApiOkResponse({ type: VenueEnvelopeResponseDto })
-  public archive(
+  @ApiOkResponse({ schema: { example: { deleted: true, venueId: "42" } } })
+  public delete(
     @CurrentOwnerId() ownerTelegramUserId: bigint,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Headers("if-match") ifMatch: string | undefined,
     @Param("id", PositiveBigIntPipe) venueId: bigint,
   ): Promise<Record<string, unknown>> {
-    return this.service.setVenueArchived(ownerTelegramUserId, idempotencyKey, ifMatch, venueId, true);
-  }
-
-  @Post(":id/restore")
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ operationId: "restoreOwnerVenue", summary: "Restore a venue catalog entry" })
-  @ApiParam({ name: "id", type: String })
-  @ApiHeader({ name: "Idempotency-Key", required: true })
-  @ApiHeader({ name: "If-Match", required: true })
-  @ApiOkResponse({ type: VenueEnvelopeResponseDto })
-  public restore(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
-    @Headers("idempotency-key") idempotencyKey: string | undefined,
-    @Headers("if-match") ifMatch: string | undefined,
-    @Param("id", PositiveBigIntPipe) venueId: bigint,
-  ): Promise<Record<string, unknown>> {
-    return this.service.setVenueArchived(ownerTelegramUserId, idempotencyKey, ifMatch, venueId, false);
+    return this.service.deleteVenue(ownerTelegramUserId, idempotencyKey, ifMatch, venueId);
   }
 }

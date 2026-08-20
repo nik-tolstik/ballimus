@@ -1,6 +1,6 @@
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
-import { venues, type BookingContact, type Venue, type VenueType } from "../schema.js";
+import { matches, venues, type BookingContact, type Venue, type VenueType } from "../schema.js";
 import {
   effectiveNow,
   nonEmpty,
@@ -13,6 +13,7 @@ import {
   NotFoundRepositoryError,
   OptimisticConcurrencyError,
   ValidationRepositoryError,
+  VenueInUseRepositoryError,
 } from "./errors.js";
 
 export interface CreateVenueInput {
@@ -32,10 +33,6 @@ export interface UpdateVenueInput {
   readonly websiteUrl?: string | null;
   readonly expectedVersion?: number;
   readonly now?: Date;
-}
-
-export interface VenueListOptions {
-  readonly includeArchived?: boolean;
 }
 
 function venueId(id: DatabaseIdentifier): bigint {
@@ -78,11 +75,10 @@ function requireVenue(record: Venue | undefined, id: bigint): Venue {
 export class VenuesRepository {
   public constructor(private readonly db: DatabaseExecutor) {}
 
-  public async list(options: VenueListOptions = {}): Promise<Venue[]> {
+  public async list(): Promise<Venue[]> {
     return this.db
       .select()
       .from(venues)
-      .where(options.includeArchived ? undefined : isNull(venues.archivedAt))
       .orderBy(asc(venues.name));
   }
 
@@ -160,23 +156,23 @@ export class VenuesRepository {
     return requireVenue(rows[0], parsedId);
   }
 
-  public async setArchived(id: DatabaseIdentifier, archived: boolean, expectedVersion?: number): Promise<Venue> {
+  public async delete(id: DatabaseIdentifier, expectedVersion?: number): Promise<boolean> {
     const parsedId = venueId(id);
     const expected = versionOrUndefined(expectedVersion);
     const current = await this.getForUpdate(parsedId);
     if (expected !== undefined && current.version !== expected) {
       throw new OptimisticConcurrencyError(expected, current.version);
     }
-    const now = effectiveNow();
+    const references = await this.db
+      .select({ id: matches.id })
+      .from(matches)
+      .where(eq(matches.venueId, parsedId))
+      .limit(1);
+    if (references.length > 0) throw new VenueInUseRepositoryError();
     const rows = await this.db
-      .update(venues)
-      .set({
-        archivedAt: archived ? now : null,
-        version: sql`${venues.version} + 1`,
-        updatedAt: now,
-      })
+      .delete(venues)
       .where(and(eq(venues.id, parsedId), ...(expected === undefined ? [] : [eq(venues.version, expected)])))
-      .returning();
-    return requireVenue(rows[0], parsedId);
+      .returning({ id: venues.id });
+    return rows.length > 0;
   }
 }

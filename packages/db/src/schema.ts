@@ -73,7 +73,6 @@ export const venues = pgTable(
     venueType: text("venue_type", { enum: venueTypes }).notNull(),
     bookingContacts: jsonb("booking_contacts").$type<BookingContact[]>().notNull().default(sql`'[]'::jsonb`),
     websiteUrl: text("website_url"),
-    archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }),
     version: integer("version").notNull().default(1),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -85,7 +84,6 @@ export const venues = pgTable(
     check("venues_booking_contacts_valid", sql`case when jsonb_typeof(${table.bookingContacts}) = 'array' then jsonb_array_length(${table.bookingContacts}) between 0 and 5 else false end`),
     check("venues_version_positive", sql`${table.version} >= 1`),
     uniqueIndex("venues_name_ci_unique").on(sql`lower(${table.name})`),
-    index("venues_archived_at_idx").on(table.archivedAt),
   ],
 );
 

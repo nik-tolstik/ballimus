@@ -23,7 +23,7 @@ The Mini App has three sections:
 
 - **Matches** — create and edit information cards; the actions menu republishes or deletes a card;
 - **Polls** — create native regular Telegram polls in the configured General topic;
-- **Venues** — maintain the reusable venue catalog; the actions menu archives or restores a venue.
+- **Venues** — maintain the reusable venue catalog; a venue can be permanently deleted when no match uses it.
 
 A poll has a question, 2–12 ordered options, and an optional multiple-answer setting. The editor starts with a dedicated “New option” draft row that has a plus icon and no option actions. Entering text promotes the draft to a regular option and adds a fresh draft row. A cleared regular option remains visible until the user presses Backspace or Delete again, then it is removed and focus moves to an adjacent row. At least two populated options are required to publish. Polls are non-anonymous regular polls and explicitly allow voters to change or retract their choices. The bell beside an option directly enables or disables count notifications for that option; new options have the bell enabled by default.
 
@@ -33,7 +33,7 @@ Creating or manually republishing a poll makes one bounded Telegram request. A c
 
 The global **Weather** action sends the current Minsk weather to the configured Telegram chat/topic. It is independent of matches, has no daily cap, and can be pressed repeatedly.
 
-All mutations use idempotency keys. Updating or deleting a match and editing a venue use `If-Match` versions to prevent silent overwrites.
+All mutations use idempotency keys. Updating or deleting a match, editing a venue, and deleting a venue use `If-Match` versions to prevent silent overwrites. A venue cannot be deleted while any match references it; existing matches remain unchanged.
 
 ## Operational boundary
 

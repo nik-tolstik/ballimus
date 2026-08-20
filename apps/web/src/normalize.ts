@@ -9,7 +9,6 @@ export interface NormalizedVenue {
   readonly venueType: 'outdoor' | 'indoor'
   readonly bookingContacts: readonly { readonly name?: string; readonly phone: string }[]
   readonly websiteUrl: string | undefined
-  readonly archivedAt: string | undefined
   readonly version: number
 }
 
@@ -36,7 +35,6 @@ export function normalizeVenue(venue: VenueResponseDto): NormalizedVenue {
       phone: contact.phone,
     })),
     websiteUrl: venue.websiteUrl ?? undefined,
-    archivedAt: venue.archivedAt ?? undefined,
     version: venue.version,
   }
 }

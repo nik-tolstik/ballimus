@@ -25,10 +25,8 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
-  ArchiveOwnerVenueHeaders,
   CreateOwnerVenueHeaders,
-  ListOwnerVenuesParams,
-  RestoreOwnerVenueHeaders,
+  DeleteOwnerVenueHeaders,
   UpdateOwnerVenueHeaders,
   VenueCreateDto,
   VenueEnvelopeResponseDto,
@@ -51,14 +49,13 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
  * @summary List venue catalog entries
  */
 export const listOwnerVenues = (
-    params?: ListOwnerVenuesParams,
+
  options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
 ) => {
 
 
       return customInstance<VenueListResponseDto>(
-      {url: `/v1/venues`, method: 'GET',
-        params, ...(signal ? { signal }: {})
+      {url: `/v1/venues`, method: 'GET', ...(signal ? { signal }: {})
     },
       options);
     }
@@ -66,23 +63,23 @@ export const listOwnerVenues = (
 
 
 
-export const getListOwnerVenuesQueryKey = (params?: ListOwnerVenuesParams,) => {
+export const getListOwnerVenuesQueryKey = () => {
     return [
-    `/v1/venues`, ...(params ? [params]: [])
+    `/v1/venues`
     ] as const;
     }
 
 
-export const getListOwnerVenuesQueryOptions = <TData = Awaited<ReturnType<typeof listOwnerVenues>>, TError = unknown>(params?: ListOwnerVenuesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerVenues>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+export const getListOwnerVenuesQueryOptions = <TData = Awaited<ReturnType<typeof listOwnerVenues>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerVenues>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListOwnerVenuesQueryKey(params);
+  const queryKey =  queryOptions?.queryKey ?? getListOwnerVenuesQueryKey();
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOwnerVenues>>> = ({ signal }) => listOwnerVenues(params, requestOptions, signal);
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOwnerVenues>>> = ({ signal }) => listOwnerVenues(requestOptions, signal);
 
 
 
@@ -96,7 +93,7 @@ export type ListOwnerVenuesQueryError = unknown
 
 
 export function useListOwnerVenues<TData = Awaited<ReturnType<typeof listOwnerVenues>>, TError = unknown>(
- params: undefined |  ListOwnerVenuesParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerVenues>>, TError, TData>> & Pick<
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerVenues>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listOwnerVenues>>,
           TError,
@@ -106,7 +103,7 @@ export function useListOwnerVenues<TData = Awaited<ReturnType<typeof listOwnerVe
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useListOwnerVenues<TData = Awaited<ReturnType<typeof listOwnerVenues>>, TError = unknown>(
- params?: ListOwnerVenuesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerVenues>>, TError, TData>> & Pick<
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerVenues>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listOwnerVenues>>,
           TError,
@@ -116,7 +113,7 @@ export function useListOwnerVenues<TData = Awaited<ReturnType<typeof listOwnerVe
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useListOwnerVenues<TData = Awaited<ReturnType<typeof listOwnerVenues>>, TError = unknown>(
- params?: ListOwnerVenuesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerVenues>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerVenues>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
@@ -124,11 +121,11 @@ export function useListOwnerVenues<TData = Awaited<ReturnType<typeof listOwnerVe
  */
 
 export function useListOwnerVenues<TData = Awaited<ReturnType<typeof listOwnerVenues>>, TError = unknown>(
- params?: ListOwnerVenuesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerVenues>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerVenues>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getListOwnerVenuesQueryOptions(params,options)
+  const queryOptions = getListOwnerVenuesQueryOptions(options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -271,29 +268,28 @@ export const useUpdateOwnerVenue = <TError = unknown,
       return useMutation(mutationOptions, queryClient);
     }
     /**
- * @summary Archive a venue catalog entry
+ * @summary Permanently delete a venue catalog entry
  */
-export const archiveOwnerVenue = (
+export const deleteOwnerVenue = (
     id: string,
-    headers: ArchiveOwnerVenueHeaders,
- options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
-) => {
+    headers: DeleteOwnerVenueHeaders,
+ options?: SecondParameter<typeof customInstance>,) => {
 
 
-      return customInstance<VenueEnvelopeResponseDto>(
-      {url: `/v1/venues/${id}/archive`, method: 'POST',
-      headers, ...(signal ? { signal }: {})
+      return customInstance<unknown>(
+      {url: `/v1/venues/${id}`, method: 'DELETE',
+      headers
     },
       options);
     }
 
 
 
-export const getArchiveOwnerVenueMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveOwnerVenue>>, TError,{id: string;headers: ArchiveOwnerVenueHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof archiveOwnerVenue>>, TError,{id: string;headers: ArchiveOwnerVenueHeaders}, TContext> => {
+export const getDeleteOwnerVenueMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteOwnerVenue>>, TError,{id: string;headers: DeleteOwnerVenueHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteOwnerVenue>>, TError,{id: string;headers: DeleteOwnerVenueHeaders}, TContext> => {
 
-const mutationKey = ['archiveOwnerVenue'];
+const mutationKey = ['deleteOwnerVenue'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -303,10 +299,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof archiveOwnerVenue>>, {id: string;headers: ArchiveOwnerVenueHeaders}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteOwnerVenue>>, {id: string;headers: DeleteOwnerVenueHeaders}> = (props) => {
           const {id,headers} = props ?? {};
 
-          return  archiveOwnerVenue(id,headers,requestOptions)
+          return  deleteOwnerVenue(id,headers,requestOptions)
         }
 
 
@@ -314,87 +310,23 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type ArchiveOwnerVenueMutationResult = NonNullable<Awaited<ReturnType<typeof archiveOwnerVenue>>>
+    export type DeleteOwnerVenueMutationResult = NonNullable<Awaited<ReturnType<typeof deleteOwnerVenue>>>
 
-    export type ArchiveOwnerVenueMutationError = unknown
+    export type DeleteOwnerVenueMutationError = unknown
 
     /**
- * @summary Archive a venue catalog entry
+ * @summary Permanently delete a venue catalog entry
  */
-export const useArchiveOwnerVenue = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveOwnerVenue>>, TError,{id: string;headers: ArchiveOwnerVenueHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
+export const useDeleteOwnerVenue = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteOwnerVenue>>, TError,{id: string;headers: DeleteOwnerVenueHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
  , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof archiveOwnerVenue>>,
+        Awaited<ReturnType<typeof deleteOwnerVenue>>,
         TError,
-        {id: string;headers: ArchiveOwnerVenueHeaders},
+        {id: string;headers: DeleteOwnerVenueHeaders},
         TContext
       > => {
 
-      const mutationOptions = getArchiveOwnerVenueMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    /**
- * @summary Restore a venue catalog entry
- */
-export const restoreOwnerVenue = (
-    id: string,
-    headers: RestoreOwnerVenueHeaders,
- options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
-) => {
-
-
-      return customInstance<VenueEnvelopeResponseDto>(
-      {url: `/v1/venues/${id}/restore`, method: 'POST',
-      headers, ...(signal ? { signal }: {})
-    },
-      options);
-    }
-
-
-
-export const getRestoreOwnerVenueMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreOwnerVenue>>, TError,{id: string;headers: RestoreOwnerVenueHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof restoreOwnerVenue>>, TError,{id: string;headers: RestoreOwnerVenueHeaders}, TContext> => {
-
-const mutationKey = ['restoreOwnerVenue'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof restoreOwnerVenue>>, {id: string;headers: RestoreOwnerVenueHeaders}> = (props) => {
-          const {id,headers} = props ?? {};
-
-          return  restoreOwnerVenue(id,headers,requestOptions)
-        }
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type RestoreOwnerVenueMutationResult = NonNullable<Awaited<ReturnType<typeof restoreOwnerVenue>>>
-
-    export type RestoreOwnerVenueMutationError = unknown
-
-    /**
- * @summary Restore a venue catalog entry
- */
-export const useRestoreOwnerVenue = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreOwnerVenue>>, TError,{id: string;headers: RestoreOwnerVenueHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof restoreOwnerVenue>>,
-        TError,
-        {id: string;headers: RestoreOwnerVenueHeaders},
-        TContext
-      > => {
-
-      const mutationOptions = getRestoreOwnerVenueMutationOptions(options);
+      const mutationOptions = getDeleteOwnerVenueMutationOptions(options);
 
       return useMutation(mutationOptions, queryClient);
     }

@@ -40,6 +40,13 @@ export class RepositoryConflictError extends PersistenceError {
   }
 }
 
+export class VenueInUseRepositoryError extends RepositoryConflictError {
+  public constructor(message = "The venue is referenced by an existing match", options: PersistenceErrorOptions = {}) {
+    super(message, options);
+    this.name = "VenueInUseRepositoryError";
+  }
+}
+
 export class ForbiddenRepositoryError extends PersistenceError {
   public constructor(message = "The requested database operation is forbidden", options: PersistenceErrorOptions = {}) {
     super("forbidden", message, options);
