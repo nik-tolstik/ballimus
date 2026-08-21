@@ -10,7 +10,7 @@ Copy `.env.production.local.example` to the ignored `.env.production.local` and 
 
 The repository pins Railway CLI v5. Its required postinstall binary is explicitly allowed in `pnpm-workspace.yaml`, so a normal `pnpm install --frozen-lockfile` is non-interactive.
 
-Keep Railway API, Railway jobs, and Vercel connected to the GitHub `main` branch. Configure the GitHub `Production` environment with the six public variables listed in `.env.production.local.example`, plus `RAILWAY_TOKEN` and a dedicated `RAILWAY_SSH_PRIVATE_KEY` secret. Register the corresponding public SSH key in Railway. The CI key has shell access, so use it only for this protected environment and rotate it independently from personal keys.
+Keep Railway API, Railway jobs, and Vercel connected to the GitHub `main` branch. Configure the GitHub `Production` environment with the six public variables listed in `.env.production.local.example`, plus a workspace-scoped `RAILWAY_API_TOKEN` and a dedicated `RAILWAY_SSH_PRIVATE_KEY` secret. Register the corresponding public SSH key in the Railway workspace. These credentials can access every project in that workspace, so use them only for this protected environment and rotate them independently from personal credentials.
 
 ## Release procedure
 
