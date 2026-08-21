@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  checkFailureSummary,
   createRailwaySshArguments,
   evaluateCors,
   evaluateGitHubCi,
@@ -23,6 +24,11 @@ RAILWAY_API_SERVICE=api
 RAILWAY_JOBS_SERVICE=jobs
 DATABASE_URL=postgresql://must-not-be-read
 `;
+
+test("reports safe verifier errors without stringifying unknown values", () => {
+  assert.equal(checkFailureSummary(new Error("pnpm command failed")), "pnpm command failed");
+  assert.equal(checkFailureSummary({ token: "must-not-be-read" }), "check could not be completed");
+});
 
 test("reads only public production verifier configuration", () => {
   const config = parsePublicProductionConfig(publicConfig);

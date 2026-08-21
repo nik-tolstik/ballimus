@@ -166,10 +166,18 @@ async function loadConfig() {
   return loadProductionConfig(parsePublicProductionConfig, projectRoot);
 }
 
+export function checkFailureSummary(error) {
+  return error instanceof Error ? error.message : "check could not be completed";
+}
+
 function result(name, check) {
   return check().then(
     (value) => ({ name, ...value }),
-    () => ({ name, ok: false, summary: "check could not be completed" }),
+    (error) => ({
+      name,
+      ok: false,
+      summary: checkFailureSummary(error),
+    }),
   );
 }
 

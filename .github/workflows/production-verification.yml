@@ -48,6 +48,7 @@ jobs:
           identity_file="$RUNNER_TEMP/railway-ci"
           printf '%s\n' "$RAILWAY_SSH_PRIVATE_KEY" > "$identity_file"
           chmod 600 "$identity_file"
+          ssh-keygen -y -f "$identity_file" > "$identity_file.pub"
           printf 'RAILWAY_SSH_IDENTITY_FILE=%s\n' "$identity_file" >> "$GITHUB_ENV"
       - name: Wait for exact production deployments
         run: pnpm release:wait-production
