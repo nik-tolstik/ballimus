@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      ssh_diagnostic:
+        description: Run only the read-only Railway SSH migration status command
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: production-verification
@@ -51,6 +57,17 @@ jobs:
           ssh-keygen -y -f "$identity_file" > "$identity_file.pub"
           printf 'RAILWAY_SSH_IDENTITY_FILE=%s\n' "$identity_file" >> "$GITHUB_ENV"
       - name: Wait for exact production deployments
+        if: ${{ !inputs.ssh_diagnostic }}
         run: pnpm release:wait-production
+      - name: Diagnose Railway SSH
+        if: ${{ inputs.ssh_diagnostic }}
+        run: >-
+          pnpm exec railway ssh
+          -p "$RAILWAY_PROJECT_ID"
+          -e "$RAILWAY_ENVIRONMENT"
+          -s "$RAILWAY_API_SERVICE"
+          -i "$RAILWAY_SSH_IDENTITY_FILE"
+          -- node packages/db/dist/migration-status-cli.js
       - name: Verify production
+        if: ${{ !inputs.ssh_diagnostic }}
         run: pnpm release:verify-production
