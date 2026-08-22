@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "NestJS API platform for the Football bot.",
+  "description": "NestJS API platform for Ballimus.",
   "engines": {
     "node": ">=22.18.0"
   },

@@ -244,7 +244,7 @@ Open the Mini App from the local test bot using the URL above.
       chat_id: childEnvironment.TELEGRAM_OWNER_USER_ID,
       menu_button: {
         type: "web_app",
-        text: "Football Bot",
+        text: "Ballimus",
         web_app: { url: publicUrl },
       },
     });

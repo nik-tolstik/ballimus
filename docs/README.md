@@ -1,4 +1,4 @@
-# Football Bot Documentation
+# Ballimus Documentation
 
 This index describes the maintained Telegram Mini App platform. The current implementation lives under `apps/api`, `apps/web`, `packages/domain`, `packages/db`, and `packages/api-client`.
 

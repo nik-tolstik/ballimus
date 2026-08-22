@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "PostgreSQL Drizzle persistence foundation for the Football bot backend.",
+  "description": "PostgreSQL Drizzle persistence foundation for the Ballimus backend.",
   "engines": {
     "node": ">=22.18.0"
   },

@@ -850,8 +850,8 @@
     }
   },
   "info": {
-    "title": "Football Bot API",
-    "description": "Owner-facing REST API for the Football Telegram Mini App.",
+    "title": "Ballimus API",
+    "description": "Owner-facing REST API for the Ballimus Telegram Mini App.",
     "version": "1.0.0",
     "contact": {}
   },

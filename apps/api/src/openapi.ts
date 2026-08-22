@@ -31,8 +31,8 @@ export function filterPublicOpenApiDocument(document: OpenAPIObject): OpenAPIObj
 
 export function createPublicOpenApiDocument(app: INestApplication): OpenAPIObject {
   const options = new DocumentBuilder()
-    .setTitle("Football Bot API")
-    .setDescription("Owner-facing REST API for the Football Telegram Mini App.")
+    .setTitle("Ballimus API")
+    .setDescription("Owner-facing REST API for the Ballimus Telegram Mini App.")
     .setVersion("1.0.0")
     .addSecurity(TELEGRAM_MINI_APP_SECURITY_SCHEME, {
       type: "apiKey",

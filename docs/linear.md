@@ -1,16 +1,16 @@
 # Linear workflow
 
-Football Bot work is planned and tracked in Linear. Use the [FBOT team](https://linear.app/nikita-tolstik/team/FBOT/overview) and the [Football Bot project](https://linear.app/nikita-tolstik/project/football-bot-34b6981b5f3b/overview).
+Ballimus work is planned and tracked in Linear. Use the [FBOT team](https://linear.app/nikita-tolstik/team/FBOT/overview) and the [Ballimus project](https://linear.app/nikita-tolstik-projects/project/ballimus-34b6981b5f3b).
 
 ## Project reference
 
 - Project ID: `30546ee5-bf70-4bb6-8dac-73182ebd6585`
 - Team: [`FBOT` — Football bot](https://linear.app/nikita-tolstik/team/FBOT/overview)
-- Project: [Football Bot](https://linear.app/nikita-tolstik/project/football-bot-34b6981b5f3b/overview)
+- Project: [Ballimus](https://linear.app/nikita-tolstik-projects/project/ballimus-34b6981b5f3b)
 
 ## Issue policy
 
-Every non-trivial implementation task starts with a Linear issue in the `FBOT` team and Football Bot project. Do not start implementation before the issue exists and is ready to be worked on.
+Every non-trivial implementation task starts with a Linear issue in the `FBOT` team and Ballimus project. Do not start implementation before the issue exists and is ready to be worked on.
 
 An isolated typo, formatting-only edit, or obvious CI maintenance change may be made without a separate issue. If the scope is uncertain, create an issue.
 
@@ -47,7 +47,8 @@ After implementation:
 
 1. Update the issue description when the delivered scope differs materially from the original scope.
 2. Confirm that the pull request is merged, CI is green, and the change is in `main`.
-3. Move the issue to `Done`.
+3. Remove the task worktree and its local branch unless the owner explicitly asks to keep them.
+4. Move the issue to `Done`.
 
 ## Git and Linear conventions
 
