@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Generated OpenAPI client output for the Football bot.",
+  "description": "Generated OpenAPI client output for Ballimus.",
   "engines": {
     "node": ">=22.18.0"
   },

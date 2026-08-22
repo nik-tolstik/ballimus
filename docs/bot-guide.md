@@ -1,6 +1,6 @@
 # Bot and Mini App Guide
 
-Football Bot is an owner-only Telegram Mini App for publishing match information and independent native Telegram polls. It does not collect players or maintain rosters.
+Ballimus is an owner-only Telegram Mini App for publishing match information and independent native Telegram polls. It does not collect players or maintain rosters.
 
 ## Telegram card
 

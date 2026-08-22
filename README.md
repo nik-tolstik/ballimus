@@ -1,6 +1,6 @@
-# Football Bot
+# Ballimus
 
-Football Bot publishes football match information cards through an owner-only Telegram Mini App. The maintained application is a pnpm workspace with a NestJS API, a React/Vite frontend, PostgreSQL persistence, generated OpenAPI client code, and short-lived background jobs.
+Ballimus publishes football match information cards through an owner-only Telegram Mini App. The maintained application is a pnpm workspace with a NestJS API, a React/Vite frontend, PostgreSQL persistence, generated OpenAPI client code, and short-lived background jobs.
 
 Production is not claimed to be deployed. The Vercel/Railway topology, test-group validation, and clean production cutover are documented in [the production runbook](docs/railway.md). Deployment, migration, legacy webhook removal, Mini App URL changes, and BotFather changes require explicit owner authorization.
 
