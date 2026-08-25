@@ -25,10 +25,11 @@ const poll = {
   createdAt: '2026-08-11T12:00:00.000Z', updatedAt: '2026-08-11T12:00:00.000Z',
 }
 
-async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boolean; readonly existingPollOptions?: typeof poll.options; readonly failedPoll?: boolean; readonly uncertainPoll?: boolean } = {}): Promise<{ readonly weatherRequests: string[]; readonly pollRequests: unknown[]; readonly notificationSettingsRequests: unknown[]; readonly archivePollRequests: string[]; readonly deleteArchivedPollRequests: string[]; readonly deleteVenueRequests: string[]; readonly archiveMatchRequests: string[]; readonly deleteArchivedMatchRequests: string[]; readonly createMatchRequests: unknown[] }> {
+async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boolean; readonly existingPollOptions?: typeof poll.options; readonly failedPoll?: boolean; readonly uncertainPoll?: boolean } = {}): Promise<{ readonly weatherRequests: string[]; readonly pollRequests: unknown[]; readonly notificationSettingsRequests: unknown[]; readonly voteHistoryRequests: string[]; readonly archivePollRequests: string[]; readonly deleteArchivedPollRequests: string[]; readonly deleteVenueRequests: string[]; readonly archiveMatchRequests: string[]; readonly deleteArchivedMatchRequests: string[]; readonly createMatchRequests: unknown[] }> {
   const weatherRequests: string[] = []
   const pollRequests: unknown[] = []
   const notificationSettingsRequests: unknown[] = []
+  const voteHistoryRequests: string[] = []
   const archivePollRequests: string[] = []
   const deleteArchivedPollRequests: string[] = []
   const deleteVenueRequests: string[] = []
@@ -95,6 +96,26 @@ async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boole
       }
       return json({ polls: options.existingPoll === true && !pollArchived ? [currentPoll] : [] })
     }
+    if (request.method() === 'GET' && pathname === '/v1/polls/1/vote-history') {
+      voteHistoryRequests.push(request.url())
+      if (new URL(request.url()).searchParams.get('cursor') === '10') {
+        return json({
+          timezone: 'Europe/Minsk', nextCursor: null,
+          events: [{ kind: 'voted', displayName: 'Иван Иванов', username: 'player_one', previousOptionIndexes: [], selectedOptionIndexes: [0], occurredAt: '2026-08-25T10:00:00.000Z' }],
+        })
+      }
+      return json({
+        timezone: 'Europe/Minsk', nextCursor: '10',
+        events: [
+          { kind: 'cancelled', displayName: 'Иван Иванов', username: 'player_one', previousOptionIndexes: [1], selectedOptionIndexes: [], occurredAt: '2026-08-25T12:00:00.000Z' },
+          { kind: 'changed', displayName: 'Иван Иванов', username: 'player_one', previousOptionIndexes: [0], selectedOptionIndexes: [1], occurredAt: '2026-08-25T11:00:00.000Z' },
+        ],
+      })
+    }
+    if (request.method() === 'GET' && pathname === '/v1/polls/4/vote-history') {
+      voteHistoryRequests.push(request.url())
+      return json({ timezone: 'Europe/Minsk', nextCursor: null, events: [] })
+    }
     if (request.method() === 'POST' && pathname === '/v1/polls') {
       const body = request.postDataJSON() as Record<string, unknown>
       pollRequests.push(body)
@@ -116,7 +137,7 @@ async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boole
     if (request.method() === 'DELETE' && pathname === '/v1/matches/4/archive') { deleteArchivedMatchRequests.push(pathname); archivedMatchDeleted = true; return json({ deleted: true, matchId: '4' }) }
     return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ code: 'NOT_FOUND' }) })
   })
-  return { weatherRequests, pollRequests, notificationSettingsRequests, archivePollRequests, deleteArchivedPollRequests, deleteVenueRequests, archiveMatchRequests, deleteArchivedMatchRequests, createMatchRequests }
+  return { weatherRequests, pollRequests, notificationSettingsRequests, voteHistoryRequests, archivePollRequests, deleteArchivedPollRequests, deleteVenueRequests, archiveMatchRequests, deleteArchivedMatchRequests, createMatchRequests }
 }
 
 async function faviconCornerAlpha(page: Page): Promise<number> {
@@ -430,6 +451,29 @@ test('uses save and options to archive an active poll', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Архивный опрос', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: `Открыть архивный опрос ${poll.question}`, exact: true })).toHaveCount(0)
   await expect(page.getByText('Архивный опрос удалён.', { exact: true })).toBeVisible()
+})
+
+test('shows paginated vote history for active polls and an empty archive history', async ({ page }) => {
+  const mocked = await mockOwnerApp(page, { existingPoll: true })
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Опросы', exact: true }).click()
+  await page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true }).click()
+  await page.getByRole('button', { name: 'История голосов', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'История голосов', exact: true })).toBeVisible()
+  await expect(page.getByText('Иван Иванов @player_one', { exact: true })).toHaveCount(2)
+  await expect(page.getByText('Отменил голос: Не буду', { exact: true })).toBeVisible()
+  await expect(page.getByText('Изменил голос: Буду → Не буду', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Показать ещё', exact: true }).click()
+  await expect(page.getByText('Проголосовал: Буду', { exact: true })).toBeVisible()
+  await expect.poll(() => mocked.voteHistoryRequests.map((url) => new URL(url).searchParams.get('cursor'))).toEqual([null, '10'])
+
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Архив опросов', exact: true }).click()
+  await page.getByRole('button', { name: 'Открыть архивный опрос Архивный опрос?', exact: true }).click()
+  await page.getByRole('button', { name: 'История голосов', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'История голосов', exact: true })).toBeVisible()
+  await expect(page.getByText('История пуста', { exact: true })).toBeVisible()
 })
 
 test('edits only existing poll option notification toggles', async ({ page }) => {

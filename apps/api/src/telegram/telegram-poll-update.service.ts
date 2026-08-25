@@ -253,6 +253,7 @@ export class TelegramPollUpdateService implements OnModuleDestroy {
     if (!secretMatches(secret, this.config.telegramWebhookSecret)) {
       throw new UnauthorizedException({ code: "TELEGRAM_WEBHOOK_UNAUTHORIZED", message: "Telegram webhook authentication failed." });
     }
+    const receivedAt = new Date();
     const pollUpdate = parseTelegramPollUpdate(body);
     if (pollUpdate !== undefined) {
       const result = await this.db.transaction(async (tx) => {
@@ -295,7 +296,7 @@ export class TelegramPollUpdateService implements OnModuleDestroy {
         username: answerUpdate.username,
         displayName: answerUpdate.displayName,
         selectedOptionIndexes: answerUpdate.selectedOptionIndexes,
-      });
+      }, receivedAt);
       const notificationTarget = pollThresholdNotificationTarget(this.config, current);
       return applied.triggers.map((trigger) => ({
         chatId: notificationTarget.telegramChatId,

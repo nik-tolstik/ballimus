@@ -17,6 +17,7 @@ import {
   type CreateTelegramPollInput,
   type TelegramPollNotificationSettingsInput,
   type TelegramPoll as DbTelegramPoll,
+  type TelegramPollVoteEvent as DbTelegramPollVoteEvent,
   type TransactionRepositories,
   type Venue as DbVenue,
 } from "@football/db";
@@ -35,6 +36,7 @@ import {
   type PollCreateDto,
   type PollListQueryDto,
   type PollNotificationSettingsUpdateDto,
+  type PollVoteHistoryQueryDto,
   type VenueCreateDto,
   type VenueUpdateDto,
 } from "./rest.dto.js";
@@ -167,6 +169,31 @@ export class OwnerRestService {
     try {
       const polls = await new TelegramPollsRepository(this.db).listByChat(this.config.telegramGroupChatId, { archived: query.archived === true });
       return serializeRestObject({ polls: polls.map((poll) => this.pollBody(poll)) });
+    } catch (error) {
+      throw toRestHttpException(error);
+    }
+  }
+
+  public async listPollVoteHistory(
+    ownerTelegramUserId: bigint,
+    pollId: bigint,
+    query: PollVoteHistoryQueryDto,
+  ): Promise<Record<string, unknown>> {
+    this.assertOwner(ownerTelegramUserId);
+    try {
+      const polls = new TelegramPollsRepository(this.db);
+      this.assertAccessiblePoll(await polls.getById(pollId));
+      const limit = query.limit ?? 50;
+      const page = await polls.listVoteHistory(pollId, {
+        limit: limit + 1,
+        ...(query.cursor === undefined ? {} : { beforeId: BigInt(query.cursor) }),
+      });
+      const events = page.slice(0, limit);
+      return serializeRestObject({
+        events: events.map((event) => this.pollVoteHistoryEventBody(event)),
+        nextCursor: page.length > limit ? events.at(-1)?.id ?? null : null,
+        timezone: this.config.groupTimezone,
+      });
     } catch (error) {
       throw toRestHttpException(error);
     }
@@ -669,6 +696,17 @@ export class OwnerRestService {
     });
   }
 
+  private pollVoteHistoryEventBody(event: DbTelegramPollVoteEvent): Record<string, RestJsonValue> {
+    return serializeRestObject({
+      kind: event.kind,
+      displayName: event.displayName,
+      username: event.username,
+      previousOptionIndexes: event.previousSelectedOptionIndexes,
+      selectedOptionIndexes: event.selectedOptionIndexes,
+      occurredAt: event.occurredAt,
+    });
+  }
+
   private publicCardBody(reference: MatchMessage | undefined): Record<string, RestJsonValue> {
     return serializeRestObject({
       publicationState: reference?.publicationState ?? "not_published",
@@ -714,6 +752,12 @@ export class OwnerRestService {
 
   private assertAccessibleMatch(match: DbMatch): void {
     if (match.telegramChatId !== this.config.telegramGroupChatId || match.deletionRequestedAt !== null) {
+      throw toRestHttpException(restRequestError(404, "RESOURCE_NOT_FOUND", "The requested resource was not found."));
+    }
+  }
+
+  private assertAccessiblePoll(poll: DbTelegramPoll): void {
+    if (poll.telegramChatId !== this.config.telegramGroupChatId) {
       throw toRestHttpException(restRequestError(404, "RESOURCE_NOT_FOUND", "The requested resource was not found."));
     }
   }

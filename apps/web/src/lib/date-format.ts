@@ -1,4 +1,10 @@
 const RUSSIAN_LOCALE = 'ru-BY'
+const voteHistoryDateTimeOptions = {
+  day: 'numeric',
+  month: 'long',
+  hour: '2-digit',
+  minute: '2-digit',
+} satisfies Intl.DateTimeFormatOptions
 
 function parseCalendarDate(value: string): Date | undefined {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value)
@@ -35,6 +41,20 @@ export function formatMatchTimeRange(timeValue: string, durationMinutes: number)
   const endHours = String(Math.floor(endMinutes / 60)).padStart(2, '0')
   const endMinutesPart = String(endMinutes % 60).padStart(2, '0')
   return `${timeValue}-${endHours}:${endMinutesPart}`
+}
+
+export function formatVoteHistoryDateTime(value: string, timeZone: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const format = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(
+    RUSSIAN_LOCALE,
+    options,
+  ).format(date).replace(' в ', ', ')
+  try {
+    return format({ ...voteHistoryDateTimeOptions, timeZone })
+  } catch {
+    return format(voteHistoryDateTimeOptions)
+  }
 }
 
 export function formatCalendarValue(value: string): string {

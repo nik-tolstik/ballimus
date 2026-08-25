@@ -135,6 +135,37 @@ export class PollListResponseDto {
   polls!: PollResponseDto[];
 }
 
+export class PollVoteHistoryEventResponseDto {
+  @ApiProperty({ enum: ["voted", "changed", "cancelled"] })
+  kind!: "voted" | "changed" | "cancelled";
+
+  @ApiProperty({ type: String })
+  displayName!: string;
+
+  @ApiProperty({ type: String, nullable: true })
+  username!: string | null;
+
+  @ApiProperty({ type: [Number] })
+  previousOptionIndexes!: number[];
+
+  @ApiProperty({ type: [Number] })
+  selectedOptionIndexes!: number[];
+
+  @ApiProperty({ type: String, format: "date-time" })
+  occurredAt!: string;
+}
+
+export class PollVoteHistoryResponseDto {
+  @ApiProperty({ type: [PollVoteHistoryEventResponseDto] })
+  events!: PollVoteHistoryEventResponseDto[];
+
+  @ApiProperty({ type: String, nullable: true, example: "42" })
+  nextCursor!: string | null;
+
+  @ApiProperty({ type: String, example: "Europe/Minsk" })
+  timezone!: string;
+}
+
 export class ArchivedPollDeletionResponseDto {
   @ApiProperty({ type: Boolean, example: true })
   deleted!: boolean;

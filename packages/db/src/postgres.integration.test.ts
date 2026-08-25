@@ -408,6 +408,8 @@ describe("information-card PostgreSQL schema", () => {
       });
     });
 
+    expect((await applyAnswer(99n, [])).triggers).toEqual([]);
+    expect(await polls.getVoterAnswer(poll.id, "user", 800_001n)).toBeUndefined();
     expect((await applyAnswer(100n, [0])).triggers).toEqual([]);
     expect((await applyAnswer(101n, [1])).triggers).toEqual([{
       optionIndex: 0,
@@ -421,7 +423,7 @@ describe("information-card PostgreSQL schema", () => {
     }]);
     expect((await applyAnswer(102n, [])).triggers).toEqual([]);
     expect((await applyAnswer(102n, [])).triggers).toEqual([]);
-    expect((await applyAnswer(99n, [0])).triggers).toEqual([]);
+    expect((await applyAnswer(98n, [0])).triggers).toEqual([]);
 
     expect(await polls.listVoteHistory(poll.id, { limit: 10 })).toMatchObject([
       { kind: "cancelled", previousSelectedOptionIndexes: [1], selectedOptionIndexes: [], telegramUpdateId: 102n },

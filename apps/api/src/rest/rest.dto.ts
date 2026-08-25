@@ -173,6 +173,22 @@ export class PollListQueryDto {
   archived?: boolean;
 }
 
+export class PollVoteHistoryQueryDto {
+  @ApiPropertyOptional({ type: String, example: "42", pattern: "^[1-9]\\d*$" })
+  @IsOptional()
+  @IsString()
+  @Matches(DECIMAL_ID_PATTERN)
+  cursor?: string;
+
+  @ApiPropertyOptional({ type: Number, default: 50, minimum: 1, maximum: 50 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit?: number;
+}
+
 export class VenueBookingContactDto {
   @ApiPropertyOptional({ type: String, example: "Администратор" })
   @IsOptional()

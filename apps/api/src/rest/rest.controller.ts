@@ -33,6 +33,7 @@ import {
   PollCreateDto,
   PollListQueryDto,
   PollNotificationSettingsUpdateDto,
+  PollVoteHistoryQueryDto,
   VenueCreateDto,
   VenueUpdateDto,
 } from "./rest.dto.js";
@@ -44,6 +45,7 @@ import {
   MatchListResponseDto,
   PollEnvelopeResponseDto,
   PollListResponseDto,
+  PollVoteHistoryResponseDto,
   VenueEnvelopeResponseDto,
   VenueListResponseDto,
   WeatherCurrentResponseDto,
@@ -205,6 +207,20 @@ export class PollsController {
     @Query(new RestQueryPipe(PollListQueryDto)) query: PollListQueryDto,
   ): Promise<Record<string, unknown>> {
     return this.service.listPolls(ownerTelegramUserId, query);
+  }
+
+  @Get(":id/vote-history")
+  @ApiOperation({ operationId: "getOwnerPollVoteHistory", summary: "List native Telegram poll vote history" })
+  @ApiParam({ name: "id", type: String })
+  @ApiQuery({ name: "cursor", required: false, type: String })
+  @ApiQuery({ name: "limit", required: false, type: Number })
+  @ApiOkResponse({ type: PollVoteHistoryResponseDto })
+  public listVoteHistory(
+    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @Param("id", PositiveBigIntPipe) pollId: bigint,
+    @Query(new RestQueryPipe(PollVoteHistoryQueryDto)) query: PollVoteHistoryQueryDto,
+  ): Promise<Record<string, unknown>> {
+    return this.service.listPollVoteHistory(ownerTelegramUserId, pollId, query);
   }
 
   @Post()

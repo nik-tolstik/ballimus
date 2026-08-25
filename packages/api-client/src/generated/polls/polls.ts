@@ -29,11 +29,13 @@ import type {
   ArchivedPollDeletionResponseDto,
   CreateOwnerPollHeaders,
   DeleteArchivedOwnerPollHeaders,
+  GetOwnerPollVoteHistoryParams,
   ListOwnerPollsParams,
   PollCreateDto,
   PollEnvelopeResponseDto,
   PollListResponseDto,
   PollNotificationSettingsUpdateDto,
+  PollVoteHistoryResponseDto,
   UpdateOwnerPollNotificationSettingsHeaders
 } from '.././model/index.js';
 
@@ -207,6 +209,106 @@ export const useCreateOwnerPoll = <TError = unknown,
       return useMutation(mutationOptions, queryClient);
     }
     /**
+ * @summary List native Telegram poll vote history
+ */
+export const getOwnerPollVoteHistory = (
+    id: string,
+    params?: GetOwnerPollVoteHistoryParams,
+ options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
+) => {
+
+
+      return customInstance<PollVoteHistoryResponseDto>(
+      {url: `/v1/polls/${id}/vote-history`, method: 'GET',
+        params, ...(signal ? { signal }: {})
+    },
+      options);
+    }
+
+
+
+
+export const getGetOwnerPollVoteHistoryQueryKey = (id?: string,
+    params?: GetOwnerPollVoteHistoryParams,) => {
+    return [
+    `/v1/polls/${id}/vote-history`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+
+export const getGetOwnerPollVoteHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getOwnerPollVoteHistory>>, TError = unknown>(id: string,
+    params?: GetOwnerPollVoteHistoryParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerPollVoteHistory>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOwnerPollVoteHistoryQueryKey(id,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOwnerPollVoteHistory>>> = ({ signal }) => getOwnerPollVoteHistory(id,params, requestOptions, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id),  retry: false,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOwnerPollVoteHistory>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetOwnerPollVoteHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getOwnerPollVoteHistory>>>
+export type GetOwnerPollVoteHistoryQueryError = unknown
+
+
+export function useGetOwnerPollVoteHistory<TData = Awaited<ReturnType<typeof getOwnerPollVoteHistory>>, TError = unknown>(
+ id: string,
+    params: undefined |  GetOwnerPollVoteHistoryParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerPollVoteHistory>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getOwnerPollVoteHistory>>,
+          TError,
+          Awaited<ReturnType<typeof getOwnerPollVoteHistory>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetOwnerPollVoteHistory<TData = Awaited<ReturnType<typeof getOwnerPollVoteHistory>>, TError = unknown>(
+ id: string,
+    params?: GetOwnerPollVoteHistoryParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerPollVoteHistory>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getOwnerPollVoteHistory>>,
+          TError,
+          Awaited<ReturnType<typeof getOwnerPollVoteHistory>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetOwnerPollVoteHistory<TData = Awaited<ReturnType<typeof getOwnerPollVoteHistory>>, TError = unknown>(
+ id: string,
+    params?: GetOwnerPollVoteHistoryParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerPollVoteHistory>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List native Telegram poll vote history
+ */
+
+export function useGetOwnerPollVoteHistory<TData = Awaited<ReturnType<typeof getOwnerPollVoteHistory>>, TError = unknown>(
+ id: string,
+    params?: GetOwnerPollVoteHistoryParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerPollVoteHistory>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetOwnerPollVoteHistoryQueryOptions(id,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
  * @summary Update native poll option notification settings
  */
 export const updateOwnerPollNotificationSettings = (

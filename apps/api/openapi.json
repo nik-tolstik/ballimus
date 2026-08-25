@@ -450,6 +450,58 @@
         ]
       }
     },
+    "/v1/polls/{id}/vote-history": {
+      "get": {
+        "operationId": "getOwnerPollVoteHistory",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PollVoteHistoryResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "List native Telegram poll vote history",
+        "tags": [
+          "polls"
+        ]
+      }
+    },
     "/v1/polls/{id}/notification-settings": {
       "patch": {
         "operationId": "updateOwnerPollNotificationSettings",
@@ -1301,6 +1353,75 @@
         },
         "required": [
           "polls"
+        ]
+      },
+      "PollVoteHistoryEventResponseDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "voted",
+              "changed",
+              "cancelled"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string",
+            "nullable": true
+          },
+          "previousOptionIndexes": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "selectedOptionIndexes": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "kind",
+          "displayName",
+          "username",
+          "previousOptionIndexes",
+          "selectedOptionIndexes",
+          "occurredAt"
+        ]
+      },
+      "PollVoteHistoryResponseDto": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PollVoteHistoryEventResponseDto"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "example": "42"
+          },
+          "timezone": {
+            "type": "string",
+            "example": "Europe/Minsk"
+          }
+        },
+        "required": [
+          "events",
+          "nextCursor",
+          "timezone"
         ]
       },
       "PollOptionCreateDto": {

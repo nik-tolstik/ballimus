@@ -487,6 +487,7 @@ export class TelegramPollsRepository {
     const beforeCounts = voterCounts(poll.options.length, answers.map((answer) => answer.selectedOptionIndexes));
     const previousIndexes = current?.selectedOptionIndexes ?? [];
     const eventKind = voteEventKind(previousIndexes, nextIndexes);
+    if (eventKind === undefined) return { triggers: [] };
     const afterCounts = [...beforeCounts];
     for (const index of previousIndexes) afterCounts[index] = Math.max(0, (afterCounts[index] ?? 0) - 1);
     for (const index of nextIndexes) afterCounts[index] = (afterCounts[index] ?? 0) + 1;
@@ -544,20 +545,18 @@ export class TelegramPollsRepository {
         eq(telegramPollVoterAnswers.telegramVoterId, telegramVoterId),
       ));
     }
-    if (eventKind !== undefined) {
-      await this.db.insert(telegramPollVoteEvents).values({
-        pollId: poll.id,
-        kind: eventKind,
-        voterKind: input.voterKind,
-        telegramVoterId,
-        username,
-        displayName,
-        previousSelectedOptionIndexes: previousIndexes,
-        selectedOptionIndexes: nextIndexes,
-        telegramUpdateId,
-        occurredAt: now,
-      });
-    }
+    await this.db.insert(telegramPollVoteEvents).values({
+      pollId: poll.id,
+      kind: eventKind,
+      voterKind: input.voterKind,
+      telegramVoterId,
+      username,
+      displayName,
+      previousSelectedOptionIndexes: previousIndexes,
+      selectedOptionIndexes: nextIndexes,
+      telegramUpdateId,
+      occurredAt: now,
+    });
     return { triggers };
   }
 
