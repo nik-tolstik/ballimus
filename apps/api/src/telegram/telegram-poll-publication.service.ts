@@ -76,7 +76,7 @@ export class TelegramPollPublicationService {
       }
       return this.polls.markPublicationUncertain(
         poll.id,
-        "Telegram did not confirm poll publication. Check General before republishing.",
+        "Telegram did not confirm poll publication. Check General.",
         attemptedAt,
       );
     }

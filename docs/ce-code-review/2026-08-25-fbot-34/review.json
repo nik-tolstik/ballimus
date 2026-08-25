@@ -1,0 +1,57 @@
+{
+  "status": "complete",
+  "verdict": "Ready to merge",
+  "scope": {
+    "base": "fa57105b2401151e92d446bb3c0d0a4f707fa108",
+    "branch": "vibegame/fbot-34-archive-polls-and-align-poll-actions",
+    "head_sha": "fa57105b2401151e92d446bb3c0d0a4f707fa108",
+    "pr_url": null,
+    "files_changed": 24
+  },
+  "intent": "Add poll archiving and permanent deletion from the archive, align poll actions with match actions, and prevent the fixed navigation from hiding the last poll card. Remove manual republishing from the public surface while retaining hidden legacy routes for one transition release.",
+  "intent_confidence": "explicit",
+  "reviewers": ["correctness", "security", "api-contract"],
+  "findings": [],
+  "actionable_findings": [],
+  "triage_groups": [],
+  "pre_existing_findings": [],
+  "requirements_completeness": {
+    "poll_archive_and_delete": "met",
+    "poll_and_match_actions": "met",
+    "bottom_navigation_spacing": "met",
+    "public_api_and_client": "met",
+    "transition_legacy_routes": "met",
+    "documentation_and_tests": "met"
+  },
+  "learnings": [],
+  "agent_native_gaps": [],
+  "deployment_notes": [],
+  "residual_risks": [
+    {
+      "item": "Hidden legacy republish routes remain executable for one transition release.",
+      "tracking_issue": "FBOT-35"
+    }
+  ],
+  "testing_gaps": [],
+  "coverage": {
+    "cross_model_review": "No configured peer executable was available; three independent local reviewers were used.",
+    "resolved_during_review": [
+      "Archive mutation invalidates the archived poll query.",
+      "Archived poll deletion has a typed public response schema and generated client type."
+    ],
+    "validation": [
+      "pnpm lint",
+      "pnpm typecheck",
+      "pnpm build",
+      "API unit tests: 31 passed",
+      "Playwright mobile: 13 passed",
+      "Playwright desktop archive and navigation checks: 2 passed"
+    ],
+    "blocked_validation": [
+      "PostgreSQL integration tests require local Docker at 127.0.0.1:55432.",
+      "pnpm api:contracts:check is incompatible with Node.js v24.19.0 because spawnSync pnpm.cmd returns EINVAL; direct OpenAPI and client generation passed."
+    ]
+  },
+  "artifact_path": "docs/ce-code-review/2026-08-25-fbot-34",
+  "run_id": "2026-08-25-fbot-34"
+}

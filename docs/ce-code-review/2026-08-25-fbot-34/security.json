@@ -1,0 +1,8 @@
+{
+  "reviewer": "security",
+  "findings": [],
+  "residual_risks": [
+    "The hidden legacy republish endpoints remain callable only as the planned compatibility bridge."
+  ],
+  "testing_gaps": []
+}

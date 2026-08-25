@@ -1,0 +1,8 @@
+{
+  "reviewer": "correctness",
+  "findings": [],
+  "residual_risks": [
+    "The hidden legacy republish endpoints must be removed after the transition release."
+  ],
+  "testing_gaps": []
+}

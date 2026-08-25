@@ -97,7 +97,7 @@ describe("TelegramPollPublicationService", () => {
     await expect(service.publishPending(7n)).resolves.toBe(uncertain);
     expect(repository.markPublicationUncertain).toHaveBeenCalledWith(
       7n,
-      "Telegram did not confirm poll publication. Check General before republishing.",
+      "Telegram did not confirm poll publication. Check General.",
       expect.any(Date),
     );
     expect(repository.markPublicationFailed).not.toHaveBeenCalled();

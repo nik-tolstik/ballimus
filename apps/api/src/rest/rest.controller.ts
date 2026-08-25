@@ -15,6 +15,7 @@ import {
 import {
   ApiBody,
   ApiCreatedResponse,
+  ApiExcludeEndpoint,
   ApiHeader,
   ApiOkResponse,
   ApiOperation,
@@ -30,6 +31,7 @@ import {
   MatchListQueryDto,
   PatchMatchDto,
   PollCreateDto,
+  PollListQueryDto,
   PollNotificationSettingsUpdateDto,
   VenueCreateDto,
   VenueUpdateDto,
@@ -37,6 +39,7 @@ import {
 import { PositiveBigIntPipe, RestQueryPipe } from "./rest.pipe.js";
 import {
   BootstrapResponseDto,
+  ArchivedPollDeletionResponseDto,
   MatchEnvelopeResponseDto,
   MatchListResponseDto,
   PollEnvelopeResponseDto,
@@ -170,6 +173,7 @@ export class MatchesController {
   }
 
   @Post(":id/republish")
+  @ApiExcludeEndpoint()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ operationId: "republishOwnerMatch", summary: "Republish an information card" })
   @ApiParam({ name: "id", type: String })
@@ -193,10 +197,14 @@ export class PollsController {
   public constructor(@Inject(OwnerRestService) private readonly service: OwnerRestService) {}
 
   @Get()
-  @ApiOperation({ operationId: "listOwnerPolls", summary: "List native Telegram polls" })
+  @ApiOperation({ operationId: "listOwnerPolls", summary: "List active or archived native Telegram polls" })
+  @ApiQuery({ name: "archived", required: false, type: Boolean })
   @ApiOkResponse({ type: PollListResponseDto })
-  public list(@CurrentOwnerId() ownerTelegramUserId: bigint): Promise<Record<string, unknown>> {
-    return this.service.listPolls(ownerTelegramUserId);
+  public list(
+    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @Query(new RestQueryPipe(PollListQueryDto)) query: PollListQueryDto,
+  ): Promise<Record<string, unknown>> {
+    return this.service.listPolls(ownerTelegramUserId, query);
   }
 
   @Post()
@@ -229,6 +237,7 @@ export class PollsController {
   }
 
   @Post(":id/republish")
+  @ApiExcludeEndpoint()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ operationId: "republishOwnerPoll", summary: "Make one new attempt to publish a native Telegram poll" })
   @ApiParam({ name: "id", type: String })
@@ -254,6 +263,20 @@ export class PollsController {
     @Param("id", PositiveBigIntPipe) pollId: bigint,
   ): Promise<Record<string, unknown>> {
     return this.service.archivePoll(ownerTelegramUserId, idempotencyKey, pollId);
+  }
+
+  @Delete(":id/archive")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ operationId: "deleteArchivedOwnerPoll", summary: "Permanently delete an archived native Telegram poll" })
+  @ApiParam({ name: "id", type: String })
+  @ApiHeader({ name: "Idempotency-Key", required: true })
+  @ApiOkResponse({ type: ArchivedPollDeletionResponseDto })
+  public deleteArchived(
+    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Param("id", PositiveBigIntPipe) pollId: bigint,
+  ): Promise<Record<string, unknown>> {
+    return this.service.deleteArchivedPoll(ownerTelegramUserId, idempotencyKey, pollId);
   }
 }
 

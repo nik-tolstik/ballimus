@@ -135,6 +135,14 @@ export class PollListResponseDto {
   polls!: PollResponseDto[];
 }
 
+export class ArchivedPollDeletionResponseDto {
+  @ApiProperty({ type: Boolean, example: true })
+  deleted!: boolean;
+
+  @ApiProperty({ type: String, example: "42" })
+  pollId!: string;
+}
+
 export class MatchScheduleResponseDto {
   @ApiProperty({ type: String, example: "2026-08-03" })
   date!: string;

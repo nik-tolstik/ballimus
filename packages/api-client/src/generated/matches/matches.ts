@@ -34,7 +34,6 @@ import type {
   MatchEnvelopeResponseDto,
   MatchListResponseDto,
   PatchMatchDto,
-  RepublishOwnerMatchHeaders,
   UpdateOwnerMatchHeaders
 } from '.././model/index.js';
 
@@ -551,70 +550,6 @@ export const useDeleteArchivedOwnerMatch = <TError = unknown,
       > => {
 
       const mutationOptions = getDeleteArchivedOwnerMatchMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    /**
- * @summary Republish an information card
- */
-export const republishOwnerMatch = (
-    id: string,
-    headers: RepublishOwnerMatchHeaders,
- options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
-) => {
-
-
-      return customInstance<MatchEnvelopeResponseDto>(
-      {url: `/v1/matches/${id}/republish`, method: 'POST',
-      headers, ...(signal ? { signal }: {})
-    },
-      options);
-    }
-
-
-
-export const getRepublishOwnerMatchMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof republishOwnerMatch>>, TError,{id: string;headers: RepublishOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof republishOwnerMatch>>, TError,{id: string;headers: RepublishOwnerMatchHeaders}, TContext> => {
-
-const mutationKey = ['republishOwnerMatch'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof republishOwnerMatch>>, {id: string;headers: RepublishOwnerMatchHeaders}> = (props) => {
-          const {id,headers} = props ?? {};
-
-          return  republishOwnerMatch(id,headers,requestOptions)
-        }
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type RepublishOwnerMatchMutationResult = NonNullable<Awaited<ReturnType<typeof republishOwnerMatch>>>
-
-    export type RepublishOwnerMatchMutationError = unknown
-
-    /**
- * @summary Republish an information card
- */
-export const useRepublishOwnerMatch = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof republishOwnerMatch>>, TError,{id: string;headers: RepublishOwnerMatchHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof republishOwnerMatch>>,
-        TError,
-        {id: string;headers: RepublishOwnerMatchHeaders},
-        TContext
-      > => {
-
-      const mutationOptions = getRepublishOwnerMatchMutationOptions(options);
 
       return useMutation(mutationOptions, queryClient);
     }

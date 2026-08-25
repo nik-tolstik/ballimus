@@ -12,7 +12,7 @@ Production is not claimed to be deployed. The Vercel/Railway topology, test-grou
 - `packages/db` — PostgreSQL Drizzle schema, migrations, repositories, transactions, idempotency, outbox, and job leases.
 - `packages/api-client` — generated OpenAPI models and TanStack Query hooks plus the transport mutator.
 
-The owner uses the Mini App to create, edit, republish, and delete information cards. Each Telegram card has a local time range, a catalog venue with a map link and type, and an optional price. The owner can also send the current Minsk weather to the configured chat topic.
+The owner uses the Mini App to create and edit information cards, then archive them from the active list. Archived cards and polls can be permanently deleted after confirmation. Each Telegram card has a local time range, a catalog venue with a map link and type, and an optional price. The owner can also send the current Minsk weather to the configured chat topic.
 
 ## Start here
 

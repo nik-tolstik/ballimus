@@ -1,0 +1,17 @@
+{
+  "reviewer": "api-contract",
+  "findings": [
+    {
+      "title": "Archived poll cache was not invalidated after archiving",
+      "status": "resolved",
+      "resolution": "The archive mutation invalidates both active and archived poll list keys, with an end-to-end assertion."
+    },
+    {
+      "title": "Archived poll deletion response lacked a generated type",
+      "status": "resolved",
+      "resolution": "ArchivedPollDeletionResponseDto is exposed in OpenAPI and generated into the API client."
+    }
+  ],
+  "residual_risks": [],
+  "testing_gaps": []
+}

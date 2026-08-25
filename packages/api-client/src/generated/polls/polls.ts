@@ -26,12 +26,14 @@ import type {
 
 import type {
   ArchiveOwnerPollHeaders,
+  ArchivedPollDeletionResponseDto,
   CreateOwnerPollHeaders,
+  DeleteArchivedOwnerPollHeaders,
+  ListOwnerPollsParams,
   PollCreateDto,
   PollEnvelopeResponseDto,
   PollListResponseDto,
   PollNotificationSettingsUpdateDto,
-  RepublishOwnerPollHeaders,
   UpdateOwnerPollNotificationSettingsHeaders
 } from '.././model/index.js';
 
@@ -47,16 +49,17 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 /**
- * @summary List native Telegram polls
+ * @summary List active or archived native Telegram polls
  */
 export const listOwnerPolls = (
-
+    params?: ListOwnerPollsParams,
  options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
 ) => {
 
 
       return customInstance<PollListResponseDto>(
-      {url: `/v1/polls`, method: 'GET', ...(signal ? { signal }: {})
+      {url: `/v1/polls`, method: 'GET',
+        params, ...(signal ? { signal }: {})
     },
       options);
     }
@@ -64,23 +67,23 @@ export const listOwnerPolls = (
 
 
 
-export const getListOwnerPollsQueryKey = () => {
+export const getListOwnerPollsQueryKey = (params?: ListOwnerPollsParams,) => {
     return [
-    `/v1/polls`
+    `/v1/polls`, ...(params ? [params]: [])
     ] as const;
     }
 
 
-export const getListOwnerPollsQueryOptions = <TData = Awaited<ReturnType<typeof listOwnerPolls>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerPolls>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+export const getListOwnerPollsQueryOptions = <TData = Awaited<ReturnType<typeof listOwnerPolls>>, TError = unknown>(params?: ListOwnerPollsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerPolls>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListOwnerPollsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListOwnerPollsQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOwnerPolls>>> = ({ signal }) => listOwnerPolls(requestOptions, signal);
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOwnerPolls>>> = ({ signal }) => listOwnerPolls(params, requestOptions, signal);
 
 
 
@@ -94,7 +97,7 @@ export type ListOwnerPollsQueryError = unknown
 
 
 export function useListOwnerPolls<TData = Awaited<ReturnType<typeof listOwnerPolls>>, TError = unknown>(
-  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerPolls>>, TError, TData>> & Pick<
+ params: undefined |  ListOwnerPollsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerPolls>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listOwnerPolls>>,
           TError,
@@ -104,7 +107,7 @@ export function useListOwnerPolls<TData = Awaited<ReturnType<typeof listOwnerPol
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useListOwnerPolls<TData = Awaited<ReturnType<typeof listOwnerPolls>>, TError = unknown>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerPolls>>, TError, TData>> & Pick<
+ params?: ListOwnerPollsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerPolls>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listOwnerPolls>>,
           TError,
@@ -114,19 +117,19 @@ export function useListOwnerPolls<TData = Awaited<ReturnType<typeof listOwnerPol
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useListOwnerPolls<TData = Awaited<ReturnType<typeof listOwnerPolls>>, TError = unknown>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerPolls>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ params?: ListOwnerPollsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerPolls>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary List native Telegram polls
+ * @summary List active or archived native Telegram polls
  */
 
 export function useListOwnerPolls<TData = Awaited<ReturnType<typeof listOwnerPolls>>, TError = unknown>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerPolls>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ params?: ListOwnerPollsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerPolls>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getListOwnerPollsQueryOptions(options)
+  const queryOptions = getListOwnerPollsQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -269,70 +272,6 @@ export const useUpdateOwnerPollNotificationSettings = <TError = unknown,
       return useMutation(mutationOptions, queryClient);
     }
     /**
- * @summary Make one new attempt to publish a native Telegram poll
- */
-export const republishOwnerPoll = (
-    id: string,
-    headers: RepublishOwnerPollHeaders,
- options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
-) => {
-
-
-      return customInstance<PollEnvelopeResponseDto>(
-      {url: `/v1/polls/${id}/republish`, method: 'POST',
-      headers, ...(signal ? { signal }: {})
-    },
-      options);
-    }
-
-
-
-export const getRepublishOwnerPollMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof republishOwnerPoll>>, TError,{id: string;headers: RepublishOwnerPollHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof republishOwnerPoll>>, TError,{id: string;headers: RepublishOwnerPollHeaders}, TContext> => {
-
-const mutationKey = ['republishOwnerPoll'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof republishOwnerPoll>>, {id: string;headers: RepublishOwnerPollHeaders}> = (props) => {
-          const {id,headers} = props ?? {};
-
-          return  republishOwnerPoll(id,headers,requestOptions)
-        }
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type RepublishOwnerPollMutationResult = NonNullable<Awaited<ReturnType<typeof republishOwnerPoll>>>
-
-    export type RepublishOwnerPollMutationError = unknown
-
-    /**
- * @summary Make one new attempt to publish a native Telegram poll
- */
-export const useRepublishOwnerPoll = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof republishOwnerPoll>>, TError,{id: string;headers: RepublishOwnerPollHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof republishOwnerPoll>>,
-        TError,
-        {id: string;headers: RepublishOwnerPollHeaders},
-        TContext
-      > => {
-
-      const mutationOptions = getRepublishOwnerPollMutationOptions(options);
-
-      return useMutation(mutationOptions, queryClient);
-    }
-    /**
  * @summary Archive a poll and delete its Telegram message
  */
 export const archiveOwnerPoll = (
@@ -393,6 +332,69 @@ export const useArchiveOwnerPoll = <TError = unknown,
       > => {
 
       const mutationOptions = getArchiveOwnerPollMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * @summary Permanently delete an archived native Telegram poll
+ */
+export const deleteArchivedOwnerPoll = (
+    id: string,
+    headers: DeleteArchivedOwnerPollHeaders,
+ options?: SecondParameter<typeof customInstance>,) => {
+
+
+      return customInstance<ArchivedPollDeletionResponseDto>(
+      {url: `/v1/polls/${id}/archive`, method: 'DELETE',
+      headers
+    },
+      options);
+    }
+
+
+
+export const getDeleteArchivedOwnerPollMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteArchivedOwnerPoll>>, TError,{id: string;headers: DeleteArchivedOwnerPollHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteArchivedOwnerPoll>>, TError,{id: string;headers: DeleteArchivedOwnerPollHeaders}, TContext> => {
+
+const mutationKey = ['deleteArchivedOwnerPoll'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteArchivedOwnerPoll>>, {id: string;headers: DeleteArchivedOwnerPollHeaders}> = (props) => {
+          const {id,headers} = props ?? {};
+
+          return  deleteArchivedOwnerPoll(id,headers,requestOptions)
+        }
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteArchivedOwnerPollMutationResult = NonNullable<Awaited<ReturnType<typeof deleteArchivedOwnerPoll>>>
+
+    export type DeleteArchivedOwnerPollMutationError = unknown
+
+    /**
+ * @summary Permanently delete an archived native Telegram poll
+ */
+export const useDeleteArchivedOwnerPoll = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteArchivedOwnerPoll>>, TError,{id: string;headers: DeleteArchivedOwnerPollHeaders}, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteArchivedOwnerPoll>>,
+        TError,
+        {id: string;headers: DeleteArchivedOwnerPollHeaders},
+        TContext
+      > => {
+
+      const mutationOptions = getDeleteArchivedOwnerPollMutationOptions(options);
 
       return useMutation(mutationOptions, queryClient);
     }

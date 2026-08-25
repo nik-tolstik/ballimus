@@ -6,6 +6,6 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type RepublishOwnerPollHeaders = {
+export type DeleteArchivedOwnerPollHeaders = {
 'Idempotency-Key': string;
 };

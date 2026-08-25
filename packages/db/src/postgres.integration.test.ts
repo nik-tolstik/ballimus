@@ -428,12 +428,54 @@ describe("information-card PostgreSQL schema", () => {
     expect(retainedAnswers).toEqual([]);
   });
 
-  it("archives a poll and removes it from the active poll list", async () => {
+  it("isolates archived polls from active polls, orders them newest first, and permits permanent deletion", async () => {
     const polls = new TelegramPollsRepository(database.db);
-    const poll = await polls.create({
+    const first = await polls.create({
       telegramChatId: CHAT_ID,
       telegramTopicId: 1n,
-      question: "Архивировать?",
+      question: "Первый архивный?",
+      options: [
+        { text: "Да", notificationEnabled: true },
+        { text: "Нет", notificationEnabled: true },
+      ],
+      notificationThreshold: 10,
+      isAnonymous: false,
+      allowsMultipleAnswers: false,
+      allowsRevoting: true,
+      creatorTelegramUserId: OWNER_ID,
+    });
+    const second = await polls.create({
+      telegramChatId: CHAT_ID,
+      telegramTopicId: 1n,
+      question: "Второй архивный?",
+      options: [
+        { text: "Да", notificationEnabled: true },
+        { text: "Нет", notificationEnabled: true },
+      ],
+      notificationThreshold: 10,
+      isAnonymous: false,
+      allowsMultipleAnswers: false,
+      allowsRevoting: true,
+      creatorTelegramUserId: OWNER_ID,
+    });
+    const active = await polls.create({
+      telegramChatId: CHAT_ID,
+      telegramTopicId: 1n,
+      question: "Активный?",
+      options: [
+        { text: "Да", notificationEnabled: true },
+        { text: "Нет", notificationEnabled: true },
+      ],
+      notificationThreshold: 10,
+      isAnonymous: false,
+      allowsMultipleAnswers: false,
+      allowsRevoting: true,
+      creatorTelegramUserId: OWNER_ID,
+    });
+    await polls.create({
+      telegramChatId: CHAT_ID + 1n,
+      telegramTopicId: 1n,
+      question: "Другой чат?",
       options: [
         { text: "Да", notificationEnabled: true },
         { text: "Нет", notificationEnabled: true },
@@ -445,40 +487,16 @@ describe("information-card PostgreSQL schema", () => {
       creatorTelegramUserId: OWNER_ID,
     });
 
-    const archived = await polls.archive(poll.id, new Date("2026-08-11T11:00:00.000Z"));
-    const cancelled = await polls.markPublicationCancelled(poll.id, new Date("2026-08-11T11:00:01.000Z"));
+    const archivedFirst = await polls.archive(first.id, new Date("2026-08-11T11:00:00.000Z"));
+    const archivedSecond = await polls.archive(second.id, new Date("2026-08-11T12:00:00.000Z"));
 
-    expect(archived.archivedAt).toEqual(new Date("2026-08-11T11:00:00.000Z"));
-    expect(cancelled.publicationState).toBe("cancelled");
-    expect(await polls.listByChat(CHAT_ID)).not.toContainEqual(expect.objectContaining({ id: poll.id }));
-  });
+    expect(archivedFirst.archivedAt).toEqual(new Date("2026-08-11T11:00:00.000Z"));
+    expect((await polls.listByChat(CHAT_ID)).map((poll) => poll.id)).toEqual([active.id]);
+    expect((await polls.listByChat(CHAT_ID, { archived: true })).map((poll) => poll.id)).toEqual([archivedSecond.id, archivedFirst.id]);
+    await expect(polls.deleteArchived(active.id)).rejects.toThrow("Only an archived poll");
 
-  it("allows a failed poll to begin one manual publication attempt", async () => {
-    const polls = new TelegramPollsRepository(database.db);
-    const poll = await polls.create({
-      telegramChatId: CHAT_ID,
-      telegramTopicId: 1n,
-      question: "Повторить отправку?",
-      options: [
-        { text: "Да", notificationEnabled: true },
-        { text: "Нет", notificationEnabled: true },
-      ],
-      notificationThreshold: 10,
-      isAnonymous: false,
-      allowsMultipleAnswers: false,
-      allowsRevoting: true,
-      creatorTelegramUserId: OWNER_ID,
-    });
-
-    const failed = await polls.markPublicationFailed(poll.id, "Telegram rejected the poll");
-    const retrying = await polls.beginPublicationAttempt(poll.id);
-    const published = await polls.markPublished(poll.id, "telegram-poll-retry", 303n, [
-      { text: "Да", voterCount: 0 },
-      { text: "Нет", voterCount: 0 },
-    ]);
-
-    expect(failed.publicationState).toBe("failed");
-    expect(retrying).toMatchObject({ publicationState: "pending", publicationAttemptedAt: null, lastError: null });
-    expect(published).toMatchObject({ publicationState: "published", telegramMessageId: 303n });
+    await expect(polls.deleteArchived(archivedSecond.id)).resolves.toBe(true);
+    await expect(polls.getById(archivedSecond.id)).rejects.toThrow("was not found");
+    expect((await polls.listByChat(CHAT_ID, { archived: true })).map((poll) => poll.id)).toEqual([archivedFirst.id]);
   });
 });

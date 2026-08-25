@@ -6,7 +6,6 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type RepublishOwnerMatchHeaders = {
-'If-Match': string;
-'Idempotency-Key': string;
+export type ListOwnerPollsParams = {
+archived?: boolean;
 };

@@ -33,6 +33,7 @@ import {
   type MatchListQueryDto,
   type PatchMatchDto,
   type PollCreateDto,
+  type PollListQueryDto,
   type PollNotificationSettingsUpdateDto,
   type VenueCreateDto,
   type VenueUpdateDto,
@@ -161,10 +162,10 @@ export class OwnerRestService {
     }
   }
 
-  public async listPolls(ownerTelegramUserId: bigint): Promise<Record<string, unknown>> {
+  public async listPolls(ownerTelegramUserId: bigint, query: PollListQueryDto): Promise<Record<string, unknown>> {
     this.assertOwner(ownerTelegramUserId);
     try {
-      const polls = await new TelegramPollsRepository(this.db).listByChat(this.config.telegramGroupChatId);
+      const polls = await new TelegramPollsRepository(this.db).listByChat(this.config.telegramGroupChatId, { archived: query.archived === true });
       return serializeRestObject({ polls: polls.map((poll) => this.pollBody(poll)) });
     } catch (error) {
       throw toRestHttpException(error);
@@ -267,6 +268,26 @@ export class OwnerRestService {
     });
     if (archivedPollId !== undefined) await this.pollPublication.deleteArchived(archivedPollId);
     return body;
+  }
+
+  public async deleteArchivedPoll(
+    ownerTelegramUserId: bigint,
+    idempotencyKey: string | undefined,
+    pollId: bigint,
+  ): Promise<Record<string, unknown>> {
+    this.assertOwner(ownerTelegramUserId);
+    return this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "delete-archived-poll", pollId }, 200, async (repositories) => {
+      try {
+        const current = await repositories.polls.getByIdForUpdate(pollId);
+        if (current.telegramChatId !== this.config.telegramGroupChatId) {
+          throw toRestHttpException(restRequestError(404, "RESOURCE_NOT_FOUND", "The requested resource was not found."));
+        }
+        await repositories.polls.deleteArchived(pollId);
+        return serializeRestObject({ deleted: true, pollId });
+      } catch (error) {
+        throw toRestHttpException(error);
+      }
+    });
   }
 
   public async createMatch(

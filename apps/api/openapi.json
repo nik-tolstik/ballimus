@@ -370,62 +370,19 @@
         ]
       }
     },
-    "/v1/matches/{id}/republish": {
-      "post": {
-        "operationId": "republishOwnerMatch",
-        "parameters": [
-          {
-            "name": "If-Match",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MatchEnvelopeResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Republish an information card",
-        "tags": [
-          "matches"
-        ]
-      }
-    },
     "/v1/polls": {
       "get": {
         "operationId": "listOwnerPolls",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "archived",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -443,7 +400,7 @@
             "telegramMiniApp": []
           }
         ],
-        "summary": "List native Telegram polls",
+        "summary": "List active or archived native Telegram polls",
         "tags": [
           "polls"
         ]
@@ -547,50 +504,6 @@
         ]
       }
     },
-    "/v1/polls/{id}/republish": {
-      "post": {
-        "operationId": "republishOwnerPoll",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PollEnvelopeResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "telegramMiniApp": []
-          }
-        ],
-        "summary": "Make one new attempt to publish a native Telegram poll",
-        "tags": [
-          "polls"
-        ]
-      }
-    },
     "/v1/polls/{id}/archive": {
       "post": {
         "operationId": "archiveOwnerPoll",
@@ -630,6 +543,48 @@
           }
         ],
         "summary": "Archive a poll and delete its Telegram message",
+        "tags": [
+          "polls"
+        ]
+      },
+      "delete": {
+        "operationId": "deleteArchivedOwnerPoll",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchivedPollDeletionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "Permanently delete an archived native Telegram poll",
         "tags": [
           "polls"
         ]
@@ -1439,6 +1394,23 @@
         },
         "required": [
           "options"
+        ]
+      },
+      "ArchivedPollDeletionResponseDto": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "boolean",
+            "example": true
+          },
+          "pollId": {
+            "type": "string",
+            "example": "42"
+          }
+        },
+        "required": [
+          "deleted",
+          "pollId"
         ]
       },
       "WeatherCurrentResponseDto": {

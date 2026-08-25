@@ -25,23 +25,21 @@ const poll = {
   createdAt: '2026-08-11T12:00:00.000Z', updatedAt: '2026-08-11T12:00:00.000Z',
 }
 
-async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boolean; readonly existingPollOptions?: typeof poll.options; readonly failedPoll?: boolean; readonly uncertainPoll?: boolean } = {}): Promise<{ readonly weatherRequests: string[]; readonly republishRequests: string[]; readonly republishPollRequests: string[]; readonly pollRequests: unknown[]; readonly notificationSettingsRequests: unknown[]; readonly archivePollRequests: string[]; readonly deleteVenueRequests: string[]; readonly deleteMatchRequests: string[]; readonly archiveMatchRequests: string[]; readonly deleteArchivedMatchRequests: string[]; readonly createMatchRequests: unknown[] }> {
+async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boolean; readonly existingPollOptions?: typeof poll.options; readonly failedPoll?: boolean; readonly uncertainPoll?: boolean } = {}): Promise<{ readonly weatherRequests: string[]; readonly pollRequests: unknown[]; readonly notificationSettingsRequests: unknown[]; readonly archivePollRequests: string[]; readonly deleteArchivedPollRequests: string[]; readonly deleteVenueRequests: string[]; readonly archiveMatchRequests: string[]; readonly deleteArchivedMatchRequests: string[]; readonly createMatchRequests: unknown[] }> {
   const weatherRequests: string[] = []
-  const republishRequests: string[] = []
-  const republishPollRequests: string[] = []
   const pollRequests: unknown[] = []
   const notificationSettingsRequests: unknown[] = []
   const archivePollRequests: string[] = []
+  const deleteArchivedPollRequests: string[] = []
   const deleteVenueRequests: string[] = []
   let venueDeleted = false
-  const deleteMatchRequests: string[] = []
   const archiveMatchRequests: string[] = []
   const deleteArchivedMatchRequests: string[] = []
   const createMatchRequests: unknown[] = []
   let pollListRequests = 0
   let pollArchived = false
-  let pollRepublished = false
-  let matchDeleted = false
+  let archivedPollDeleted = false
+  let activeArchivedPollDeleted = false
   let matchArchived = false
   let archivedMatchDeleted = false
   const archivedMatch = {
@@ -52,6 +50,13 @@ async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boole
     fieldPriceRubles: 75,
     archivedAt: '2026-08-14T12:00:00.000Z',
     publicCard: { ...match.publicCard, publicationState: 'deleted' },
+  }
+  const archivedPoll = {
+    ...poll,
+    id: '4',
+    question: 'Архивный опрос?',
+    archivedAt: '2026-08-14T12:00:00.000Z',
+    publicationState: 'cancelled',
   }
   const existingPoll = { ...poll, options: options.existingPollOptions ?? poll.options }
   let notificationEnabled = existingPoll.options.map((option) => option.notificationEnabled)
@@ -67,7 +72,7 @@ async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boole
     if (request.method() === 'GET' && pathname === '/v1/matches') {
       if (new URL(request.url()).searchParams.get('archived') === 'true') return json({ matches: archivedMatchDeleted ? [] : [archivedMatch, ...(matchArchived ? [{ ...match, archivedAt: '2026-08-15T12:00:00.000Z', version: 2, publicCard: { ...match.publicCard, publicationState: 'deleted' } }] : [])] })
       return json({ matches: [
-        ...(matchArchived || matchDeleted ? [] : [match]),
+        ...(matchArchived ? [] : [match]),
         { ...match, id: '2', schedule: { ...match.schedule, time: '21:00' }, venue: { ...venue, id: '2', name: 'BOX365 Второй' }, fieldPriceRubles: 121, publicCard: { ...match.publicCard, publicationState: 'published' } },
         { ...match, id: '3', schedule: { ...match.schedule, time: '22:00' }, venue: { ...venue, id: '3', name: 'BOX365 Третий' }, fieldPriceRubles: 122, publicCard: { ...match.publicCard, publicationState: 'failed', lastError: 'Telegram unavailable' } },
       ] })
@@ -76,12 +81,18 @@ async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boole
     if (request.method() === 'GET' && pathname === '/v1/polls') {
       pollListRequests += 1
       const notificationPoll = { ...existingPoll, options: existingPoll.options.map((option, index) => ({ ...option, notificationEnabled: notificationEnabled[index] ?? option.notificationEnabled })) }
-      const publicationPoll = options.failedPoll === true && !pollRepublished
+      const publicationPoll = options.failedPoll === true
         ? { ...notificationPoll, publicationState: 'failed', lastError: 'Telegram rejected the poll' }
-        : options.uncertainPoll === true && !pollRepublished
+        : options.uncertainPoll === true
           ? { ...notificationPoll, publicationState: 'uncertain', lastError: 'Telegram did not confirm the poll' }
           : notificationPoll
       const currentPoll = pollListRequests < 2 || options.failedPoll === true || options.uncertainPoll === true ? publicationPoll : { ...publicationPoll, options: publicationPoll.options.map((option, index) => index === 0 ? { ...option, voterCount: 1 } : option) }
+      if (new URL(request.url()).searchParams.get('archived') === 'true') {
+        return json({ polls: [
+          ...(archivedPollDeleted ? [] : [archivedPoll]),
+          ...(pollArchived && !activeArchivedPollDeleted ? [{ ...publicationPoll, archivedAt: '2026-08-15T12:00:00.000Z', publicationState: 'cancelled' }] : []),
+        ] })
+      }
       return json({ polls: options.existingPoll === true && !pollArchived ? [currentPoll] : [] })
     }
     if (request.method() === 'POST' && pathname === '/v1/polls') {
@@ -89,7 +100,6 @@ async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boole
       pollRequests.push(body)
       return json({ poll: { id: '1', ...body, publicationState: 'published', closedAt: null, archivedAt: null, lastError: null, createdAt: '2026-08-11T12:00:00.000Z', updatedAt: '2026-08-11T12:00:00.000Z' } })
     }
-    if (request.method() === 'POST' && pathname === '/v1/polls/1/republish') { republishPollRequests.push(pathname); pollRepublished = true; return json({ poll: { ...poll, publicationState: 'published' } }) }
     if (request.method() === 'PATCH' && pathname === '/v1/polls/1/notification-settings') {
       const body = request.postDataJSON() as { options: { notificationEnabled: boolean }[] }
       notificationSettingsRequests.push(body)
@@ -97,16 +107,16 @@ async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boole
       return json({ poll: { ...existingPoll, options: existingPoll.options.map((option, index) => ({ ...option, notificationEnabled: notificationEnabled[index] ?? option.notificationEnabled })) } })
     }
     if (request.method() === 'POST' && pathname === '/v1/polls/1/archive') { archivePollRequests.push(pathname); pollArchived = true; return json({ poll: { ...poll, archivedAt: '2026-08-11T12:30:00.000Z' } }) }
+    if (request.method() === 'DELETE' && pathname === '/v1/polls/1/archive') { deleteArchivedPollRequests.push(pathname); activeArchivedPollDeleted = true; return json({ deleted: true, pollId: '1' }) }
+    if (request.method() === 'DELETE' && pathname === '/v1/polls/4/archive') { deleteArchivedPollRequests.push(pathname); archivedPollDeleted = true; return json({ deleted: true, pollId: '4' }) }
     if (request.method() === 'POST' && pathname === '/v1/weather/current') { weatherRequests.push(pathname); return json({ sent: true, observedAt: '2026-08-10T12:00' }) }
     if (request.method() === 'DELETE' && pathname === '/v1/venues/1') { deleteVenueRequests.push(pathname); venueDeleted = true; return json({ deleted: true, venueId: '1' }) }
     if (request.method() === 'POST' && pathname === '/v1/matches') { const body = request.postDataJSON(); createMatchRequests.push(body); return json({ match: { ...match, ...body, id: '5', archivedAt: null, schedule: { date: (body as { date: string }).date, time: (body as { time: string }).time, timezone: 'Europe/Minsk' } } }) }
-    if (request.method() === 'POST' && pathname === '/v1/matches/1/republish') { republishRequests.push(pathname); return json({ match: { ...match, version: 2 } }) }
-    if (request.method() === 'DELETE' && pathname === '/v1/matches/1') { deleteMatchRequests.push(pathname); matchDeleted = true; return json({ deleted: true, matchId: '1' }) }
     if (request.method() === 'POST' && pathname === '/v1/matches/1/archive') { archiveMatchRequests.push(pathname); matchArchived = true; return json({ match: { ...match, archivedAt: '2026-08-15T12:00:00.000Z', version: 2, publicCard: { ...match.publicCard, publicationState: 'deleted' } } }) }
     if (request.method() === 'DELETE' && pathname === '/v1/matches/4/archive') { deleteArchivedMatchRequests.push(pathname); archivedMatchDeleted = true; return json({ deleted: true, matchId: '4' }) }
     return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ code: 'NOT_FOUND' }) })
   })
-  return { weatherRequests, republishRequests, republishPollRequests, pollRequests, notificationSettingsRequests, archivePollRequests, deleteVenueRequests, deleteMatchRequests, archiveMatchRequests, deleteArchivedMatchRequests, createMatchRequests }
+  return { weatherRequests, pollRequests, notificationSettingsRequests, archivePollRequests, deleteArchivedPollRequests, deleteVenueRequests, archiveMatchRequests, deleteArchivedMatchRequests, createMatchRequests }
 }
 
 async function faviconCornerAlpha(page: Page): Promise<number> {
@@ -153,17 +163,9 @@ test('shows static information cards without roster or voting controls', async (
   await expect(page.getByRole('button', { name: 'Удалить', exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: 'Действия матча', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Действия с матчем', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Переопубликовать матч', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Удалить', exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Удалить', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Удалить матч?', exact: true })).toBeVisible()
-  await expect(page.getByText('Среда, 12 августа · 20:00-21:30 будет удалён из Telegram.', { exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Отмена', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Удалить матч?', exact: true })).toHaveCount(0)
-  await expect(page.getByRole('heading', { name: 'Действия с матчем', exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Переопубликовать матч', exact: true }).click()
-  await expect.poll(() => mocked.republishRequests).toEqual(['/v1/matches/1/republish'])
-  await expect(page.getByRole('heading', { name: 'Действия с матчем', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'В архив', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Переопубликовать матч', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Удалить', exact: true })).toHaveCount(0)
   await expect(page.getByText(/Игроки|Голосования|Состав/u)).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Игроки', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'История', exact: true })).toHaveCount(0)
@@ -392,19 +394,24 @@ test('creates a native poll with an option threshold notification', async ({ pag
   await expect(page.getByText('Опрос отправлен в Telegram.', { exact: true })).toBeVisible()
 })
 
-test('opens a poll, refreshes Telegram vote counts, and archives it', async ({ page }) => {
+test('uses save and options to archive an active poll', async ({ page }) => {
   const mocked = await mockOwnerApp(page, { existingPoll: true })
   await page.goto('/')
 
   await page.getByRole('button', { name: 'Опросы', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Опросы', exact: true })).toBeVisible()
   await page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Оповещения', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Редактировать оповещения', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Опрос', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Сохранить', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Действия опроса', exact: true })).toBeVisible()
   await expect(page.getByText('Неанонимное голосование', { exact: true })).toBeVisible()
   await expect(page.getByText('Голос можно отменять', { exact: true })).toBeVisible()
   await expect(page.getByText('Оповестить о количестве', { exact: true })).toBeVisible()
   await expect(page.getByLabel('1 голосов', { exact: true })).toBeVisible({ timeout: 5_000 })
+  await page.getByRole('button', { name: 'Действия опроса', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Действия с опросом', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Удалить', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Переопубликовать', exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: 'В архив', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Переместить опрос в архив?', exact: true })).toBeVisible()
   await expect(page.getByText(`«${poll.question}» будет удалён из Telegram.`, { exact: true })).toBeVisible()
@@ -413,6 +420,16 @@ test('opens a poll, refreshes Telegram vote counts, and archives it', async ({ p
   await expect(page.getByRole('heading', { name: 'Опрос', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true })).toHaveCount(0)
   await expect(page.getByText('Опрос перемещён в архив.', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Архив опросов', exact: true }).click()
+  await expect(page.getByRole('button', { name: `Открыть архивный опрос ${poll.question}`, exact: true })).toBeVisible()
+  await page.getByRole('button', { name: `Открыть архивный опрос ${poll.question}`, exact: true }).click()
+  await page.getByRole('button', { name: 'Удалить', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Удалить опрос навсегда?', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Удалить', exact: true }).click()
+  await expect.poll(() => mocked.deleteArchivedPollRequests).toEqual(['/v1/polls/1/archive'])
+  await expect(page.getByRole('heading', { name: 'Архивный опрос', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: `Открыть архивный опрос ${poll.question}`, exact: true })).toHaveCount(0)
+  await expect(page.getByText('Архивный опрос удалён.', { exact: true })).toBeVisible()
 })
 
 test('edits only existing poll option notification toggles', async ({ page }) => {
@@ -421,14 +438,12 @@ test('edits only existing poll option notification toggles', async ({ page }) =>
 
   await page.getByRole('button', { name: 'Опросы', exact: true }).click()
   await page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Оповещения', exact: true })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Опрос', exact: true })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Редактировать оповещения', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Опрос', exact: true })).toBeVisible()
   const firstBell = page.getByRole('button', { name: 'Оповещение для варианта 1', exact: true })
   const secondBell = page.getByRole('button', { name: 'Оповещение для варианта 2', exact: true })
   await expect(firstBell).toHaveAttribute('aria-pressed', 'true')
   await expect(secondBell).toHaveAttribute('aria-pressed', 'false')
-  const notificationSheet = page.getByRole('heading', { name: 'Оповещения', exact: true }).locator('xpath=ancestor::div[@data-slot="sheet-content"]')
+  const notificationSheet = page.getByRole('heading', { name: 'Опрос', exact: true }).locator('xpath=ancestor::div[@data-slot="sheet-content"]')
   await expect(notificationSheet.getByRole('textbox')).toHaveCount(0)
   await firstBell.click()
   await secondBell.click()
@@ -438,7 +453,7 @@ test('edits only existing poll option notification toggles', async ({ page }) =>
     options: [{ notificationEnabled: false }, { notificationEnabled: true }],
   }])
   await expect(page.getByText('Оповещения обновлены.', { exact: true })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Оповещения', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Опрос', exact: true })).toHaveCount(0)
 })
 
 test('keeps poll notification editing visible above long poll details', async ({ page }) => {
@@ -455,11 +470,11 @@ test('keeps poll notification editing visible above long poll details', async ({
 
   await page.getByRole('button', { name: 'Опросы', exact: true }).click()
   await page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Оповещения', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Опрос', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Оповещение для варианта 12', exact: true })).toBeVisible()
 })
 
-test('cancels direct poll notification editing without saving', async ({ page }) => {
+test('dismisses poll notification editing without saving', async ({ page }) => {
   const mocked = await mockOwnerApp(page, { existingPoll: true })
   await page.goto('/')
 
@@ -468,60 +483,73 @@ test('cancels direct poll notification editing without saving', async ({ page })
   const firstBell = page.getByRole('button', { name: 'Оповещение для варианта 1', exact: true })
   await firstBell.click()
   await expect(firstBell).toHaveAttribute('aria-pressed', 'false')
-  await page.getByRole('button', { name: 'Отмена', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Оповещения', exact: true })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('heading', { name: 'Опрос', exact: true })).toHaveCount(0)
   await expect.poll(() => mocked.notificationSettingsRequests).toEqual([])
 
   await page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true }).click()
   await expect(page.getByRole('button', { name: 'Оповещение для варианта 1', exact: true })).toHaveAttribute('aria-pressed', 'true')
 })
 
-test('manually republishes a poll after a failed first attempt', async ({ page }) => {
-  const mocked = await mockOwnerApp(page, { existingPoll: true, failedPoll: true })
+test('does not offer republishing for failed or uncertain polls', async ({ page }) => {
+  await mockOwnerApp(page, { existingPoll: true, failedPoll: true })
   await page.goto('/')
 
   await page.getByRole('button', { name: 'Опросы', exact: true }).click()
   await expect(page.getByText('Не опубликован', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true }).click()
   await expect(page.getByText('Опрос не опубликован', { exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Переопубликовать', exact: true }).click()
-
-  await expect.poll(() => mocked.republishPollRequests).toEqual(['/v1/polls/1/republish'])
-  await expect(page.getByText('Опрос опубликован в Telegram.', { exact: true })).toBeVisible()
-  await expect(page.getByText('Опрос не опубликован', { exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Переопубликовать', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Действия опроса', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'В архив', exact: true })).toBeVisible()
 })
 
-test('deletes an active match after its in-app confirmation', async ({ page }) => {
-  const mocked = await mockOwnerApp(page)
-  await page.goto('/')
-
-  await page.getByRole('button', { name: 'Открыть матч Среда, 12 августа · 20:00-21:30', exact: true }).click()
-  await page.getByRole('button', { name: 'Действия матча', exact: true }).click()
-  await page.getByRole('button', { name: 'Удалить', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Удалить матч?', exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Удалить', exact: true }).click()
-
-  await expect.poll(() => mocked.deleteMatchRequests).toEqual(['/v1/matches/1'])
-  await expect(page.getByRole('button', { name: 'Открыть матч Среда, 12 августа · 20:00-21:30', exact: true })).toHaveCount(0)
-})
-
-test('confirms uncertain poll republishing without a native dialog', async ({ page }) => {
-  const mocked = await mockOwnerApp(page, { existingPoll: true, uncertainPoll: true })
+test('shows uncertain poll status without a republish action', async ({ page }) => {
+  await mockOwnerApp(page, { existingPoll: true, uncertainPoll: true })
   await page.goto('/')
 
   await page.getByRole('button', { name: 'Опросы', exact: true }).click()
   await page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true }).click()
   await expect(page.getByText('Проверьте опрос в General', { exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Переопубликовать', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Переопубликовать опрос?', exact: true })).toBeVisible()
-  await expect(page.getByText('Сначала проверьте General: Telegram мог получить опрос, даже если не подтвердил отправку.', { exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Отмена', exact: true }).click()
-  await expect.poll(() => mocked.republishPollRequests).toEqual([])
-  await expect(page.getByRole('heading', { name: 'Оповещения', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Переопубликовать', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Действия опроса', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'В архив', exact: true })).toBeVisible()
+})
 
-  await page.getByRole('button', { name: 'Переопубликовать', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Переопубликовать опрос?', exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Переопубликовать', exact: true }).click()
-  await expect.poll(() => mocked.republishPollRequests).toEqual(['/v1/polls/1/republish'])
-  await expect(page.getByRole('heading', { name: 'Переопубликовать опрос?', exact: true })).toHaveCount(0)
+test('shows archived polls and permanently deletes them only from the archive', async ({ page }) => {
+  const mocked = await mockOwnerApp(page, { existingPoll: true })
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Опросы', exact: true }).click()
+  await page.getByRole('button', { name: 'Архив опросов', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Архив опросов', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Открыть архивный опрос Архивный опрос?', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Архивный опрос', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Удалить', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Удалить', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Удалить опрос навсегда?', exact: true })).toBeVisible()
+  await expect(page.getByText('«Архивный опрос?». Действие нельзя отменить.', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Удалить', exact: true }).click()
+  await expect.poll(() => mocked.deleteArchivedPollRequests).toEqual(['/v1/polls/4/archive'])
+  await expect(page.getByRole('heading', { name: 'Архивный опрос', exact: true })).toHaveCount(0)
+  await expect(page.getByText('Архивный опрос удалён.', { exact: true })).toBeVisible()
+})
+
+test('reserves space above the bottom navigation for a long poll card on Pixel 5', async ({ page }) => {
+  await mockOwnerApp(page, {
+    existingPoll: true,
+    existingPollOptions: Array.from({ length: 12 }, (_, index) => ({
+      text: `Вариант ${String(index + 1)}`,
+      notificationEnabled: false,
+      voterCount: index,
+      notificationQueuedAt: null,
+    })),
+  })
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Опросы', exact: true }).click()
+  await page.locator('main').evaluate((element) => { element.scrollTop = element.scrollHeight })
+  const cardBottom = await page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true }).evaluate((element) => element.getBoundingClientRect().bottom)
+  const navigationTop = await page.locator('nav[aria-label="Основная навигация"]').evaluate((element) => element.getBoundingClientRect().top)
+  expect(cardBottom).toBeLessThanOrEqual(navigationTop)
 })

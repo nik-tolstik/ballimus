@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, or } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, or } from "drizzle-orm";
 
 import {
   telegramPollVoterAnswers,
@@ -84,6 +84,11 @@ export interface TelegramPollWithdrawalTrigger {
 
 export interface ApplyTelegramPollVoterAnswerResult {
   readonly triggers: readonly TelegramPollWithdrawalTrigger[];
+}
+
+export interface TelegramPollListOptions {
+  readonly archived?: boolean;
+  readonly limit?: number;
 }
 
 function requirePoll(poll: TelegramPoll | undefined, reference: string): TelegramPoll {
@@ -211,16 +216,21 @@ export class TelegramPollsRepository {
     return requirePoll(rows[0], parsed.toString(10));
   }
 
-  public async listByChat(telegramChatId: DatabaseIdentifier, limit = 100): Promise<TelegramPoll[]> {
+  public async listByChat(
+    telegramChatId: DatabaseIdentifier,
+    { archived = false, limit = 100 }: TelegramPollListOptions = {},
+  ): Promise<TelegramPoll[]> {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 250) {
       throw new ValidationRepositoryError("poll list limit must be between 1 and 250");
     }
     return this.db.select().from(telegramPolls)
       .where(and(
         eq(telegramPolls.telegramChatId, nonZero(telegramChatId, "telegramChatId")),
-        isNull(telegramPolls.archivedAt),
+        archived ? isNotNull(telegramPolls.archivedAt) : isNull(telegramPolls.archivedAt),
       ))
-      .orderBy(desc(telegramPolls.createdAt), desc(telegramPolls.id))
+      .orderBy(
+        ...(archived ? [desc(telegramPolls.archivedAt), desc(telegramPolls.id)] : [desc(telegramPolls.createdAt), desc(telegramPolls.id)]),
+      )
       .limit(limit);
   }
 
@@ -336,6 +346,17 @@ export class TelegramPollsRepository {
     const archived = requirePoll(rows[0], parsedId.toString(10));
     await this.db.delete(telegramPollVoterAnswers).where(eq(telegramPollVoterAnswers.pollId, parsedId));
     return archived;
+  }
+
+  /** Permanently removes a poll only after it has been archived. */
+  public async deleteArchived(id: DatabaseIdentifier): Promise<boolean> {
+    const parsedId = positiveBigInt(id, "pollId");
+    const current = await this.getByIdForUpdate(parsedId);
+    if (current.archivedAt === null) throw new RepositoryConflictError("Only an archived poll can be permanently deleted");
+    const rows = await this.db.delete(telegramPolls)
+      .where(and(eq(telegramPolls.id, parsedId), isNotNull(telegramPolls.archivedAt)))
+      .returning({ id: telegramPolls.id });
+    return rows.length > 0;
   }
 
   public async getByTelegramPollIdForUpdate(telegramPollId: string): Promise<TelegramPoll | undefined> {
