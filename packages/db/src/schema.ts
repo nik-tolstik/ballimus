@@ -32,6 +32,9 @@ export type PollPublicationState = (typeof pollPublicationStates)[number];
 export const telegramPollVoterKinds = ["user", "chat"] as const;
 export type TelegramPollVoterKind = (typeof telegramPollVoterKinds)[number];
 
+export const telegramPollVoteEventKinds = ["voted", "changed", "cancelled"] as const;
+export type TelegramPollVoteEventKind = (typeof telegramPollVoteEventKinds)[number];
+
 export const httpIdempotencyStatuses = ["processing", "succeeded", "failed"] as const;
 export type HttpIdempotencyStatus = (typeof httpIdempotencyStatuses)[number];
 
@@ -57,6 +60,7 @@ const venueTypeSql = sqlStringList(venueTypes);
 const publicationStateSql = sqlStringList(publicationStates);
 const pollPublicationStateSql = sqlStringList(pollPublicationStates);
 const telegramPollVoterKindSql = sqlStringList(telegramPollVoterKinds);
+const telegramPollVoteEventKindSql = sqlStringList(telegramPollVoteEventKinds);
 const idempotencyStateSql = sqlStringList(httpIdempotencyStatuses);
 const outboxEventSql = sqlStringList(outboxEventTypes);
 const outboxDeliverySql = sqlStringList(outboxDeliveryStates);
@@ -265,6 +269,35 @@ export const telegramPollVoterAnswers = pgTable(
   ],
 );
 
+export const telegramPollVoteEvents = pgTable(
+  "telegram_poll_vote_events",
+  {
+    id: bigint("id", { mode: "bigint" }).generatedAlwaysAsIdentity().primaryKey(),
+    pollId: bigint("poll_id", { mode: "bigint" }).notNull().references(() => telegramPolls.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    kind: text("kind", { enum: telegramPollVoteEventKinds }).notNull(),
+    voterKind: text("voter_kind", { enum: telegramPollVoterKinds }).notNull(),
+    telegramVoterId: bigint("telegram_voter_id", { mode: "bigint" }).notNull(),
+    username: text("username"),
+    displayName: text("display_name").notNull(),
+    previousSelectedOptionIndexes: jsonb("previous_selected_option_indexes").$type<number[]>().notNull().default(sql`'[]'::jsonb`),
+    selectedOptionIndexes: jsonb("selected_option_indexes").$type<number[]>().notNull().default(sql`'[]'::jsonb`),
+    telegramUpdateId: bigint("telegram_update_id", { mode: "bigint" }).notNull(),
+    occurredAt: createdAt(),
+  },
+  (table) => [
+    check("telegram_poll_vote_events_kind_valid", sql`${table.kind} in (${telegramPollVoteEventKindSql})`),
+    check("telegram_poll_vote_events_voter_kind_valid", sql`${table.voterKind} in (${telegramPollVoterKindSql})`),
+    check("telegram_poll_vote_events_voter_id_non_zero", sql`${table.telegramVoterId} <> 0`),
+    check("telegram_poll_vote_events_username_valid", sql`${table.username} is null or length(trim(${table.username})) between 1 and 255`),
+    check("telegram_poll_vote_events_display_name_valid", sql`length(trim(${table.displayName})) between 1 and 255`),
+    check("telegram_poll_vote_events_previous_options_valid", sql`jsonb_typeof(${table.previousSelectedOptionIndexes}) = 'array'`),
+    check("telegram_poll_vote_events_options_valid", sql`jsonb_typeof(${table.selectedOptionIndexes}) = 'array'`),
+    check("telegram_poll_vote_events_update_id_non_negative", sql`${table.telegramUpdateId} >= 0`),
+    unique("telegram_poll_vote_events_update_unique").on(table.pollId, table.voterKind, table.telegramVoterId, table.telegramUpdateId),
+    index("telegram_poll_vote_events_poll_id_idx").on(table.pollId, table.id),
+  ],
+);
+
 export const outbox = pgTable(
   "outbox",
   {
@@ -344,6 +377,8 @@ export type TelegramPoll = typeof telegramPolls.$inferSelect;
 export type NewTelegramPoll = typeof telegramPolls.$inferInsert;
 export type TelegramPollVoterAnswer = typeof telegramPollVoterAnswers.$inferSelect;
 export type NewTelegramPollVoterAnswer = typeof telegramPollVoterAnswers.$inferInsert;
+export type TelegramPollVoteEvent = typeof telegramPollVoteEvents.$inferSelect;
+export type NewTelegramPollVoteEvent = typeof telegramPollVoteEvents.$inferInsert;
 
-export const schema = { venues, matches, matchMessages, telegramPolls, telegramPollVoterAnswers, httpIdempotencyKeys, outbox, jobClaims };
+export const schema = { venues, matches, matchMessages, telegramPolls, telegramPollVoterAnswers, telegramPollVoteEvents, httpIdempotencyKeys, outbox, jobClaims };
 export type DatabaseSchema = typeof schema;

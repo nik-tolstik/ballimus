@@ -1,10 +1,13 @@
-import { and, desc, eq, isNotNull, isNull, or } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, lt, or } from "drizzle-orm";
 
 import {
+  telegramPollVoteEvents,
   telegramPollVoterAnswers,
   telegramPolls,
   type TelegramPoll,
   type TelegramPollOptionState,
+  type TelegramPollVoteEvent,
+  type TelegramPollVoteEventKind,
   type TelegramPollVoterAnswer,
   type TelegramPollVoterKind,
 } from "../schema.js";
@@ -91,6 +94,11 @@ export interface TelegramPollListOptions {
   readonly limit?: number;
 }
 
+export interface TelegramPollVoteHistoryOptions {
+  readonly beforeId?: DatabaseIdentifier;
+  readonly limit?: number;
+}
+
 function requirePoll(poll: TelegramPoll | undefined, reference: string): TelegramPoll {
   if (poll === undefined) throw new NotFoundRepositoryError(`Telegram poll ${reference} was not found`);
   return poll;
@@ -162,6 +170,20 @@ function selectedOptionIndexes(values: readonly number[], optionCount: number): 
     unique.add(value);
   }
   return [...unique].sort((left, right) => left - right);
+}
+
+function sameSelectedOptionIndexes(left: readonly number[], right: readonly number[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function voteEventKind(
+  previousIndexes: readonly number[],
+  nextIndexes: readonly number[],
+): TelegramPollVoteEventKind | undefined {
+  if (sameSelectedOptionIndexes(previousIndexes, nextIndexes)) return undefined;
+  if (previousIndexes.length === 0) return "voted";
+  if (nextIndexes.length === 0) return "cancelled";
+  return "changed";
 }
 
 function voterCounts(optionCount: number, answers: readonly (readonly number[])[]): number[] {
@@ -405,6 +427,24 @@ export class TelegramPollsRepository {
     return rows[0];
   }
 
+  public async listVoteHistory(
+    pollId: DatabaseIdentifier,
+    { beforeId, limit = 50 }: TelegramPollVoteHistoryOptions = {},
+  ): Promise<TelegramPollVoteEvent[]> {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 250) {
+      throw new ValidationRepositoryError("vote history limit must be between 1 and 250");
+    }
+    const parsedPollId = positiveBigInt(pollId, "pollId");
+    const cursor = beforeId === undefined ? undefined : positiveBigInt(beforeId, "beforeId");
+    return this.db.select().from(telegramPollVoteEvents)
+      .where(and(
+        eq(telegramPollVoteEvents.pollId, parsedPollId),
+        ...(cursor === undefined ? [] : [lt(telegramPollVoteEvents.id, cursor)]),
+      ))
+      .orderBy(desc(telegramPollVoteEvents.id))
+      .limit(limit);
+  }
+
   public async applyTelegramUpdate(
     poll: TelegramPoll,
     options: readonly TelegramPollUpdateOptionInput[],
@@ -446,6 +486,7 @@ export class TelegramPollsRepository {
 
     const beforeCounts = voterCounts(poll.options.length, answers.map((answer) => answer.selectedOptionIndexes));
     const previousIndexes = current?.selectedOptionIndexes ?? [];
+    const eventKind = voteEventKind(previousIndexes, nextIndexes);
     const afterCounts = [...beforeCounts];
     for (const index of previousIndexes) afterCounts[index] = Math.max(0, (afterCounts[index] ?? 0) - 1);
     for (const index of nextIndexes) afterCounts[index] = (afterCounts[index] ?? 0) + 1;
@@ -502,6 +543,20 @@ export class TelegramPollsRepository {
         eq(telegramPollVoterAnswers.voterKind, input.voterKind),
         eq(telegramPollVoterAnswers.telegramVoterId, telegramVoterId),
       ));
+    }
+    if (eventKind !== undefined) {
+      await this.db.insert(telegramPollVoteEvents).values({
+        pollId: poll.id,
+        kind: eventKind,
+        voterKind: input.voterKind,
+        telegramVoterId,
+        username,
+        displayName,
+        previousSelectedOptionIndexes: previousIndexes,
+        selectedOptionIndexes: nextIndexes,
+        telegramUpdateId,
+        occurredAt: now,
+      });
     }
     return { triggers };
   }

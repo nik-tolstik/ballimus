@@ -8,7 +8,7 @@ import {
   TelegramPollsRepository,
   VenuesRepository,
 } from "./index.js";
-import { telegramPollVoterAnswers } from "./schema.js";
+import { telegramPollVoteEvents, telegramPollVoterAnswers } from "./schema.js";
 import {
   createPostgresTestDatabase,
   resetPostgresTestDatabase,
@@ -47,6 +47,7 @@ describe("information-card PostgreSQL schema", () => {
       "match_messages",
       "matches",
       "outbox",
+      "telegram_poll_vote_events",
       "telegram_poll_voter_answers",
       "telegram_polls",
       "venues",
@@ -372,7 +373,7 @@ describe("information-card PostgreSQL schema", () => {
     ]);
   });
 
-  it("emits a withdrawal alert on each distinct downward threshold crossing", async () => {
+  it("records each applied vote transition and retains it after archival", async () => {
     const polls = new TelegramPollsRepository(database.db);
     const poll = await polls.create({
       telegramChatId: CHAT_ID,
@@ -407,6 +408,72 @@ describe("information-card PostgreSQL schema", () => {
       });
     });
 
+    expect((await applyAnswer(100n, [0])).triggers).toEqual([]);
+    expect((await applyAnswer(101n, [1])).triggers).toEqual([{
+      optionIndex: 0,
+      optionText: "Буду",
+      threshold: 1,
+      voterCount: 0,
+      username: "player_one",
+      displayName: "Player One",
+      voterKind: "user",
+      telegramVoterId: 800_001n,
+    }]);
+    expect((await applyAnswer(102n, [])).triggers).toEqual([]);
+    expect((await applyAnswer(102n, [])).triggers).toEqual([]);
+    expect((await applyAnswer(99n, [0])).triggers).toEqual([]);
+
+    expect(await polls.listVoteHistory(poll.id, { limit: 10 })).toMatchObject([
+      { kind: "cancelled", previousSelectedOptionIndexes: [1], selectedOptionIndexes: [], telegramUpdateId: 102n },
+      { kind: "changed", previousSelectedOptionIndexes: [0], selectedOptionIndexes: [1], telegramUpdateId: 101n },
+      { kind: "voted", previousSelectedOptionIndexes: [], selectedOptionIndexes: [0], telegramUpdateId: 100n },
+    ]);
+
+    await polls.archive(poll.id);
+    const retainedAnswers = await database.db.select().from(telegramPollVoterAnswers)
+      .where(eq(telegramPollVoterAnswers.pollId, poll.id));
+    expect(retainedAnswers).toEqual([]);
+    expect(await polls.listVoteHistory(poll.id, { limit: 10 })).toHaveLength(3);
+
+    await polls.deleteArchived(poll.id);
+    const retainedEvents = await database.db.select().from(telegramPollVoteEvents)
+      .where(eq(telegramPollVoteEvents.pollId, poll.id));
+    expect(retainedEvents).toEqual([]);
+  });
+
+  it("emits a withdrawal alert on each distinct downward threshold crossing", async () => {
+    const polls = new TelegramPollsRepository(database.db);
+    const poll = await polls.create({
+      telegramChatId: CHAT_ID,
+      telegramTopicId: 2n,
+      question: "Кто играет?",
+      options: [
+        { text: "Буду", notificationEnabled: true },
+        { text: "Не буду", notificationEnabled: false },
+      ],
+      notificationThreshold: 1,
+      isAnonymous: false,
+      allowsMultipleAnswers: false,
+      allowsRevoting: true,
+      creatorTelegramUserId: OWNER_ID,
+    });
+    await polls.markPublished(poll.id, "telegram-poll-withdrawal", 203n, [
+      { text: "Буду", voterCount: 0 },
+      { text: "Не буду", voterCount: 0 },
+    ]);
+    const applyAnswer = async (telegramUpdateId: bigint, selectedOptionIndexes: readonly number[]) => database.db.transaction(async (tx) => {
+      const repository = new TelegramPollsRepository(tx);
+      const current = await repository.getByTelegramPollIdForUpdate("telegram-poll-withdrawal");
+      if (current === undefined) throw new Error("Published poll was not found");
+      return repository.applyTelegramVoterAnswer(current, {
+        telegramUpdateId,
+        voterKind: "user",
+        telegramVoterId: 800_001n,
+        username: "player_one",
+        displayName: "Player One",
+        selectedOptionIndexes,
+      });
+    });
     expect((await applyAnswer(100n, [0])).triggers).toEqual([]);
     expect((await applyAnswer(101n, [])).triggers).toEqual([{
       optionIndex: 0,

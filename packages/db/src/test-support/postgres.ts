@@ -16,6 +16,7 @@ const applicationName = "football-bot-postgres-integration-tests";
 const applicationTables = [
   "matches",
   "match_messages",
+  "telegram_poll_vote_events",
   "telegram_poll_voter_answers",
   "telegram_polls",
   "http_idempotency_keys",
