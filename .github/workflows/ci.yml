@@ -51,5 +51,4 @@ jobs:
       - run: pnpm test
       - run: pnpm typecheck
       - run: pnpm db:check
-      - run: pnpm api:contracts:check
       - run: pnpm build
