@@ -40,7 +40,6 @@ The optional `pnpm dev -- --set-menu-button` command sets the menu button for th
 pnpm lint
 pnpm typecheck
 pnpm test
-pnpm api:contracts:check
 pnpm test:e2e
 pnpm db:cleanup-legacy-cards
 ```

@@ -10,7 +10,6 @@ The full repository quality gate is:
 pnpm lint
 pnpm typecheck
 pnpm test
-pnpm api:contracts:check
 pnpm build
 pnpm test:e2e
 ```

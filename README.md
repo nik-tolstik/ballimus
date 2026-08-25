@@ -34,7 +34,6 @@ pnpm lint
 pnpm test
 pnpm typecheck
 pnpm build
-pnpm api:contracts:check
 ```
 
 Use the API, web, PostgreSQL, Telegram Mini App, and jobs commands in the [development guide](docs/development.md) for the maintained platform.
