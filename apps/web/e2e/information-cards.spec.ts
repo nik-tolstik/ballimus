@@ -162,6 +162,9 @@ test('shows static information cards without roster or voting controls', async (
   await expect(page).toHaveTitle('Ballimus Dev')
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', /^data:image\/png;base64,/u)
   await expect.poll(() => faviconCornerAlpha(page)).toBe(0)
+  await expect(page.getByRole('heading', { name: 'Опросы', exact: true })).toBeVisible()
+  await expect(page.locator('nav[aria-label="Основная навигация"] > button')).toHaveText(['Опросы', 'Матчи', 'Места'])
+  await page.getByRole('button', { name: 'Матчи', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Матчи', exact: true })).toBeVisible()
   await expect(page.getByText('Среда, 12 августа · 20:00-21:30', { exact: true })).toBeVisible()
   const mapLink = page.getByRole('link', { name: 'BOX365 Пушкинская · В помещении', exact: true })
@@ -196,6 +199,7 @@ test('archives a match, repeats it, and permanently deletes an archived record',
   const mocked = await mockOwnerApp(page)
   await page.goto('/')
 
+  await page.getByRole('button', { name: 'Матчи', exact: true }).click()
   await page.getByRole('button', { name: 'Открыть матч Среда, 12 августа · 20:00-21:30', exact: true }).click()
   await page.getByRole('button', { name: 'Действия матча', exact: true }).click()
   await expect(page.getByRole('button', { name: 'В архив', exact: true })).toBeVisible()
