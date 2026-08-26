@@ -4,8 +4,8 @@ import { BarChart3, CalendarDays, MapPinned } from 'lucide-react'
 export type Tab = 'matches' | 'polls' | 'venues'
 
 const tabs: readonly { readonly value: Tab; readonly label: string; readonly icon: typeof CalendarDays }[] = [
-  { value: 'matches', label: 'Матчи', icon: CalendarDays },
   { value: 'polls', label: 'Опросы', icon: BarChart3 },
+  { value: 'matches', label: 'Матчи', icon: CalendarDays },
   { value: 'venues', label: 'Места', icon: MapPinned },
 ]
 
