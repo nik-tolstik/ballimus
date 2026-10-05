@@ -453,6 +453,57 @@ test('uses save and options to archive an active poll', async ({ page }) => {
   await expect(page.getByText('Архивный опрос удалён.', { exact: true })).toBeVisible()
 })
 
+test('repeats an active poll and an archived poll into the creation form', async ({ page }) => {
+  const mocked = await mockOwnerApp(page, { existingPoll: true })
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Опросы', exact: true }).click()
+  await page.getByRole('button', { name: `Открыть опрос ${poll.question}`, exact: true }).click()
+  await page.getByRole('button', { name: 'Действия опроса', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Действия с опросом', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Повторить', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Новый опрос', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Действия с опросом', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Опрос', exact: true })).toHaveCount(0)
+  const creationForm = page.getByRole('form', { name: 'Форма создания опроса', exact: true })
+  await expect(creationForm.getByLabel('Вопрос', { exact: true })).toHaveValue(poll.question)
+  await expect(creationForm.getByLabel('Вариант 1', { exact: true })).toHaveValue('Буду')
+  await expect(creationForm.getByLabel('Вариант 2', { exact: true })).toHaveValue('Не буду')
+  await expect(creationForm.getByLabel('Новый вариант', { exact: true })).toBeVisible()
+  await expect(creationForm.getByRole('switch', { name: 'Оповестить о количестве', exact: true })).toBeChecked()
+  await expect(creationForm.getByLabel('Количество для оповещения', { exact: true })).toHaveValue('10')
+  await expect(creationForm.getByRole('button', { name: 'Оповещение для варианта 1', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(creationForm.getByRole('button', { name: 'Оповещение для варианта 2', exact: true })).toHaveAttribute('aria-pressed', 'false')
+  await expect(creationForm.getByRole('switch', { name: 'Несколько ответов', exact: true })).not.toBeChecked()
+  await page.getByRole('button', { name: 'Опубликовать опрос', exact: true }).click()
+  await expect.poll(() => mocked.pollRequests).toEqual([{
+    question: poll.question,
+    options: [
+      { text: 'Буду', notificationEnabled: true },
+      { text: 'Не буду', notificationEnabled: false },
+    ],
+    notificationThreshold: 10,
+    allowsMultipleAnswers: false,
+  }])
+  await expect(page.getByText('Опрос отправлен в Telegram.', { exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Новый опрос', exact: true })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Архив опросов', exact: true }).click()
+  await page.getByRole('button', { name: 'Открыть архивный опрос Архивный опрос?', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Архивный опрос', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Повторить', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Новый опрос', exact: true })).toBeVisible()
+  await expect(creationForm.getByLabel('Вопрос', { exact: true })).toHaveValue('Архивный опрос?')
+  await expect(creationForm.getByLabel('Вариант 1', { exact: true })).toHaveValue('Буду')
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('heading', { name: 'Новый опрос', exact: true })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Новый опрос', exact: true }).click()
+  await expect(creationForm.getByLabel('Вопрос', { exact: true })).toHaveValue('')
+  await expect(creationForm.getByLabel('Вариант 1', { exact: true })).toHaveCount(0)
+  await expect(creationForm.getByLabel('Новый вариант', { exact: true })).toBeVisible()
+})
+
 test('shows paginated vote history for active polls and an empty archive history', async ({ page }) => {
   const mocked = await mockOwnerApp(page, { existingPoll: true })
   await page.goto('/')
