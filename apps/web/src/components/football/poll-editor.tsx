@@ -201,6 +201,12 @@ function PollOptionRow({
   </Reorder.Item>
 }
 
+function initialOptionItems(initialValues: PollEditorValues | undefined): PollEditorOptionItem[] {
+  if (initialValues === undefined) return [option(1, true, false)]
+  const items = initialValues.options.map((item) => ({ ...item, isDraft: false, animateEntry: false }))
+  return items.length < 12 ? [...items, option(items.length, true, false)] : items
+}
+
 export function validatePollEditorValues(values: PollEditorValues): string | undefined {
   const question = values.question.trim()
   if (question.length < 1 || question.length > 300) return 'Введите вопрос длиной до 300 символов.'
@@ -219,13 +225,13 @@ export function validatePollEditorValues(values: PollEditorValues): string | und
   return undefined
 }
 
-export function PollEditor({ onSave, saving }: { readonly onSave: (values: PollEditorValues) => void; readonly saving: boolean }) {
-  const [question, setQuestion] = useState('')
-  const [options, setOptions] = useState<PollEditorOptionItem[]>([option(1, true, false)])
-  const [notificationThreshold, setNotificationThreshold] = useState<string | null>('10')
-  const [allowsMultipleAnswers, setAllowsMultipleAnswers] = useState(false)
+export function PollEditor({ initialValues, onSave, saving }: { readonly initialValues?: PollEditorValues; readonly onSave: (values: PollEditorValues) => void; readonly saving: boolean }) {
+  const [question, setQuestion] = useState(initialValues?.question ?? '')
+  const [options, setOptions] = useState<PollEditorOptionItem[]>(() => initialOptionItems(initialValues))
+  const [notificationThreshold, setNotificationThreshold] = useState<string | null>(initialValues === undefined ? '10' : initialValues.notificationThreshold)
+  const [allowsMultipleAnswers, setAllowsMultipleAnswers] = useState(initialValues?.allowsMultipleAnswers ?? false)
   const [validation, setValidation] = useState('')
-  const nextKeyRef = useRef(2)
+  const nextKeyRef = useRef(initialValues === undefined ? 2 : initialValues.options.length + 1)
   const optionInputRefs = useRef(new Map<string, HTMLInputElement>())
   const pendingFocusKeyRef = useRef<string | null>(null)
 
