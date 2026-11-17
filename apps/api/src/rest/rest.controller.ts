@@ -25,7 +25,8 @@ import {
   ApiTags,
 } from "@nestjs/swagger";
 
-import { CurrentOwnerId } from "./rest.decorator.js";
+import { MiniAppAccess } from "../auth/mini-app-auth.decorator.js";
+import { CurrentMiniAppUser } from "./rest.decorator.js";
 import {
   MatchCreateDto,
   MatchListQueryDto,
@@ -50,27 +51,29 @@ import {
   VenueListResponseDto,
   WeatherCurrentResponseDto,
 } from "./rest.response.dto.js";
-import { OwnerRestService } from "./rest.service.js";
+import { RestService } from "./rest.service.js";
 
 @ApiTags("bootstrap")
 @ApiSecurity("telegramMiniApp")
 @Controller("bootstrap")
+@MiniAppAccess("admin")
 export class BootstrapController {
-  public constructor(@Inject(OwnerRestService) private readonly service: OwnerRestService) {}
+  public constructor(@Inject(RestService) private readonly service: RestService) {}
 
   @Get()
-  @ApiOperation({ operationId: "getOwnerBootstrap", summary: "Load owner Mini App bootstrap data" })
+  @ApiOperation({ operationId: "getOwnerBootstrap", summary: "Load Mini App bootstrap data" })
   @ApiOkResponse({ type: BootstrapResponseDto })
-  public getBootstrap(@CurrentOwnerId() ownerTelegramUserId: bigint): Promise<Record<string, unknown>> {
-    return this.service.getBootstrap(ownerTelegramUserId);
+  public getBootstrap(): Promise<Record<string, unknown>> {
+    return this.service.getBootstrap();
   }
 }
 
 @ApiTags("matches")
 @ApiSecurity("telegramMiniApp")
 @Controller("matches")
+@MiniAppAccess("admin")
 export class MatchesController {
-  public constructor(@Inject(OwnerRestService) private readonly service: OwnerRestService) {}
+  public constructor(@Inject(RestService) private readonly service: RestService) {}
 
   @Get()
   @ApiOperation({ operationId: "listOwnerMatches", summary: "List active or archived information cards" })
@@ -78,10 +81,9 @@ export class MatchesController {
   @ApiQuery({ name: "archived", required: false, type: Boolean })
   @ApiOkResponse({ type: MatchListResponseDto })
   public list(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
     @Query(new RestQueryPipe(MatchListQueryDto)) query: MatchListQueryDto,
   ): Promise<Record<string, unknown>> {
-    return this.service.listMatches(ownerTelegramUserId, query);
+    return this.service.listMatches(query);
   }
 
   @Get(":id")
@@ -89,10 +91,9 @@ export class MatchesController {
   @ApiParam({ name: "id", type: String })
   @ApiOkResponse({ type: MatchEnvelopeResponseDto })
   public get(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
     @Param("id", PositiveBigIntPipe) matchId: bigint,
   ): Promise<Record<string, unknown>> {
-    return this.service.getMatch(ownerTelegramUserId, matchId);
+    return this.service.getMatch(matchId);
   }
 
   @Post()
@@ -102,11 +103,11 @@ export class MatchesController {
   @ApiBody({ type: MatchCreateDto })
   @ApiCreatedResponse({ type: MatchEnvelopeResponseDto })
   public create(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @CurrentMiniAppUser("id") actorTelegramUserId: bigint,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Body() input: MatchCreateDto,
   ): Promise<Record<string, unknown>> {
-    return this.service.createMatch(ownerTelegramUserId, idempotencyKey, input);
+    return this.service.createMatch(actorTelegramUserId, idempotencyKey, input);
   }
 
   @Patch(":id")
@@ -117,13 +118,13 @@ export class MatchesController {
   @ApiBody({ type: PatchMatchDto })
   @ApiOkResponse({ type: MatchEnvelopeResponseDto })
   public update(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @CurrentMiniAppUser("id") actorTelegramUserId: bigint,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Headers("if-match") ifMatch: string | undefined,
     @Param("id", PositiveBigIntPipe) matchId: bigint,
     @Body() input: PatchMatchDto,
   ): Promise<Record<string, unknown>> {
-    return this.service.patchMatch(ownerTelegramUserId, idempotencyKey, ifMatch, matchId, input);
+    return this.service.patchMatch(actorTelegramUserId, idempotencyKey, ifMatch, matchId, input);
   }
 
   @Post(":id/archive")
@@ -134,12 +135,12 @@ export class MatchesController {
   @ApiHeader({ name: "If-Match", required: true })
   @ApiOkResponse({ type: MatchEnvelopeResponseDto })
   public archive(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @CurrentMiniAppUser("id") actorTelegramUserId: bigint,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Headers("if-match") ifMatch: string | undefined,
     @Param("id", PositiveBigIntPipe) matchId: bigint,
   ): Promise<Record<string, unknown>> {
-    return this.service.archiveMatch(ownerTelegramUserId, idempotencyKey, ifMatch, matchId);
+    return this.service.archiveMatch(actorTelegramUserId, idempotencyKey, ifMatch, matchId);
   }
 
   @Delete(":id/archive")
@@ -150,12 +151,12 @@ export class MatchesController {
   @ApiHeader({ name: "If-Match", required: true })
   @ApiOkResponse({ schema: { example: { deleted: true, matchId: "42" } } })
   public deleteArchived(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @CurrentMiniAppUser("id") actorTelegramUserId: bigint,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Headers("if-match") ifMatch: string | undefined,
     @Param("id", PositiveBigIntPipe) matchId: bigint,
   ): Promise<Record<string, unknown>> {
-    return this.service.deleteArchivedMatch(ownerTelegramUserId, idempotencyKey, ifMatch, matchId);
+    return this.service.deleteArchivedMatch(actorTelegramUserId, idempotencyKey, ifMatch, matchId);
   }
 
   @Delete(":id")
@@ -166,12 +167,12 @@ export class MatchesController {
   @ApiHeader({ name: "If-Match", required: true })
   @ApiOkResponse({ schema: { example: { deleted: true, matchId: "42" } } })
   public delete(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @CurrentMiniAppUser("id") actorTelegramUserId: bigint,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Headers("if-match") ifMatch: string | undefined,
     @Param("id", PositiveBigIntPipe) matchId: bigint,
   ): Promise<Record<string, unknown>> {
-    return this.service.deleteMatch(ownerTelegramUserId, idempotencyKey, ifMatch, matchId);
+    return this.service.deleteMatch(actorTelegramUserId, idempotencyKey, ifMatch, matchId);
   }
 
   @Post(":id/republish")
@@ -183,30 +184,30 @@ export class MatchesController {
   @ApiHeader({ name: "If-Match", required: true })
   @ApiOkResponse({ type: MatchEnvelopeResponseDto })
   public republish(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @CurrentMiniAppUser("id") actorTelegramUserId: bigint,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Headers("if-match") ifMatch: string | undefined,
     @Param("id", PositiveBigIntPipe) matchId: bigint,
   ): Promise<Record<string, unknown>> {
-    return this.service.republishMatch(ownerTelegramUserId, idempotencyKey, ifMatch, matchId);
+    return this.service.republishMatch(actorTelegramUserId, idempotencyKey, ifMatch, matchId);
   }
 }
 
 @ApiTags("polls")
 @ApiSecurity("telegramMiniApp")
 @Controller("polls")
+@MiniAppAccess("admin")
 export class PollsController {
-  public constructor(@Inject(OwnerRestService) private readonly service: OwnerRestService) {}
+  public constructor(@Inject(RestService) private readonly service: RestService) {}
 
   @Get()
   @ApiOperation({ operationId: "listOwnerPolls", summary: "List active or archived native Telegram polls" })
   @ApiQuery({ name: "archived", required: false, type: Boolean })
   @ApiOkResponse({ type: PollListResponseDto })
   public list(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
     @Query(new RestQueryPipe(PollListQueryDto)) query: PollListQueryDto,
   ): Promise<Record<string, unknown>> {
-    return this.service.listPolls(ownerTelegramUserId, query);
+    return this.service.listPolls(query);
   }
 
   @Get(":id/vote-history")
@@ -216,11 +217,10 @@ export class PollsController {
   @ApiQuery({ name: "limit", required: false, type: Number })
   @ApiOkResponse({ type: PollVoteHistoryResponseDto })
   public listVoteHistory(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
     @Param("id", PositiveBigIntPipe) pollId: bigint,
     @Query(new RestQueryPipe(PollVoteHistoryQueryDto)) query: PollVoteHistoryQueryDto,
   ): Promise<Record<string, unknown>> {
-    return this.service.listPollVoteHistory(ownerTelegramUserId, pollId, query);
+    return this.service.listPollVoteHistory(pollId, query);
   }
 
   @Post()
@@ -230,11 +230,11 @@ export class PollsController {
   @ApiBody({ type: PollCreateDto })
   @ApiCreatedResponse({ type: PollEnvelopeResponseDto })
   public create(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @CurrentMiniAppUser("id") actorTelegramUserId: bigint,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Body() input: PollCreateDto,
   ): Promise<Record<string, unknown>> {
-    return this.service.createPoll(ownerTelegramUserId, idempotencyKey, input);
+    return this.service.createPoll(actorTelegramUserId, idempotencyKey, input);
   }
 
   @Patch(":id/notification-settings")
@@ -244,12 +244,12 @@ export class PollsController {
   @ApiBody({ type: PollNotificationSettingsUpdateDto })
   @ApiOkResponse({ type: PollEnvelopeResponseDto })
   public updateNotificationSettings(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @CurrentMiniAppUser("id") actorTelegramUserId: bigint,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Param("id", PositiveBigIntPipe) pollId: bigint,
     @Body() input: PollNotificationSettingsUpdateDto,
   ): Promise<Record<string, unknown>> {
-    return this.service.updatePollNotificationSettings(ownerTelegramUserId, idempotencyKey, pollId, input);
+    return this.service.updatePollNotificationSettings(actorTelegramUserId, idempotencyKey, pollId, input);
   }
 
   @Post(":id/republish")
@@ -260,11 +260,11 @@ export class PollsController {
   @ApiHeader({ name: "Idempotency-Key", required: true })
   @ApiOkResponse({ type: PollEnvelopeResponseDto })
   public republish(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @CurrentMiniAppUser("id") actorTelegramUserId: bigint,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Param("id", PositiveBigIntPipe) pollId: bigint,
   ): Promise<Record<string, unknown>> {
-    return this.service.republishPoll(ownerTelegramUserId, idempotencyKey, pollId);
+    return this.service.republishPoll(actorTelegramUserId, idempotencyKey, pollId);
   }
 
   @Post(":id/archive")
@@ -274,11 +274,11 @@ export class PollsController {
   @ApiHeader({ name: "Idempotency-Key", required: true })
   @ApiOkResponse({ type: PollEnvelopeResponseDto })
   public archive(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @CurrentMiniAppUser("id") actorTelegramUserId: bigint,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Param("id", PositiveBigIntPipe) pollId: bigint,
   ): Promise<Record<string, unknown>> {
-    return this.service.archivePoll(ownerTelegramUserId, idempotencyKey, pollId);
+    return this.service.archivePoll(actorTelegramUserId, idempotencyKey, pollId);
   }
 
   @Delete(":id/archive")
@@ -288,11 +288,11 @@ export class PollsController {
   @ApiHeader({ name: "Idempotency-Key", required: true })
   @ApiOkResponse({ type: ArchivedPollDeletionResponseDto })
   public deleteArchived(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @CurrentMiniAppUser("id") actorTelegramUserId: bigint,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Param("id", PositiveBigIntPipe) pollId: bigint,
   ): Promise<Record<string, unknown>> {
-    return this.service.deleteArchivedPoll(ownerTelegramUserId, idempotencyKey, pollId);
+    return this.service.deleteArchivedPoll(actorTelegramUserId, idempotencyKey, pollId);
   }
 }
 
@@ -300,28 +300,29 @@ export class PollsController {
 @ApiSecurity("telegramMiniApp")
 @Controller("weather")
 export class WeatherController {
-  public constructor(@Inject(OwnerRestService) private readonly service: OwnerRestService) {}
+  public constructor(@Inject(RestService) private readonly service: RestService) {}
 
   @Post("current")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ operationId: "sendCurrentWeather", summary: "Send current Minsk weather to Telegram" })
   @ApiOkResponse({ type: WeatherCurrentResponseDto })
-  public current(@CurrentOwnerId() ownerTelegramUserId: bigint): Promise<Record<string, unknown>> {
-    return this.service.sendCurrentWeather(ownerTelegramUserId);
+  public current(): Promise<Record<string, unknown>> {
+    return this.service.sendCurrentWeather();
   }
 }
 
 @ApiTags("venues")
 @ApiSecurity("telegramMiniApp")
 @Controller("venues")
+@MiniAppAccess("admin")
 export class VenuesController {
-  public constructor(@Inject(OwnerRestService) private readonly service: OwnerRestService) {}
+  public constructor(@Inject(RestService) private readonly service: RestService) {}
 
   @Get()
   @ApiOperation({ operationId: "listOwnerVenues", summary: "List venue catalog entries" })
   @ApiOkResponse({ type: VenueListResponseDto })
-  public list(@CurrentOwnerId() ownerTelegramUserId: bigint): Promise<Record<string, unknown>> {
-    return this.service.listVenues(ownerTelegramUserId);
+  public list(): Promise<Record<string, unknown>> {
+    return this.service.listVenues();
   }
 
   @Post()
@@ -331,11 +332,11 @@ export class VenuesController {
   @ApiBody({ type: VenueCreateDto })
   @ApiCreatedResponse({ type: VenueEnvelopeResponseDto })
   public create(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @CurrentMiniAppUser("id") actorTelegramUserId: bigint,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Body() input: VenueCreateDto,
   ): Promise<Record<string, unknown>> {
-    return this.service.createVenue(ownerTelegramUserId, idempotencyKey, input);
+    return this.service.createVenue(actorTelegramUserId, idempotencyKey, input);
   }
 
   @Patch(":id")
@@ -346,13 +347,13 @@ export class VenuesController {
   @ApiBody({ type: VenueUpdateDto })
   @ApiOkResponse({ type: VenueEnvelopeResponseDto })
   public update(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @CurrentMiniAppUser("id") actorTelegramUserId: bigint,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Headers("if-match") ifMatch: string | undefined,
     @Param("id", PositiveBigIntPipe) venueId: bigint,
     @Body() input: VenueUpdateDto,
   ): Promise<Record<string, unknown>> {
-    return this.service.updateVenue(ownerTelegramUserId, idempotencyKey, ifMatch, venueId, input);
+    return this.service.updateVenue(actorTelegramUserId, idempotencyKey, ifMatch, venueId, input);
   }
 
   @Delete(":id")
@@ -363,11 +364,11 @@ export class VenuesController {
   @ApiHeader({ name: "If-Match", required: true })
   @ApiOkResponse({ schema: { example: { deleted: true, venueId: "42" } } })
   public delete(
-    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @CurrentMiniAppUser("id") actorTelegramUserId: bigint,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Headers("if-match") ifMatch: string | undefined,
     @Param("id", PositiveBigIntPipe) venueId: bigint,
   ): Promise<Record<string, unknown>> {
-    return this.service.deleteVenue(ownerTelegramUserId, idempotencyKey, ifMatch, venueId);
+    return this.service.deleteVenue(actorTelegramUserId, idempotencyKey, ifMatch, venueId);
   }
 }

@@ -19,6 +19,7 @@ import {
   useListOwnerMatches,
   useListOwnerPolls,
   useListOwnerVenues,
+  useGetMiniAppSession,
   useSendCurrentWeather,
   useUpdateOwnerMatch,
   useUpdateOwnerPollNotificationSettings,
@@ -27,6 +28,7 @@ import {
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { AdminsPanel } from '@/components/football/admins-panel'
 import { ConfirmationSheet } from '@/components/football/confirmation-sheet'
 import { MatchesPanel } from '@/components/football/panels'
 import { PollsPanel } from '@/components/football/polls-panel'
@@ -80,7 +82,13 @@ export function App({ telegramSession }: AppProps = {}) {
   const [conflict, setConflict] = useState('')
   const [authFailure, setAuthFailure] = useState<AuthFailure>()
   const [weatherConfirmationOpen, setWeatherConfirmationOpen] = useState(false)
-  const queryEnabled = session.status === 'ready' && session.initData !== undefined && authFailure === undefined
+  const sessionReady = session.status === 'ready' && session.initData !== undefined
+  const accessQuery = useGetMiniAppSession({ query: { enabled: sessionReady, refetchOnWindowFocus: true } })
+  const role = accessQuery.data?.role
+  // A newly deployed frontend can still run against an older, owner-only API.
+  const legacyApi = getErrorStatus(accessQuery.error) === 404
+  const canManageAdmins = role === 'owner'
+  const queryEnabled = sessionReady && authFailure === undefined && (role === 'owner' || role === 'admin' || legacyApi)
   const matchesQuery = useListOwnerMatches(undefined, { query: { enabled: queryEnabled } })
   const archivedMatchesQuery = useListOwnerMatches({ archived: true }, { query: { enabled: queryEnabled } })
   const pollsQuery = useListOwnerPolls(undefined, { query: { enabled: queryEnabled, refetchInterval: tab === 'polls' ? POLL_RESULTS_REFRESH_INTERVAL_MS : false, refetchOnWindowFocus: true } })
@@ -118,13 +126,26 @@ export function App({ telegramSession }: AppProps = {}) {
   const updateVenueMutation = useUpdateOwnerVenue(mutationOptions)
   const deleteVenueMutation = useDeleteOwnerVenue(mutationOptions)
 
-  const queryAuthFailure = [matchesQuery.error, archivedMatchesQuery.error, pollsQuery.error, archivedPollsQuery.error, venuesQuery.error].map(authFailureFor).find((value) => value !== undefined)
+  const queryAuthFailure = [accessQuery.error, matchesQuery.error, archivedMatchesQuery.error, pollsQuery.error, archivedPollsQuery.error, venuesQuery.error].map(authFailureFor).find((value) => value !== undefined)
   const effectiveAuthFailure = authFailure ?? queryAuthFailure
   if (session.status === 'loading') return <StateScreen kind="loading" title="Подготавливаем команду" copy="Подключаемся к Telegram…" />
   if (session.status === 'outside-telegram') return <StateScreen kind="outside" title="Откройте приложение в Telegram" copy="Это закрытое мини-приложение. Запустите его из Telegram." />
-  if (session.status === 'unauthorized' || effectiveAuthFailure === 'unauthorized') return <StateScreen kind="unauthorized" title="Нужен доступ владельца" copy="У этого аккаунта Telegram нет прав на управление командой." action={<Button onClick={() => window.location.reload()}><RotateCw data-icon="inline-start" />Перезагрузить</Button>} />
   if (effectiveAuthFailure === 'expired') return <StateScreen kind="unauthorized" title="Сессия Telegram истекла" copy="Закройте это окно и заново откройте Mini App из Telegram." />
   if (session.status === 'error') return <StateScreen kind="error" title="Не удалось запустить Telegram" copy={session.reason ?? 'Telegram не смог запустить мини-приложение.'} />
+  if (session.status === 'unauthorized' || effectiveAuthFailure === 'unauthorized' || role === 'guest') {
+    const telegramUserId = accessQuery.data?.telegramUserId
+    return <StateScreen
+      kind="unauthorized"
+      title="Нужен доступ администратора"
+      copy={telegramUserId === undefined ? 'У этого аккаунта Telegram нет доступа к управлению командой.' : 'Передайте свой Telegram ID владельцу Ballimus.'}
+      action={<>
+        {telegramUserId === undefined ? null : <p className="text-sm">Telegram ID <code className="select-all rounded bg-muted px-2 py-1">{telegramUserId}</code></p>}
+        <Button onClick={() => window.location.reload()}><RotateCw data-icon="inline-start" />Перезагрузить</Button>
+      </>}
+    />
+  }
+  if (accessQuery.isLoading) return <StateScreen kind="loading" title="Загружаем данные" copy="Проверяем доступ…" />
+  if (accessQuery.isError && !legacyApi && role === undefined) return <StateScreen kind="error" title="Не удалось проверить доступ" copy="Попробуйте ещё раз." action={<Button onClick={() => void accessQuery.refetch()}>Повторить</Button>} />
 
   const handleCreateMatch = (values: EditorValues) => createMatchMutation.mutate({ data: matchRequest(values), headers: { 'Idempotency-Key': requestKey() } }, { onSuccess: () => { invalidateMatches(); toast.success('Карточка матча отправлена в Telegram.') } })
   const handleCreatePoll = (values: PollEditorValues) => createPollMutation.mutate({
@@ -222,14 +243,15 @@ export function App({ telegramSession }: AppProps = {}) {
   const venueSaving = [createVenueMutation, updateVenueMutation, deleteVenueMutation].some((mutation) => mutation.isPending)
   const loading = matchesQuery.isLoading || archivedMatchesQuery.isLoading || pollsQuery.isLoading || archivedPollsQuery.isLoading || venuesQuery.isLoading
   const failure = [matchesQuery.error, archivedMatchesQuery.error, pollsQuery.error, archivedPollsQuery.error, venuesQuery.error].find((error) => error !== null && error !== undefined)
+  const activeTab = tab === 'admins' && !canManageAdmins ? 'polls' : tab
 
   return <div className="mx-auto flex min-h-svh w-full max-w-[480px] flex-col bg-background">
-    <header className="flex h-14 items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur-sm"><div className="flex items-center gap-2.5"><img src={applicationBrand.logo} alt="" width="36" height="36" className="size-9 rounded-full object-cover" /><p className="text-base font-semibold leading-none">{applicationBrand.name}</p></div><div className="flex items-center gap-1"><Button variant="ghost" size="sm" onClick={() => setWeatherConfirmationOpen(true)} disabled={weatherMutation.isPending}><CloudSun data-icon="inline-start" />Погода</Button><ThemeToggle /></div></header>
+    <header className="flex h-14 items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur-sm"><div className="flex items-center gap-2.5"><img src={applicationBrand.logo} alt="" width="36" height="36" className="size-9 rounded-full object-cover" /><p className="text-base font-semibold leading-none">{applicationBrand.name}</p></div><div className="flex items-center gap-1">{canManageAdmins || legacyApi ? <Button variant="ghost" size="sm" onClick={() => setWeatherConfirmationOpen(true)} disabled={weatherMutation.isPending}><CloudSun data-icon="inline-start" />Погода</Button> : null}<ThemeToggle /></div></header>
     <main className="min-h-0 flex-1 overflow-y-auto px-4 pt-4 pb-[calc(1.25rem+var(--telegram-nav-height)+var(--tg-safe-bottom))]">
-      {failure !== undefined ? <Alert variant="destructive" className="mb-4"><TriangleAlert /><AlertTitle>Не удалось загрузить данные</AlertTitle><AlertDescription>{errorMessage(failure)}</AlertDescription></Alert> : null}
-      {loading ? <StateScreen kind="loading" title="Загружаем данные" copy="Синхронизируем данные…" /> : tab === 'matches' ? <MatchesPanel matches={matches} archivedMatches={archivedMatches} venues={venues} saving={matchSaving} conflict={conflict} onClearConflict={() => setConflict('')} onCreate={handleCreateMatch} onUpdate={handleUpdateMatch} onArchive={handleArchiveMatch} onDeleteArchived={handleDeleteArchivedMatch} onCreateVenue={handleCreateVenue} /> : tab === 'polls' ? <PollsPanel polls={pollsQuery.data?.polls ?? []} archivedPolls={archivedPollsQuery.data?.polls ?? []} saving={pollSaving} onCreate={handleCreatePoll} onUpdateNotificationSettings={handleUpdatePollNotificationSettings} onArchive={handleArchivePoll} onDeleteArchived={handleDeleteArchivedPoll} /> : <VenuesPanel venues={venues} saving={venueSaving} onCreate={handleCreateVenue} onUpdate={handleUpdateVenue} onDelete={handleDeleteVenue} />}
+      {activeTab !== 'admins' && failure !== undefined ? <Alert variant="destructive" className="mb-4"><TriangleAlert /><AlertTitle>Не удалось загрузить данные</AlertTitle><AlertDescription>{errorMessage(failure)}</AlertDescription></Alert> : null}
+      {activeTab === 'admins' ? <AdminsPanel /> : loading ? <StateScreen kind="loading" title="Загружаем данные" copy="Синхронизируем данные…" /> : activeTab === 'matches' ? <MatchesPanel matches={matches} archivedMatches={archivedMatches} venues={venues} saving={matchSaving} conflict={conflict} onClearConflict={() => setConflict('')} onCreate={handleCreateMatch} onUpdate={handleUpdateMatch} onArchive={handleArchiveMatch} onDeleteArchived={handleDeleteArchivedMatch} onCreateVenue={handleCreateVenue} /> : activeTab === 'polls' ? <PollsPanel polls={pollsQuery.data?.polls ?? []} archivedPolls={archivedPollsQuery.data?.polls ?? []} saving={pollSaving} onCreate={handleCreatePoll} onUpdateNotificationSettings={handleUpdatePollNotificationSettings} onArchive={handleArchivePoll} onDeleteArchived={handleDeleteArchivedPoll} /> : <VenuesPanel venues={venues} saving={venueSaving} onCreate={handleCreateVenue} onUpdate={handleUpdateVenue} onDelete={handleDeleteVenue} />}
     </main>
-    <TabBar value={tab} onChange={setTab} />
+    <TabBar value={activeTab} onChange={setTab} canManageAdmins={canManageAdmins} />
     <ConfirmationSheet open={weatherConfirmationOpen} title="Отправить погоду?" confirmLabel="Отправить" pending={weatherMutation.isPending} onOpenChange={setWeatherConfirmationOpen} onConfirm={() => { setWeatherConfirmationOpen(false); weatherMutation.mutate() }} />
   </div>
 }

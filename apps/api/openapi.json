@@ -1,6 +1,116 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/v1/access/session": {
+      "get": {
+        "operationId": "getMiniAppSession",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MiniAppSessionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "Load the signed-in Telegram identity and current Mini App role",
+        "tags": [
+          "access"
+        ]
+      }
+    },
+    "/v1/access/admins": {
+      "get": {
+        "operationId": "listMiniAppAdmins",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MiniAppAdminsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "List Mini App administrators as the owner",
+        "tags": [
+          "access"
+        ]
+      }
+    },
+    "/v1/access/admins/{telegramUserId}": {
+      "put": {
+        "operationId": "grantMiniAppAdmin",
+        "parameters": [
+          {
+            "name": "telegramUserId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "Grant Mini App administrator access as the owner",
+        "tags": [
+          "access"
+        ]
+      },
+      "delete": {
+        "operationId": "revokeMiniAppAdmin",
+        "parameters": [
+          {
+            "name": "telegramUserId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "Revoke Mini App administrator access as the owner",
+        "tags": [
+          "access"
+        ]
+      }
+    },
     "/v1/bootstrap": {
       "get": {
         "operationId": "getOwnerBootstrap",
@@ -22,7 +132,7 @@
             "telegramMiniApp": []
           }
         ],
-        "summary": "Load owner Mini App bootstrap data",
+        "summary": "Load Mini App bootstrap data",
         "tags": [
           "bootstrap"
         ]
@@ -870,10 +980,44 @@
         "type": "apiKey",
         "in": "header",
         "name": "X-Telegram-Init-Data",
-        "description": "Raw Telegram.WebApp.initData. The server validates its HMAC and owner identity."
+        "description": "Raw Telegram.WebApp.initData. The server verifies its HMAC and authorizes the Telegram user's current role."
       }
     },
     "schemas": {
+      "MiniAppSessionResponseDto": {
+        "type": "object",
+        "properties": {
+          "telegramUserId": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "admin",
+              "guest"
+            ]
+          }
+        },
+        "required": [
+          "telegramUserId",
+          "role"
+        ]
+      },
+      "MiniAppAdminsResponseDto": {
+        "type": "object",
+        "properties": {
+          "telegramUserIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "telegramUserIds"
+        ]
+      },
       "OwnerIdentityResponseDto": {
         "type": "object",
         "properties": {

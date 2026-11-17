@@ -3,6 +3,8 @@ import { SetMetadata } from "@nestjs/common";
 import {
   MINI_APP_AUTH_BYPASS_METADATA,
   MINI_APP_AUTH_BYPASS_SCOPES,
+  MINI_APP_ACCESS_METADATA,
+  type MiniAppAccessLevel,
   type MiniAppAuthBypassScope,
 } from "./mini-app-auth.constants.js";
 
@@ -12,4 +14,8 @@ export function MiniAppAuthBypass(scope: MiniAppAuthBypassScope): MethodDecorato
   }
 
   return SetMetadata(MINI_APP_AUTH_BYPASS_METADATA, scope);
+}
+
+export function MiniAppAccess(level: MiniAppAccessLevel): MethodDecorator & ClassDecorator {
+  return SetMetadata(MINI_APP_ACCESS_METADATA, level);
 }

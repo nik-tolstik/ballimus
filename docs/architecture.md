@@ -52,6 +52,6 @@ Migration `0010_information_cards` queues deletion of legacy Telegram card messa
 
 ## Security and environments
 
-The Mini App guard verifies Telegram HMAC signatures, session freshness, and the configured owner ID. CORS allows only the configured web origin. The webhook requires Telegram's secret-token header, whose expected value is derived from the bot token, and only applies updates for known Telegram poll IDs. `/health`, the poll webhook, and the jobs CLI are the only non-Mini-App boundaries.
+The Mini App guard verifies Telegram HMAC signatures and session freshness. The configured owner can manage administrator grants and send weather. For other accounts, the guard checks PostgreSQL on each request that requires administrator access. Matches, polls, and venues are accessible to the owner and appointed administrators. A signed-in user can read their own ID and role at `/v1/access/session`. CORS allows only the configured web origin. The webhook requires Telegram's secret-token header, whose expected value is derived from the bot token, and only applies updates for known Telegram poll IDs. `/health`, the poll webhook, and the jobs CLI are the only non-Mini-App boundaries.
 
 Local and production configurations are isolated. No production deployment, migration, Telegram configuration, or messages are implied by code changes.

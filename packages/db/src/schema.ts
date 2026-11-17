@@ -18,6 +18,10 @@ import {
 export const venueTypes = ["outdoor", "indoor"] as const;
 export type VenueType = (typeof venueTypes)[number];
 
+export const miniAppAdmins = pgTable("mini_app_admins", {
+  telegramUserId: bigint("telegram_user_id", { mode: "bigint" }).primaryKey(),
+});
+
 export interface BookingContact {
   readonly name?: string;
   readonly phone: string;
@@ -380,5 +384,5 @@ export type NewTelegramPollVoterAnswer = typeof telegramPollVoterAnswers.$inferI
 export type TelegramPollVoteEvent = typeof telegramPollVoteEvents.$inferSelect;
 export type NewTelegramPollVoteEvent = typeof telegramPollVoteEvents.$inferInsert;
 
-export const schema = { venues, matches, matchMessages, telegramPolls, telegramPollVoterAnswers, telegramPollVoteEvents, httpIdempotencyKeys, outbox, jobClaims };
+export const schema = { venues, matches, matchMessages, telegramPolls, telegramPollVoterAnswers, telegramPollVoteEvents, httpIdempotencyKeys, outbox, jobClaims, miniAppAdmins };
 export type DatabaseSchema = typeof schema;

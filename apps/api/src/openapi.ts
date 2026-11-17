@@ -38,7 +38,7 @@ export function createPublicOpenApiDocument(app: INestApplication): OpenAPIObjec
       type: "apiKey",
       in: "header",
       name: "X-Telegram-Init-Data",
-      description: "Raw Telegram.WebApp.initData. The server validates its HMAC and owner identity.",
+      description: "Raw Telegram.WebApp.initData. The server verifies its HMAC and authorizes the Telegram user's current role.",
     })
     .build();
 

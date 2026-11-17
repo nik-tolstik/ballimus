@@ -1,9 +1,8 @@
-import { HttpException } from "@nestjs/common";
 import { RepositoryConflictError, TelegramPollsRepository, withTransaction } from "@football/db";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { pollCreationInput, pollNotificationSettingsInput } from "./rest.service.js";
-import { OwnerRestService } from "./rest.service.js";
+import { RestService } from "./rest.service.js";
 
 vi.mock("@football/db", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@football/db")>();
@@ -15,7 +14,7 @@ afterEach(() => {
   vi.mocked(withTransaction).mockReset();
 });
 
-const createPollOwnerService = () => new OwnerRestService(
+const createPollRestService = () => new RestService(
   {} as never,
   { telegramOwnerUserId: 100n, telegramGroupChatId: -100n, groupTimezone: "Europe/Minsk" } as never,
   {} as never,
@@ -66,35 +65,8 @@ describe("native poll notification settings", () => {
   });
 });
 
-describe("native poll owner boundary", () => {
-  it("rejects non-owners before listing or permanently deleting polls", async () => {
-    const service = new OwnerRestService(
-      {} as never,
-      { telegramOwnerUserId: 100n } as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-    );
-
-    for (const operation of [
-      () => service.listPolls(200n, { archived: true }),
-      () => service.listPollVoteHistory(200n, 1n, {}),
-      () => service.deleteArchivedPoll(200n, "test-key", 1n),
-    ]) {
-      try {
-        await operation();
-        throw new Error("The owner guard should reject the request.");
-      } catch (error) {
-        expect(error).toBeInstanceOf(HttpException);
-        expect((error as HttpException).getStatus()).toBe(403);
-      }
-    }
-  });
-});
-
 describe("native poll vote history", () => {
-  it("returns the newest owner-visible events with a cursor", async () => {
+  it("returns the newest visible events with a cursor", async () => {
     const getById = vi.fn().mockResolvedValue({ id: 1n, telegramChatId: -100n });
     const listVoteHistory = vi.fn().mockResolvedValue([
       {
@@ -127,7 +99,7 @@ describe("native poll vote history", () => {
     ]);
     vi.mocked(TelegramPollsRepository).mockImplementation(() => ({ getById, listVoteHistory }) as never);
 
-    await expect(createPollOwnerService().listPollVoteHistory(100n, 1n, { limit: 2 })).resolves.toEqual({
+    await expect(createPollRestService().listPollVoteHistory(1n, { limit: 2 })).resolves.toEqual({
       timezone: "Europe/Minsk",
       nextCursor: "11",
       events: [
@@ -157,7 +129,7 @@ describe("native poll vote history", () => {
     const listVoteHistory = vi.fn();
     vi.mocked(TelegramPollsRepository).mockImplementation(() => ({ getById, listVoteHistory }) as never);
 
-    await expect(createPollOwnerService().listPollVoteHistory(100n, 1n, {})).rejects.toMatchObject({ status: 404 });
+    await expect(createPollRestService().listPollVoteHistory(1n, {})).rejects.toMatchObject({ status: 404 });
     expect(listVoteHistory).not.toHaveBeenCalled();
   });
 
@@ -166,7 +138,7 @@ describe("native poll vote history", () => {
     const listVoteHistory = vi.fn().mockResolvedValue([]);
     vi.mocked(TelegramPollsRepository).mockImplementation(() => ({ getById, listVoteHistory }) as never);
 
-    await expect(createPollOwnerService().listPollVoteHistory(100n, 1n, { cursor: "24" })).resolves.toEqual({
+    await expect(createPollRestService().listPollVoteHistory(1n, { cursor: "24" })).resolves.toEqual({
       events: [],
       nextCursor: null,
       timezone: "Europe/Minsk",
@@ -187,7 +159,7 @@ describe("archived native poll deletion", () => {
       polls: { getByIdForUpdate: vi.fn().mockResolvedValue({ telegramChatId: -101n }), deleteArchived },
     });
 
-    await expect(createPollOwnerService().deleteArchivedPoll(100n, "test-key", 1n)).rejects.toMatchObject({ status: 404 });
+    await expect(createPollRestService().deleteArchivedPoll(100n, "test-key", 1n)).rejects.toMatchObject({ status: 404 });
     expect(deleteArchived).not.toHaveBeenCalled();
   });
 
@@ -203,7 +175,7 @@ describe("archived native poll deletion", () => {
       idempotency: { beginInTransaction, complete: vi.fn() },
       polls: { getByIdForUpdate: vi.fn().mockResolvedValue({ telegramChatId: -100n }), deleteArchived },
     });
-    const service = createPollOwnerService();
+    const service = createPollRestService();
 
     await expect(service.deleteArchivedPoll(100n, "active-key", 1n)).rejects.toMatchObject({ status: 409 });
     await expect(service.deleteArchivedPoll(100n, "archived-key", 1n)).resolves.toEqual({ deleted: true, pollId: "1" });

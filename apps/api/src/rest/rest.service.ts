@@ -50,7 +50,7 @@ type MutationRepositories = Pick<TransactionRepositories, "matches" | "matchMess
 
 export function pollCreationInput(
   config: Pick<ApiConfig, "telegramGroupChatId" | "telegramGeneralTopicId">,
-  ownerTelegramUserId: bigint,
+  actorTelegramUserId: bigint,
   input: PollCreateDto,
 ): CreateTelegramPollInput {
   return {
@@ -62,7 +62,7 @@ export function pollCreationInput(
     isAnonymous: false,
     allowsMultipleAnswers: input.allowsMultipleAnswers,
     allowsRevoting: true,
-    creatorTelegramUserId: ownerTelegramUserId,
+    creatorTelegramUserId: actorTelegramUserId,
   };
 }
 
@@ -113,9 +113,8 @@ export function parseIfMatch(value: string | undefined, required: boolean): numb
   return parsed;
 }
 
-/** Owner API for venue catalog and read-only Telegram match cards. */
 @Injectable()
-export class OwnerRestService {
+export class RestService {
   public constructor(
     @Inject(APP_DATABASE) private readonly db: AppDatabase,
     @Inject(API_CONFIG) private readonly config: ApiConfig,
@@ -125,12 +124,11 @@ export class OwnerRestService {
     @Inject(CurrentWeatherService) private readonly weather: CurrentWeatherService,
   ) {}
 
-  public async getBootstrap(ownerTelegramUserId: bigint): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
+  public async getBootstrap(): Promise<Record<string, unknown>> {
     const repositories = readRepositories(this.db);
     const matches = await repositories.matches.list({ telegramChatId: this.config.telegramGroupChatId, archived: false });
     return serializeRestObject({
-      owner: { telegramUserId: ownerTelegramUserId },
+      owner: { telegramUserId: this.config.telegramOwnerUserId },
       group: {
         telegramChatId: this.config.telegramGroupChatId,
         generalTopicId: this.config.telegramGeneralTopicId,
@@ -141,8 +139,7 @@ export class OwnerRestService {
     });
   }
 
-  public async listMatches(ownerTelegramUserId: bigint, query: MatchListQueryDto): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
+  public async listMatches(query: MatchListQueryDto): Promise<Record<string, unknown>> {
     const repositories = readRepositories(this.db);
     const matches = await repositories.matches.list({
       telegramChatId: this.config.telegramGroupChatId,
@@ -152,8 +149,7 @@ export class OwnerRestService {
     return serializeRestObject({ matches: await Promise.all(matches.map(async (match) => this.matchBody(match, repositories))) });
   }
 
-  public async getMatch(ownerTelegramUserId: bigint, matchId: bigint): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
+  public async getMatch(matchId: bigint): Promise<Record<string, unknown>> {
     try {
       const repositories = readRepositories(this.db);
       const match = await repositories.matches.getById(matchId);
@@ -164,8 +160,7 @@ export class OwnerRestService {
     }
   }
 
-  public async listPolls(ownerTelegramUserId: bigint, query: PollListQueryDto): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
+  public async listPolls(query: PollListQueryDto): Promise<Record<string, unknown>> {
     try {
       const polls = await new TelegramPollsRepository(this.db).listByChat(this.config.telegramGroupChatId, { archived: query.archived === true });
       return serializeRestObject({ polls: polls.map((poll) => this.pollBody(poll)) });
@@ -175,11 +170,9 @@ export class OwnerRestService {
   }
 
   public async listPollVoteHistory(
-    ownerTelegramUserId: bigint,
     pollId: bigint,
     query: PollVoteHistoryQueryDto,
   ): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
     try {
       const polls = new TelegramPollsRepository(this.db);
       this.assertAccessiblePoll(await polls.getById(pollId));
@@ -200,15 +193,14 @@ export class OwnerRestService {
   }
 
   public async createPoll(
-    ownerTelegramUserId: bigint,
+    actorTelegramUserId: bigint,
     idempotencyKey: string | undefined,
     input: PollCreateDto,
   ): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
     let createdPollId: bigint | undefined;
-    const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "create-poll", input }, 201, async (repositories) => {
+    const body = await this.mutate(actorTelegramUserId, idempotencyKey, { operation: "create-poll", input }, 201, async (repositories) => {
       try {
-        const poll = await repositories.polls.create(pollCreationInput(this.config, ownerTelegramUserId, input));
+        const poll = await repositories.polls.create(pollCreationInput(this.config, actorTelegramUserId, input));
         createdPollId = poll.id;
         return serializeRestObject({ poll: this.pollBody(poll) });
       } catch (error) {
@@ -224,15 +216,14 @@ export class OwnerRestService {
   }
 
   public async updatePollNotificationSettings(
-    ownerTelegramUserId: bigint,
+    actorTelegramUserId: bigint,
     idempotencyKey: string | undefined,
     pollId: bigint,
     input: PollNotificationSettingsUpdateDto,
   ): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
     let disabledOptionIndexes: readonly number[] = [];
     let updatedPollId: bigint | undefined;
-    const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "update-poll-notification-settings", pollId, input }, 200, async (repositories) => {
+    const body = await this.mutate(actorTelegramUserId, idempotencyKey, { operation: "update-poll-notification-settings", pollId, input }, 200, async (repositories) => {
       try {
         const current = await repositories.polls.getByIdForUpdate(pollId);
         if (current.telegramChatId !== this.config.telegramGroupChatId) {
@@ -255,13 +246,12 @@ export class OwnerRestService {
   }
 
   public async republishPoll(
-    ownerTelegramUserId: bigint,
+    actorTelegramUserId: bigint,
     idempotencyKey: string | undefined,
     pollId: bigint,
   ): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
     let publicationPollId: bigint | undefined;
-    await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "republish-poll", pollId }, 200, async (repositories) => {
+    await this.mutate(actorTelegramUserId, idempotencyKey, { operation: "republish-poll", pollId }, 200, async (repositories) => {
       const current = await repositories.polls.getById(pollId);
       if (current.telegramChatId !== this.config.telegramGroupChatId) {
         throw toRestHttpException(restRequestError(404, "RESOURCE_NOT_FOUND", "The requested resource was not found."));
@@ -277,13 +267,12 @@ export class OwnerRestService {
   }
 
   public async archivePoll(
-    ownerTelegramUserId: bigint,
+    actorTelegramUserId: bigint,
     idempotencyKey: string | undefined,
     pollId: bigint,
   ): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
     let archivedPollId: bigint | undefined;
-    const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "archive-poll", pollId }, 200, async (repositories) => {
+    const body = await this.mutate(actorTelegramUserId, idempotencyKey, { operation: "archive-poll", pollId }, 200, async (repositories) => {
       const current = await repositories.polls.getById(pollId);
       if (current.telegramChatId !== this.config.telegramGroupChatId) {
         throw toRestHttpException(restRequestError(404, "RESOURCE_NOT_FOUND", "The requested resource was not found."));
@@ -298,12 +287,11 @@ export class OwnerRestService {
   }
 
   public async deleteArchivedPoll(
-    ownerTelegramUserId: bigint,
+    actorTelegramUserId: bigint,
     idempotencyKey: string | undefined,
     pollId: bigint,
   ): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
-    return this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "delete-archived-poll", pollId }, 200, async (repositories) => {
+    return this.mutate(actorTelegramUserId, idempotencyKey, { operation: "delete-archived-poll", pollId }, 200, async (repositories) => {
       try {
         const current = await repositories.polls.getByIdForUpdate(pollId);
         if (current.telegramChatId !== this.config.telegramGroupChatId) {
@@ -318,13 +306,12 @@ export class OwnerRestService {
   }
 
   public async createMatch(
-    ownerTelegramUserId: bigint,
+    actorTelegramUserId: bigint,
     idempotencyKey: string | undefined,
     input: MatchCreateDto,
   ): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
     const scheduledAt = this.toScheduledAt(input.date, input.time);
-    const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "create-match", input }, 201, async (repositories) => {
+    const body = await this.mutate(actorTelegramUserId, idempotencyKey, { operation: "create-match", input }, 201, async (repositories) => {
       try {
         const venue = await repositories.venues.getForUpdate(BigInt(input.venueId));
         const match = await repositories.matches.create({
@@ -333,7 +320,7 @@ export class OwnerRestService {
           durationMinutes: input.durationMinutes,
           venueId: venue.id,
           ...(input.fieldPriceRubles === undefined ? {} : { fieldPriceRubles: input.fieldPriceRubles }),
-          creatorTelegramUserId: ownerTelegramUserId,
+          creatorTelegramUserId: actorTelegramUserId,
         });
         await repositories.matchMessages.createPending(match.id, this.config.telegramGroupChatId, this.config.telegramGeneralTopicId);
         await repositories.outbox.insertInTransaction({
@@ -353,19 +340,18 @@ export class OwnerRestService {
   }
 
   public async patchMatch(
-    ownerTelegramUserId: bigint,
+    actorTelegramUserId: bigint,
     idempotencyKey: string | undefined,
     ifMatch: string | undefined,
     matchId: bigint,
     input: PatchMatchDto,
   ): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
     const expectedVersion = parseIfMatch(ifMatch, true);
     if (expectedVersion === undefined) throw new Error("If-Match was required but not provided");
     if (input.date === undefined && input.time === undefined && input.durationMinutes === undefined && input.venueId === undefined && input.fieldPriceRubles === undefined) {
       throw toRestHttpException(restRequestError(400, "MATCH_PATCH_EMPTY", "Provide at least one match field to update."));
     }
-    const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "patch-match", matchId, expectedVersion, input }, 200, async (repositories) => {
+    const body = await this.mutate(actorTelegramUserId, idempotencyKey, { operation: "patch-match", matchId, expectedVersion, input }, 200, async (repositories) => {
       try {
         const current = await repositories.matches.getForUpdate(matchId);
         this.assertCurrentMatch(current);
@@ -392,15 +378,14 @@ export class OwnerRestService {
   }
 
   public async deleteMatch(
-    ownerTelegramUserId: bigint,
+    actorTelegramUserId: bigint,
     idempotencyKey: string | undefined,
     ifMatch: string | undefined,
     matchId: bigint,
   ): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
     const expectedVersion = parseIfMatch(ifMatch, true);
     if (expectedVersion === undefined) throw new Error("If-Match was required but not provided");
-    const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "delete-match", matchId, expectedVersion }, 200, async (repositories) => {
+    const body = await this.mutate(actorTelegramUserId, idempotencyKey, { operation: "delete-match", matchId, expectedVersion }, 200, async (repositories) => {
       try {
         this.assertCurrentMatch(await repositories.matches.getForUpdate(matchId));
         const deleted = await repositories.matches.requestDeletion(matchId, expectedVersion);
@@ -425,15 +410,14 @@ export class OwnerRestService {
   }
 
   public async archiveMatch(
-    ownerTelegramUserId: bigint,
+    actorTelegramUserId: bigint,
     idempotencyKey: string | undefined,
     ifMatch: string | undefined,
     matchId: bigint,
   ): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
     const expectedVersion = parseIfMatch(ifMatch, true);
     if (expectedVersion === undefined) throw new Error("If-Match was required but not provided");
-    const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "archive-match", matchId, expectedVersion }, 200, async (repositories) => {
+    const body = await this.mutate(actorTelegramUserId, idempotencyKey, { operation: "archive-match", matchId, expectedVersion }, 200, async (repositories) => {
       try {
         this.assertCurrentMatch(await repositories.matches.getForUpdate(matchId));
         const archived = await repositories.matches.archive(matchId, expectedVersion);
@@ -459,15 +443,14 @@ export class OwnerRestService {
   }
 
   public async deleteArchivedMatch(
-    ownerTelegramUserId: bigint,
+    actorTelegramUserId: bigint,
     idempotencyKey: string | undefined,
     ifMatch: string | undefined,
     matchId: bigint,
   ): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
     const expectedVersion = parseIfMatch(ifMatch, true);
     if (expectedVersion === undefined) throw new Error("If-Match was required but not provided");
-    const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "delete-archived-match", matchId, expectedVersion }, 200, async (repositories) => {
+    const body = await this.mutate(actorTelegramUserId, idempotencyKey, { operation: "delete-archived-match", matchId, expectedVersion }, 200, async (repositories) => {
       try {
         const current = await repositories.matches.getForUpdate(matchId);
         this.assertArchivedMatch(current);
@@ -492,15 +475,14 @@ export class OwnerRestService {
   }
 
   public async republishMatch(
-    ownerTelegramUserId: bigint,
+    actorTelegramUserId: bigint,
     idempotencyKey: string | undefined,
     ifMatch: string | undefined,
     matchId: bigint,
   ): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
     const expectedVersion = parseIfMatch(ifMatch, true);
     if (expectedVersion === undefined) throw new Error("If-Match was required but not provided");
-    const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "republish-match", matchId, expectedVersion }, 200, async (repositories) => {
+    const body = await this.mutate(actorTelegramUserId, idempotencyKey, { operation: "republish-match", matchId, expectedVersion }, 200, async (repositories) => {
       try {
         const current = await repositories.matches.getForUpdate(matchId);
         this.assertCurrentMatch(current);
@@ -526,8 +508,7 @@ export class OwnerRestService {
     return body;
   }
 
-  public async listVenues(ownerTelegramUserId: bigint): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
+  public async listVenues(): Promise<Record<string, unknown>> {
     try {
       const venues = await new VenuesRepository(this.db).list();
       return serializeRestObject({ venues: venues.map((venue) => this.venueBody(venue)) });
@@ -536,9 +517,8 @@ export class OwnerRestService {
     }
   }
 
-  public async createVenue(ownerTelegramUserId: bigint, idempotencyKey: string | undefined, input: VenueCreateDto): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
-    return this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "create-venue", input }, 201, async (repositories) => {
+  public async createVenue(actorTelegramUserId: bigint, idempotencyKey: string | undefined, input: VenueCreateDto): Promise<Record<string, unknown>> {
+    return this.mutate(actorTelegramUserId, idempotencyKey, { operation: "create-venue", input }, 201, async (repositories) => {
       try {
         const venue = await repositories.venues.create(input);
         return serializeRestObject({ venue: this.venueBody(venue) });
@@ -549,16 +529,15 @@ export class OwnerRestService {
   }
 
   public async updateVenue(
-    ownerTelegramUserId: bigint,
+    actorTelegramUserId: bigint,
     idempotencyKey: string | undefined,
     ifMatch: string | undefined,
     venueId: bigint,
     input: VenueUpdateDto,
   ): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
     const expectedVersion = parseIfMatch(ifMatch, true);
     if (expectedVersion === undefined) throw new Error("If-Match was required but not provided");
-    const body = await this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "update-venue", venueId, expectedVersion, input }, 200, async (repositories) => {
+    const body = await this.mutate(actorTelegramUserId, idempotencyKey, { operation: "update-venue", venueId, expectedVersion, input }, 200, async (repositories) => {
       try {
         const venue = await repositories.venues.update(venueId, { ...input, expectedVersion });
         const affectedMatches = await repositories.matches.list({ venueId: venue.id });
@@ -576,14 +555,13 @@ export class OwnerRestService {
   }
 
   public async deleteVenue(
-    ownerTelegramUserId: bigint,
+    actorTelegramUserId: bigint,
     idempotencyKey: string | undefined,
     ifMatch: string | undefined,
     venueId: bigint,
   ): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
     const expectedVersion = parseIfMatch(ifMatch, true);
-    return this.mutate(ownerTelegramUserId, idempotencyKey, { operation: "delete-venue", venueId, expectedVersion }, 200, async (repositories) => {
+    return this.mutate(actorTelegramUserId, idempotencyKey, { operation: "delete-venue", venueId, expectedVersion }, 200, async (repositories) => {
       try {
         const deleted = await repositories.venues.delete(venueId, expectedVersion);
         return serializeRestObject({ deleted, venueId });
@@ -593,8 +571,7 @@ export class OwnerRestService {
     });
   }
 
-  public async sendCurrentWeather(ownerTelegramUserId: bigint): Promise<Record<string, unknown>> {
-    this.assertOwner(ownerTelegramUserId);
+  public async sendCurrentWeather(): Promise<Record<string, unknown>> {
     try {
       const weather = await this.weather.sendCurrentWeather();
       return serializeRestObject({ sent: true, observedAt: weather.observedAt });
@@ -604,7 +581,7 @@ export class OwnerRestService {
   }
 
   private async mutate(
-    ownerTelegramUserId: bigint,
+    actorTelegramUserId: bigint,
     idempotencyKey: string | undefined,
     request: Record<string, unknown>,
     status: number,
@@ -614,7 +591,7 @@ export class OwnerRestService {
     try {
       return await withTransaction(this.db, async (repositories) => {
         const begin = await repositories.idempotency.beginInTransaction({
-          ownerTelegramUserId,
+          ownerTelegramUserId: actorTelegramUserId,
           idempotencyKey: key,
           requestHash: canonicalRequestHash(request),
           expiresAt: new Date(Date.now() + IDEMPOTENCY_TTL_MS),
@@ -744,12 +721,6 @@ export class OwnerRestService {
     }
   }
 
-  private assertOwner(ownerTelegramUserId: bigint): void {
-    if (ownerTelegramUserId !== this.config.telegramOwnerUserId) {
-      throw toRestHttpException(restRequestError(403, "TELEGRAM_OWNER_REQUIRED", "This API is restricted to the configured owner."));
-    }
-  }
-
   private assertAccessibleMatch(match: DbMatch): void {
     if (match.telegramChatId !== this.config.telegramGroupChatId || match.deletionRequestedAt !== null) {
       throw toRestHttpException(restRequestError(404, "RESOURCE_NOT_FOUND", "The requested resource was not found."));
@@ -780,7 +751,7 @@ export class OwnerRestService {
     try {
       await this.bestEffort.dispatch();
     } catch {
-      // The durable outbox runner retries delivery without failing the owner mutation.
+      // The durable outbox runner retries delivery without failing the mutation.
     }
   }
 }

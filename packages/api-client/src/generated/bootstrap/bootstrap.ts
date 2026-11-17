@@ -36,7 +36,7 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 /**
- * @summary Load owner Mini App bootstrap data
+ * @summary Load Mini App bootstrap data
  */
 export const getOwnerBootstrap = (
 
@@ -107,7 +107,7 @@ export function useGetOwnerBootstrap<TData = Awaited<ReturnType<typeof getOwnerB
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary Load owner Mini App bootstrap data
+ * @summary Load Mini App bootstrap data
  */
 
 export function useGetOwnerBootstrap<TData = Awaited<ReturnType<typeof getOwnerBootstrap>>, TError = unknown>(

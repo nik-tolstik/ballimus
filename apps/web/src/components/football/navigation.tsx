@@ -1,20 +1,25 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { BarChart3, CalendarDays, MapPinned } from 'lucide-react'
+import { BarChart3, CalendarDays, MapPinned, ShieldCheck } from 'lucide-react'
 
-export type Tab = 'matches' | 'polls' | 'venues'
+export type Tab = 'matches' | 'polls' | 'venues' | 'admins'
 
 const tabs: readonly { readonly value: Tab; readonly label: string; readonly icon: typeof CalendarDays }[] = [
   { value: 'polls', label: 'Опросы', icon: BarChart3 },
   { value: 'matches', label: 'Матчи', icon: CalendarDays },
   { value: 'venues', label: 'Места', icon: MapPinned },
+  { value: 'admins', label: 'Админы', icon: ShieldCheck },
 ]
 
-export function TabBar({ value, onChange }: { readonly value: Tab; readonly onChange: (tab: Tab) => void }) {
+export function TabBar({ value, onChange, canManageAdmins }: {
+  readonly value: Tab
+  readonly onChange: (tab: Tab) => void
+  readonly canManageAdmins: boolean
+}) {
   const reduceMotion = useReducedMotion()
 
   return (
     <nav className="telegram-nav" aria-label="Основная навигация">
-      {tabs.map(({ value: tabValue, label, icon: Icon }) => {
+      {tabs.filter(({ value: tabValue }) => tabValue !== 'admins' || canManageAdmins).map(({ value: tabValue, label, icon: Icon }) => {
         const active = value === tabValue
         return (
           <button

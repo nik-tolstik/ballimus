@@ -25,7 +25,7 @@ const poll = {
   createdAt: '2026-08-11T12:00:00.000Z', updatedAt: '2026-08-11T12:00:00.000Z',
 }
 
-async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boolean; readonly existingPollOptions?: typeof poll.options; readonly failedPoll?: boolean; readonly uncertainPoll?: boolean } = {}): Promise<{ readonly weatherRequests: string[]; readonly pollRequests: unknown[]; readonly notificationSettingsRequests: unknown[]; readonly voteHistoryRequests: string[]; readonly archivePollRequests: string[]; readonly deleteArchivedPollRequests: string[]; readonly deleteVenueRequests: string[]; readonly archiveMatchRequests: string[]; readonly deleteArchivedMatchRequests: string[]; readonly createMatchRequests: unknown[] }> {
+async function mockOwnerApp(page: Page, options: { readonly role?: 'owner' | 'admin' | 'guest' | 'legacy'; readonly existingPoll?: boolean; readonly existingPollOptions?: typeof poll.options; readonly failedPoll?: boolean; readonly uncertainPoll?: boolean } = {}): Promise<{ readonly weatherRequests: string[]; readonly pollRequests: unknown[]; readonly notificationSettingsRequests: unknown[]; readonly voteHistoryRequests: string[]; readonly archivePollRequests: string[]; readonly deleteArchivedPollRequests: string[]; readonly deleteVenueRequests: string[]; readonly archiveMatchRequests: string[]; readonly deleteArchivedMatchRequests: string[]; readonly createMatchRequests: unknown[] }> {
   const weatherRequests: string[] = []
   const pollRequests: unknown[] = []
   const notificationSettingsRequests: unknown[] = []
@@ -37,6 +37,7 @@ async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boole
   const archiveMatchRequests: string[] = []
   const deleteArchivedMatchRequests: string[] = []
   const createMatchRequests: unknown[] = []
+  const administrators = new Set<string>()
   let pollListRequests = 0
   let pollArchived = false
   let archivedPollDeleted = false
@@ -70,6 +71,21 @@ async function mockOwnerApp(page: Page, options: { readonly existingPoll?: boole
     const request = route.request()
     const pathname = new URL(request.url()).pathname
     const json = (body: unknown) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) })
+    if (request.method() === 'GET' && pathname === '/v1/access/session') {
+      const role = options.role ?? 'owner'
+      if (role === 'legacy') return route.fulfill({ status: 404 })
+      return json({ role, telegramUserId: role === 'owner' ? '100' : '5000000002' })
+    }
+    if (pathname === '/v1/access/admins') return json({ telegramUserIds: [...administrators] })
+    const adminId = /^\/v1\/access\/admins\/(\d+)$/.exec(pathname)?.[1]
+    if (adminId !== undefined && request.method() === 'PUT') {
+      administrators.add(adminId)
+      return route.fulfill({ status: 204 })
+    }
+    if (adminId !== undefined && request.method() === 'DELETE') {
+      administrators.delete(adminId)
+      return route.fulfill({ status: 204 })
+    }
     if (request.method() === 'GET' && pathname === '/v1/matches') {
       if (new URL(request.url()).searchParams.get('archived') === 'true') return json({ matches: archivedMatchDeleted ? [] : [archivedMatch, ...(matchArchived ? [{ ...match, archivedAt: '2026-08-15T12:00:00.000Z', version: 2, publicCard: { ...match.publicCard, publicationState: 'deleted' } }] : [])] })
       return json({ matches: [
@@ -163,7 +179,7 @@ test('shows static information cards without roster or voting controls', async (
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', /^data:image\/png;base64,/u)
   await expect.poll(() => faviconCornerAlpha(page)).toBe(0)
   await expect(page.getByRole('heading', { name: 'Опросы', exact: true })).toBeVisible()
-  await expect(page.locator('nav[aria-label="Основная навигация"] > button')).toHaveText(['Опросы', 'Матчи', 'Места'])
+  await expect(page.locator('nav[aria-label="Основная навигация"] > button')).toHaveText(['Опросы', 'Матчи', 'Места', 'Админы'])
   await page.getByRole('button', { name: 'Матчи', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Матчи', exact: true })).toBeVisible()
   await expect(page.getByText('Среда, 12 августа · 20:00-21:30', { exact: true })).toBeVisible()
@@ -193,6 +209,46 @@ test('shows static information cards without roster or voting controls', async (
   await expect(page.getByText(/Игроки|Голосования|Состав/u)).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Игроки', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'История', exact: true })).toHaveCount(0)
+})
+
+test('lets the owner add and revoke a Mini App administrator by Telegram ID', async ({ page }) => {
+  await mockOwnerApp(page)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Админы', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Администраторы' })).toBeVisible()
+  const input = page.getByLabel('Telegram ID')
+  await input.fill('@username')
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click()
+  await expect(page.getByRole('alert')).toHaveText('Введите числовой Telegram ID.')
+  await input.fill('5000000002')
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click()
+  const revoke = page.getByRole('button', { name: 'Отозвать доступ у 5000000002' })
+  await revoke.click()
+  const confirmation = page.getByRole('dialog', { name: 'Отозвать доступ?' })
+  await confirmation.getByRole('button', { name: 'Отмена', exact: true }).click()
+  await expect(revoke).toBeVisible()
+  await revoke.click()
+  await confirmation.getByRole('button', { name: 'Отозвать', exact: true }).click()
+  await expect(page.getByText('Администраторов пока нет')).toBeVisible()
+})
+
+test('shows operational tabs to an administrator without access management', async ({ page }) => {
+  await mockOwnerApp(page, { role: 'admin' })
+  await page.goto('/')
+  await expect(page.locator('nav[aria-label="Основная навигация"] > button')).toHaveText(['Опросы', 'Матчи', 'Места'])
+  await expect(page.getByRole('button', { name: 'Новый опрос', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Матчи', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Новый матч', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Места', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Добавить', exact: true })).toBeVisible()
+})
+
+test('shows the signed-in Telegram ID to a user who needs access', async ({ page }) => {
+  await mockOwnerApp(page, { role: 'guest' })
+  await page.goto('/')
+  await expect(page.getByText('Нужен доступ администратора')).toBeVisible()
+  await expect(page.getByText('5000000002', { exact: true })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Основная навигация' })).toHaveCount(0)
 })
 
 test('archives a match, repeats it, and permanently deletes an archived record', async ({ page }) => {
@@ -238,7 +294,7 @@ test('archives a match, repeats it, and permanently deletes an archived record',
 })
 
 test('does not send current weather when its confirmation is cancelled', async ({ page }) => {
-  const mocked = await mockOwnerApp(page)
+  const mocked = await mockOwnerApp(page, { role: 'legacy' })
   await page.goto('/')
 
   await page.getByRole('button', { name: 'Погода', exact: true }).click()

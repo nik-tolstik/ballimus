@@ -8,8 +8,8 @@ interface AuthenticatedRequest {
 }
 
 /** Reads the identity attached by the platform Mini App guard. */
-export const CurrentOwnerId = createParamDecorator(
-  (_data: unknown, context: ExecutionContext): bigint => {
+export const CurrentMiniAppUser = createParamDecorator(
+  (field: keyof MiniAppAuthenticatedUser | undefined, context: ExecutionContext) => {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const user = request[MINI_APP_REQUEST_USER];
     if (user === undefined) {
@@ -18,6 +18,6 @@ export const CurrentOwnerId = createParamDecorator(
         message: "Telegram Mini App authentication is required.",
       });
     }
-    return user.id;
+    return field === undefined ? user : user[field];
   },
 );
