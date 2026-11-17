@@ -77,6 +77,10 @@ async function mockOwnerApp(page: Page, options: { readonly role?: 'owner' | 'ad
       return json({ role, telegramUserId: role === 'owner' ? '100' : '5000000002' })
     }
     if (pathname === '/v1/access/admins') return json({ telegramUserIds: [...administrators] })
+    if (pathname === '/v1/access/group-members') return json({ members: [
+      { telegramUserId: '5000000002', displayName: 'Иван Петров', username: 'player_one' },
+      { telegramUserId: '5000000003', displayName: 'Мария Иванова', username: null },
+    ] })
     const adminId = /^\/v1\/access\/admins\/(\d+)$/.exec(pathname)?.[1]
     if (adminId !== undefined && request.method() === 'PUT') {
       administrators.add(adminId)
@@ -211,18 +215,21 @@ test('shows static information cards without roster or voting controls', async (
   await expect(page.getByRole('button', { name: 'История', exact: true })).toHaveCount(0)
 })
 
-test('lets the owner add and revoke a Mini App administrator by Telegram ID', async ({ page }) => {
+test('lets the owner select a group member and revoke their Mini App access', async ({ page }) => {
   await mockOwnerApp(page)
   await page.goto('/')
   await page.getByRole('button', { name: 'Админы', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Администраторы' })).toBeVisible()
-  const input = page.getByLabel('Telegram ID')
-  await input.fill('@username')
+  const select = page.getByRole('combobox', { name: 'Участник группы' })
+  await select.click()
+  await page.getByRole('option', { name: 'Иван Петров · @player_one' }).click()
   await page.getByRole('button', { name: 'Добавить', exact: true }).click()
-  await expect(page.getByRole('alert')).toHaveText('Введите числовой Telegram ID.')
-  await input.fill('5000000002')
-  await page.getByRole('button', { name: 'Добавить', exact: true }).click()
-  const revoke = page.getByRole('button', { name: 'Отозвать доступ у 5000000002' })
+  const revoke = page.getByRole('button', { name: 'Отозвать доступ у Иван Петров · @player_one' })
+  await expect(revoke).toBeVisible()
+  await select.click()
+  await expect(page.getByRole('option', { name: 'Мария Иванова' })).toBeVisible()
+  await expect(page.getByRole('option', { name: 'Иван Петров · @player_one' })).toHaveCount(0)
+  await page.keyboard.press('Escape')
   await revoke.click()
   const confirmation = page.getByRole('dialog', { name: 'Отозвать доступ?' })
   await confirmation.getByRole('button', { name: 'Отмена', exact: true }).click()
@@ -243,11 +250,11 @@ test('shows operational tabs to an administrator without access management', asy
   await expect(page.getByRole('button', { name: 'Добавить', exact: true })).toBeVisible()
 })
 
-test('shows the signed-in Telegram ID to a user who needs access', async ({ page }) => {
+test('directs a group member who needs access to the owner', async ({ page }) => {
   await mockOwnerApp(page, { role: 'guest' })
   await page.goto('/')
   await expect(page.getByText('Нужен доступ администратора')).toBeVisible()
-  await expect(page.getByText('5000000002', { exact: true })).toBeVisible()
+  await expect(page.getByText('Попросите владельца Ballimus назначить вас администратором.')).toBeVisible()
   await expect(page.getByRole('navigation', { name: 'Основная навигация' })).toHaveCount(0)
 })
 

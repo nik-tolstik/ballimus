@@ -26,6 +26,7 @@ import type {
 
 import type {
   MiniAppAdminsResponseDto,
+  MiniAppGroupMembersResponseDto,
   MiniAppSessionResponseDto
 } from '.././model/index.js';
 
@@ -213,6 +214,98 @@ export function useListMiniAppAdmins<TData = Awaited<ReturnType<typeof listMiniA
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getListMiniAppAdminsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * @summary List current Telegram group members as the owner
+ */
+export const listMiniAppGroupMembers = (
+
+ options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
+) => {
+
+
+      return customInstance<MiniAppGroupMembersResponseDto>(
+      {url: `/v1/access/group-members`, method: 'GET', ...(signal ? { signal }: {})
+    },
+      options);
+    }
+
+
+
+
+export const getListMiniAppGroupMembersQueryKey = () => {
+    return [
+    `/v1/access/group-members`
+    ] as const;
+    }
+
+
+export const getListMiniAppGroupMembersQueryOptions = <TData = Awaited<ReturnType<typeof listMiniAppGroupMembers>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMiniAppGroupMembers>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMiniAppGroupMembersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMiniAppGroupMembers>>> = ({ signal }) => listMiniAppGroupMembers(requestOptions, signal);
+
+
+
+
+
+   return  { queryKey, queryFn,   retry: false,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMiniAppGroupMembers>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListMiniAppGroupMembersQueryResult = NonNullable<Awaited<ReturnType<typeof listMiniAppGroupMembers>>>
+export type ListMiniAppGroupMembersQueryError = unknown
+
+
+export function useListMiniAppGroupMembers<TData = Awaited<ReturnType<typeof listMiniAppGroupMembers>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMiniAppGroupMembers>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listMiniAppGroupMembers>>,
+          TError,
+          Awaited<ReturnType<typeof listMiniAppGroupMembers>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListMiniAppGroupMembers<TData = Awaited<ReturnType<typeof listMiniAppGroupMembers>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMiniAppGroupMembers>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listMiniAppGroupMembers>>,
+          TError,
+          Awaited<ReturnType<typeof listMiniAppGroupMembers>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListMiniAppGroupMembers<TData = Awaited<ReturnType<typeof listMiniAppGroupMembers>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMiniAppGroupMembers>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List current Telegram group members as the owner
+ */
+
+export function useListMiniAppGroupMembers<TData = Awaited<ReturnType<typeof listMiniAppGroupMembers>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMiniAppGroupMembers>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListMiniAppGroupMembersQueryOptions(options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

@@ -17,9 +17,9 @@ Editing a match updates the same Telegram message. A jobs invocation retries tra
 
 ## Mini App access
 
-Open the Mini App from Telegram. Ballimus checks the signed Telegram session and the account's current role on every API request. A Telegram user without access can see their own Telegram ID and send it to the owner.
+Open the Mini App from Telegram. Ballimus checks the signed Telegram session and the account's current role on every API request. A group member without access can ask the owner to grant it.
 
-The owner can add a numeric Telegram ID in **Admins** or revoke access from the same list. Administrators can manage the three working sections:
+In **Admins**, the owner can select a current group member by name or revoke an existing grant. The bot rechecks Telegram group membership before granting access. Administrators can manage the three working sections:
 
 - **Matches** — create and edit information cards; the active-card actions menu contains only **Archive**. The archive button beside **New match** opens archived matches, newest first;
 - **Polls** — create native regular Telegram polls in the configured General topic. The archive button beside **New poll** opens archived polls, newest first;

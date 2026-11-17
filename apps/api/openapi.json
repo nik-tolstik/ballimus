@@ -55,6 +55,33 @@
         ]
       }
     },
+    "/v1/access/group-members": {
+      "get": {
+        "operationId": "listMiniAppGroupMembers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MiniAppGroupMembersResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "List current Telegram group members as the owner",
+        "tags": [
+          "access"
+        ]
+      }
+    },
     "/v1/access/admins/{telegramUserId}": {
       "put": {
         "operationId": "grantMiniAppAdmin",
@@ -1016,6 +1043,40 @@
         },
         "required": [
           "telegramUserIds"
+        ]
+      },
+      "MiniAppGroupMemberResponseDto": {
+        "type": "object",
+        "properties": {
+          "telegramUserId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "telegramUserId",
+          "displayName",
+          "username"
+        ]
+      },
+      "MiniAppGroupMembersResponseDto": {
+        "type": "object",
+        "properties": {
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MiniAppGroupMemberResponseDto"
+            }
+          }
+        },
+        "required": [
+          "members"
         ]
       },
       "OwnerIdentityResponseDto": {

@@ -7,6 +7,7 @@ import { MiniAppAccessService } from "../auth/mini-app-access.service.js";
 import { MINI_APP_ROLES, type MiniAppRole } from "../auth/mini-app-auth.constants.js";
 import { MiniAppAccess } from "../auth/mini-app-auth.decorator.js";
 import type { MiniAppAuthenticatedUser } from "../auth/mini-app-auth.guard.js";
+import { TelegramGroupMembersService, type TelegramGroupMember } from "../telegram/telegram-group-members.service.js";
 import { CurrentMiniAppUser } from "./rest.decorator.js";
 
 class MiniAppSessionResponseDto {
@@ -22,12 +23,31 @@ class MiniAppAdminsResponseDto {
   telegramUserIds!: string[];
 }
 
+class MiniAppGroupMemberResponseDto implements TelegramGroupMember {
+  @ApiProperty({ type: String })
+  telegramUserId!: string;
+
+  @ApiProperty({ type: String })
+  displayName!: string;
+
+  @ApiProperty({ type: String, nullable: true })
+  username!: string | null;
+}
+
+class MiniAppGroupMembersResponseDto {
+  @ApiProperty({ type: [MiniAppGroupMemberResponseDto] })
+  members!: MiniAppGroupMemberResponseDto[];
+}
+
 @ApiTags("access")
 @ApiSecurity("telegramMiniApp")
 @Controller("access")
 @MiniAppAccess("owner")
 export class AccessController {
-  public constructor(@Inject(MiniAppAccessService) private readonly access: MiniAppAccessService) {}
+  public constructor(
+    @Inject(MiniAppAccessService) private readonly access: MiniAppAccessService,
+    @Inject(TelegramGroupMembersService) private readonly groupMembers: TelegramGroupMembersService,
+  ) {}
 
   @Get("session")
   @Header("Cache-Control", "private, no-store")
@@ -46,13 +66,23 @@ export class AccessController {
     return { telegramUserIds: await this.access.listAdmins() };
   }
 
+  @Get("group-members")
+  @Header("Cache-Control", "private, no-store")
+  @ApiOperation({ operationId: "listMiniAppGroupMembers", summary: "List current Telegram group members as the owner" })
+  @ApiOkResponse({ type: MiniAppGroupMembersResponseDto })
+  public async listGroupMembers(): Promise<MiniAppGroupMembersResponseDto> {
+    return { members: await this.groupMembers.list() };
+  }
+
   @Put("admins/:telegramUserId")
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ operationId: "grantMiniAppAdmin", summary: "Grant Mini App administrator access as the owner" })
   @ApiParam({ name: "telegramUserId", type: String })
   @ApiNoContentResponse()
-  public grant(@Param("telegramUserId") telegramUserId: string): Promise<void> {
-    return this.access.setAdmin(telegramUserId, true);
+  public async grant(@Param("telegramUserId") telegramUserId: string): Promise<void> {
+    const target = this.access.adminTarget(telegramUserId);
+    await this.groupMembers.assertMember(target);
+    return this.access.setAdmin(target, true);
   }
 
   @Delete("admins/:telegramUserId")
@@ -61,6 +91,6 @@ export class AccessController {
   @ApiParam({ name: "telegramUserId", type: String })
   @ApiNoContentResponse()
   public revoke(@Param("telegramUserId") telegramUserId: string): Promise<void> {
-    return this.access.setAdmin(telegramUserId, false);
+    return this.access.setAdmin(this.access.adminTarget(telegramUserId), false);
   }
 }

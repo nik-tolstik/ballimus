@@ -5,4 +5,5 @@ packages:
 allowBuilds:
   '@railway/cli': true
   '@scarf/scarf': false
+  better-sqlite3: false
   esbuild: true

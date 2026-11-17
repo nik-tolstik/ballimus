@@ -51,6 +51,7 @@ function safeStartupMessage(error: unknown): string {
   for (const name of [
     "DATABASE_URL",
     "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_API_HASH",
     "TELEGRAM_OWNER_USER_ID",
     "TELEGRAM_CHAT_ID",
     "TELEGRAM_GENERAL_TOPIC_ID",

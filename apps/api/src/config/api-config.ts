@@ -15,6 +15,7 @@ export type ApiLogLevel = (typeof API_LOG_LEVELS)[number];
 export interface ApiConfig {
   readonly databaseUrl: string;
   readonly telegramBotToken: string;
+  readonly telegramMtproto?: { readonly apiId: number; readonly apiHash: string };
   readonly telegramOwnerUserId: bigint;
   readonly telegramGroupChatId: bigint;
   readonly telegramGeneralTopicId: bigint;
@@ -117,6 +118,19 @@ function parsePort(environment: ApiEnvironment): number {
   return port;
 }
 
+function parseMtproto(environment: ApiEnvironment): ApiConfig["telegramMtproto"] {
+  const apiId = parseInteger(environment, "TELEGRAM_API_ID");
+  const apiHash = readString(environment, "TELEGRAM_API_HASH");
+  if (apiId === undefined && apiHash === undefined) return undefined;
+  if (apiId === undefined || apiId <= 0n || apiId > 2_147_483_647n || apiHash === undefined || !/^[a-f\d]{32}$/iu.test(apiHash)) {
+    throw new ApiConfigurationError("Set both TELEGRAM_API_ID and TELEGRAM_API_HASH to valid Telegram application credentials.", [
+      "TELEGRAM_API_ID",
+      "TELEGRAM_API_HASH",
+    ]);
+  }
+  return { apiId: Number(apiId), apiHash };
+}
+
 function validateTimezone(timezone: string): string {
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: timezone }).format();
@@ -203,9 +217,11 @@ export function parseApiConfig(
     throw new ApiConfigurationError("LOG_LEVEL must be one of debug, info, warn, or error", ["LOG_LEVEL"]);
   }
 
+  const telegramMtproto = parseMtproto(environment);
   return {
     databaseUrl,
     telegramBotToken: requiredString(environment, "TELEGRAM_BOT_TOKEN"),
+    ...(telegramMtproto === undefined ? {} : { telegramMtproto }),
     telegramOwnerUserId: requiredInteger(environment, "TELEGRAM_OWNER_USER_ID", "positive"),
     telegramGroupChatId: requiredInteger(environment, "TELEGRAM_CHAT_ID", "nonZero"),
     telegramGeneralTopicId: requiredInteger(environment, "TELEGRAM_GENERAL_TOPIC_ID", "positive"),

@@ -124,6 +124,25 @@ export class TelegramBotService {
     });
   }
 
+  public async isHumanChatMember(groupId: bigint, userId: bigint): Promise<boolean> {
+    try {
+      const member = await this.withDeadline((signal) =>
+        this.bot.api.getChatMember(chatId(groupId), positiveTelegramNumber(userId, "telegramUserId"), signal),
+      );
+      if (member.user.is_bot || member.status === "left" || member.status === "kicked") return false;
+      return member.status !== "restricted" || member.is_member;
+    } catch (error) {
+      if (error instanceof GrammyError && error.error_code === 400 && /user not found|user_id_invalid|participant_id_invalid/i.test(error.description)) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  public getChatMemberCount(groupId: bigint): Promise<number> {
+    return this.withDeadline((signal) => this.bot.api.getChatMemberCount(chatId(groupId), signal));
+  }
+
   public async sendMessage(input: TelegramSendMessageInput): Promise<TelegramSentMessage> {
     const messageThreadId = optionalTelegramNumber(input.messageThreadId, "messageThreadId");
     const sent = await this.withDeadline((signal) => this.bot.api.sendMessage(chatId(input.chatId), input.text, {

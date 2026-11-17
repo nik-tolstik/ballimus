@@ -133,15 +133,11 @@ export function App({ telegramSession }: AppProps = {}) {
   if (effectiveAuthFailure === 'expired') return <StateScreen kind="unauthorized" title="Сессия Telegram истекла" copy="Закройте это окно и заново откройте Mini App из Telegram." />
   if (session.status === 'error') return <StateScreen kind="error" title="Не удалось запустить Telegram" copy={session.reason ?? 'Telegram не смог запустить мини-приложение.'} />
   if (session.status === 'unauthorized' || effectiveAuthFailure === 'unauthorized' || role === 'guest') {
-    const telegramUserId = accessQuery.data?.telegramUserId
     return <StateScreen
       kind="unauthorized"
       title="Нужен доступ администратора"
-      copy={telegramUserId === undefined ? 'У этого аккаунта Telegram нет доступа к управлению командой.' : 'Передайте свой Telegram ID владельцу Ballimus.'}
-      action={<>
-        {telegramUserId === undefined ? null : <p className="text-sm">Telegram ID <code className="select-all rounded bg-muted px-2 py-1">{telegramUserId}</code></p>}
-        <Button onClick={() => window.location.reload()}><RotateCw data-icon="inline-start" />Перезагрузить</Button>
-      </>}
+      copy="Попросите владельца Ballimus назначить вас администратором."
+      action={<Button onClick={() => window.location.reload()}><RotateCw data-icon="inline-start" />Перезагрузить</Button>}
     />
   }
   if (accessQuery.isLoading) return <StateScreen kind="loading" title="Загружаем данные" copy="Проверяем доступ…" />

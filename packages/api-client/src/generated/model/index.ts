@@ -27,6 +27,8 @@ export * from './matchListResponseDto.js';
 export * from './matchResponseDto.js';
 export * from './matchScheduleResponseDto.js';
 export * from './miniAppAdminsResponseDto.js';
+export * from './miniAppGroupMemberResponseDto.js';
+export * from './miniAppGroupMembersResponseDto.js';
 export * from './miniAppSessionResponseDto.js';
 export * from './miniAppSessionResponseDtoRole.js';
 export * from './ownerIdentityResponseDto.js';

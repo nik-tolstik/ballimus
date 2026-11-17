@@ -1,7 +1,7 @@
 import "reflect-metadata";
 
 import { createHmac } from "node:crypto";
-import { Module, type INestApplication } from "@nestjs/common";
+import { BadRequestException, Module, type INestApplication } from "@nestjs/common";
 import { APP_GUARD, NestFactory } from "@nestjs/core";
 import { MiniAppAdminsRepository } from "@football/db";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -10,6 +10,7 @@ import { MiniAppAccessService } from "../auth/mini-app-access.service.js";
 import { MiniAppAuthGuard } from "../auth/mini-app-auth.guard.js";
 import { API_CONFIG } from "../config/api-config.js";
 import { APP_DATABASE } from "../database/database.constants.js";
+import { TelegramGroupMembersService } from "../telegram/telegram-group-members.service.js";
 import { AccessController } from "./access.controller.js";
 import { MatchesController, PollsController, VenuesController, WeatherController } from "./rest.controller.js";
 import { RestService } from "./rest.service.js";
@@ -29,6 +30,12 @@ const createVenue = vi.fn<RestService["createVenue"]>().mockResolvedValue({});
     { provide: APP_GUARD, useClass: MiniAppAuthGuard },
     { provide: API_CONFIG, useValue: { telegramBotToken: botToken, telegramOwnerUserId: BigInt(ownerId), miniAppInitDataMaxAgeSeconds: 60 } },
     { provide: APP_DATABASE, useValue: {} },
+    { provide: TelegramGroupMembersService, useValue: {
+      list: async () => [{ telegramUserId: String(adminId), displayName: "Test player", username: null }],
+      assertMember: async (id: bigint) => {
+        if (id !== BigInt(adminId)) throw new BadRequestException({ code: "TELEGRAM_GROUP_MEMBER_REQUIRED" });
+      },
+    } },
     { provide: RestService, useValue: { createMatch, createPoll, createVenue, sendCurrentWeather: () => ({}) } },
   ],
 })
@@ -79,6 +86,13 @@ it("lets only the owner grant and revoke access and checks it on every managemen
   expect((await request("/access/admins/9007199254740992", ownerSession, "PUT")).status).toBe(400);
   expect((await request(`/access/admins/${ownerId}`, ownerSession, "PUT")).status).toBe(400);
   expect((await request(`/access/admins/${ownerId}`, ownerSession, "DELETE")).status).toBe(400);
+  expect((await request("/access/group-members", adminSession)).status).toBe(403);
+  expect(await (await request("/access/group-members", ownerSession)).json()).toEqual({
+    members: [{ telegramUserId: String(adminId), displayName: "Test player", username: null }],
+  });
+  const outsider = await request("/access/admins/300", ownerSession, "PUT");
+  expect(outsider.status).toBe(400);
+  expect(await outsider.json()).toEqual({ code: "TELEGRAM_GROUP_MEMBER_REQUIRED" });
   expect((await request(adminPath, ownerSession, "PUT")).status).toBe(204);
   expect(await (await request("/access/admins", ownerSession)).json()).toEqual({ telegramUserIds: [String(adminId)] });
 
@@ -91,6 +105,7 @@ it("lets only the owner grant and revoke access and checks it on every managemen
     expect(create.mock.calls[0]?.[0]).toBe(BigInt(adminId));
   }
   expect((await request("/access/admins", adminSession)).status).toBe(403);
+  expect((await request("/access/group-members", adminSession)).status).toBe(403);
   expect((await request("/access/admins/300", adminSession, "PUT")).status).toBe(403);
   expect((await request(adminPath, adminSession, "DELETE")).status).toBe(403);
   expect((await request("/weather/current", adminSession, "POST")).status).toBe(403);

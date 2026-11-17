@@ -49,7 +49,7 @@ export class MiniAppAccessService {
     }
   }
 
-  public async setAdmin(rawId: string, enabled: boolean): Promise<void> {
+  public adminTarget(rawId: string): bigint {
     const id = parseTelegramUserId(rawId);
     if (id === undefined) {
       throw toRestHttpException(restRequestError(400, "TELEGRAM_USER_ID_INVALID", "Enter a valid Telegram user ID."));
@@ -57,6 +57,10 @@ export class MiniAppAccessService {
     if (this.isOwner(id)) {
       throw toRestHttpException(restRequestError(400, "TELEGRAM_OWNER_IMMUTABLE", "The configured owner already has full access."));
     }
+    return id;
+  }
+
+  public async setAdmin(id: bigint, enabled: boolean): Promise<void> {
     try {
       if (enabled) await this.admins.grant(id);
       else await this.admins.revoke(id);
