@@ -11,18 +11,23 @@ import {
 import { Reflector } from "@nestjs/core";
 
 import { API_CONFIG, type ApiConfig } from "../config/api-config.js";
+import { MiniAppAccessService, parseTelegramUserId } from "./mini-app-access.service.js";
 import {
   DEFAULT_AUTH_DATE_FUTURE_SKEW_SECONDS,
+  MINI_APP_ACCESS_METADATA,
   MINI_APP_AUTH_BYPASS_METADATA,
   MINI_APP_REQUEST_USER,
   TELEGRAM_INIT_DATA_HEADER_LOWERCASE,
   TELEGRAM_WEB_APP_DATA_LABEL,
+  type MiniAppAccessLevel,
   type MiniAppAuthBypassScope,
   type MiniAppAuthFailureCode,
+  type MiniAppRole,
 } from "./mini-app-auth.constants.js";
 
 export interface MiniAppAuthenticatedUser {
   readonly id: bigint;
+  readonly role: MiniAppRole;
 }
 
 interface MiniAppRequest {
@@ -32,13 +37,12 @@ interface MiniAppRequest {
 
 export interface ValidateTelegramMiniAppInitDataOptions {
   readonly botToken: string;
-  readonly ownerUserId: bigint;
   readonly maxAgeSeconds: number;
   readonly nowSeconds?: number;
 }
 
 export interface ValidatedTelegramMiniAppInitData {
-  readonly user: MiniAppAuthenticatedUser;
+  readonly user: Pick<MiniAppAuthenticatedUser, "id">;
   readonly authDate: Date;
 }
 
@@ -62,22 +66,8 @@ function validationError(
     TELEGRAM_INIT_DATA_MALFORMED: "Telegram Mini App init data is malformed.",
     TELEGRAM_INIT_DATA_INVALID: "Telegram Mini App init data is invalid.",
     TELEGRAM_INIT_DATA_EXPIRED: "Telegram Mini App init data has expired; reopen the Mini App.",
-    TELEGRAM_OWNER_REQUIRED: "This Telegram Mini App is restricted to the configured owner.",
   };
   return new MiniAppAuthValidationError(code, messages[code]);
-}
-
-function parseUserId(value: unknown): bigint | undefined {
-  if (typeof value === "string" && /^\d+$/.test(value)) {
-    try {
-      const parsed = BigInt(value);
-      return parsed > 0n ? parsed : undefined;
-    } catch {
-      return undefined;
-    }
-  }
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) return undefined;
-  return BigInt(value);
 }
 
 function parseAuthDate(value: string): bigint | undefined {
@@ -107,7 +97,7 @@ function isHashValid(providedHash: string | undefined, calculatedHash: Buffer): 
   return provided.length === calculatedHash.length && timingSafeEqual(provided, calculatedHash);
 }
 
-function parseAndValidateUser(userValue: string | undefined): MiniAppAuthenticatedUser {
+function parseAndValidateUser(userValue: string | undefined): ValidatedTelegramMiniAppInitData["user"] {
   if (userValue === undefined) throw validationError("TELEGRAM_INIT_DATA_MALFORMED");
 
   let parsed: unknown;
@@ -121,7 +111,7 @@ function parseAndValidateUser(userValue: string | undefined): MiniAppAuthenticat
     throw validationError("TELEGRAM_INIT_DATA_MALFORMED");
   }
 
-  const userId = parseUserId((parsed as { id?: unknown }).id);
+  const userId = parseTelegramUserId((parsed as { id?: unknown }).id);
   if (userId === undefined) throw validationError("TELEGRAM_INIT_DATA_MALFORMED");
   return { id: userId };
 }
@@ -172,7 +162,6 @@ export function validateTelegramMiniAppInitData(
   }
 
   const user = parseAndValidateUser(userValue);
-  if (user.id !== options.ownerUserId) throw validationError("TELEGRAM_OWNER_REQUIRED");
 
   return {
     user,
@@ -189,24 +178,19 @@ function headerValue(request: MiniAppRequest): string | undefined {
   return undefined;
 }
 
-function authException(error: MiniAppAuthValidationError): UnauthorizedException | ForbiddenException {
-  const response = { code: error.code, message: error.message };
-  return error.code === "TELEGRAM_OWNER_REQUIRED"
-    ? new ForbiddenException(response)
-    : new UnauthorizedException(response);
-}
-
 @Injectable()
 export class MiniAppAuthGuard implements CanActivate {
   constructor(
     @Inject(Reflector) private readonly reflector: Reflector,
     @Inject(API_CONFIG) private readonly apiConfig: ApiConfig,
+    @Inject(MiniAppAccessService) private readonly access: MiniAppAccessService,
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const targets = [context.getHandler(), context.getClass()];
     const bypass = this.reflector.getAllAndOverride<MiniAppAuthBypassScope | undefined>(
       MINI_APP_AUTH_BYPASS_METADATA,
-      [context.getHandler(), context.getClass()],
+      targets,
     );
     if (bypass !== undefined) return true;
     if (context.getType<string>() !== "http") {
@@ -225,20 +209,38 @@ export class MiniAppAuthGuard implements CanActivate {
       });
     }
 
+    let validated: ValidatedTelegramMiniAppInitData;
     try {
-      const validated = validateTelegramMiniAppInitData(rawInitData, {
+      validated = validateTelegramMiniAppInitData(rawInitData, {
         botToken: this.apiConfig.telegramBotToken,
-        ownerUserId: this.apiConfig.telegramOwnerUserId,
         maxAgeSeconds: this.apiConfig.miniAppInitDataMaxAgeSeconds,
       });
-      request[MINI_APP_REQUEST_USER] = validated.user;
-      return true;
     } catch (error) {
-      if (error instanceof MiniAppAuthValidationError) throw authException(error);
+      if (error instanceof MiniAppAuthValidationError) {
+        throw new UnauthorizedException({ code: error.code, message: error.message });
+      }
       throw new UnauthorizedException({
         code: "TELEGRAM_INIT_DATA_INVALID",
         message: "Telegram Mini App init data is invalid.",
       });
     }
+
+    const { id } = validated.user;
+    const level = this.reflector.getAllAndOverride<MiniAppAccessLevel>(MINI_APP_ACCESS_METADATA, targets) ?? "owner";
+    if (level === "owner" && !this.access.isOwner(id)) {
+      throw new ForbiddenException({
+        code: "TELEGRAM_OWNER_REQUIRED",
+        message: "This action requires the configured owner.",
+      });
+    }
+    const role = await this.access.roleFor(id);
+    if (level === "admin" && role === "guest") {
+      throw new ForbiddenException({
+        code: "TELEGRAM_ADMIN_REQUIRED",
+        message: "This action requires Mini App administrator access.",
+      });
+    }
+    request[MINI_APP_REQUEST_USER] = { id, role };
+    return true;
   }
 }

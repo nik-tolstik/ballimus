@@ -1,3 +1,4 @@
+export * from "./generated/access/access.js";
 export * from "./generated/bootstrap/bootstrap.js";
 export * from "./generated/matches/matches.js";
 export * from "./generated/model/index.js";

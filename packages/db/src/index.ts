@@ -11,5 +11,6 @@ export * from "./repositories/errors.js";
 export * from "./repositories/idempotency.js";
 export * from "./repositories/match-messages.js";
 export * from "./repositories/matches.js";
+export * from "./repositories/mini-app-admins.js";
 export * from "./repositories/polls.js";
 export * from "./repositories/venues.js";

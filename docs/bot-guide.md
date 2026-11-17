@@ -1,6 +1,6 @@
 # Bot and Mini App Guide
 
-Ballimus is an owner-only Telegram Mini App for publishing match information and independent native Telegram polls. It does not collect players or maintain rosters.
+Ballimus is a Telegram Mini App for publishing match information and independent native Telegram polls. The configured owner and appointed administrators can manage them.
 
 ## Telegram card
 
@@ -15,11 +15,11 @@ The card has no inline keyboard, vote status, player list, threshold, or lifecyc
 
 Editing a match updates the same Telegram message. A jobs invocation retries transient Telegram card-delivery failures. The owner can manually archive a match from its actions: the Telegram card is deleted, the match disappears from the active list, and its details remain available in the Mini App archive. Archived matches can be repeated into a new card or permanently deleted after confirmation; they cannot be restored and are never archived automatically.
 
-## Owner Mini App
+## Mini App access
 
-The configured owner opens the Mini App from Telegram. Signed Telegram `initData` is required; an ordinary browser tab or another Telegram user cannot access the API.
+Open the Mini App from Telegram. Ballimus checks the signed Telegram session and the account's current role on every API request. A group member without access can ask the owner to grant it.
 
-The Mini App has three sections:
+In **Admins**, the owner can select a current group member by name or revoke an existing grant. The bot rechecks Telegram group membership before granting access. Administrators can manage the three working sections:
 
 - **Matches** — create and edit information cards; the active-card actions menu contains only **Archive**. The archive button beside **New match** opens archived matches, newest first;
 - **Polls** — create native regular Telegram polls in the configured General topic. The archive button beside **New poll** opens archived polls, newest first;
@@ -31,9 +31,9 @@ Count notifications are enabled by default at 10 people, and the organizer can c
 
 Creating a poll makes one bounded Telegram request. A confirmed Telegram rejection is shown as “Not published”; a timeout or network interruption asks the owner to check General because the poll may still have arrived. The application never resends a poll automatically or manually. Failed and uncertain polls remain visible with their status and may be archived.
 
-The global **Weather** action sends the current Minsk weather to the configured Telegram chat/topic. It is independent of matches, has no daily cap, and can be pressed repeatedly.
+The owner's **Weather** action sends the current Minsk weather to the configured Telegram chat/topic. It is independent of matches, has no daily cap, and can be pressed repeatedly.
 
-All mutations use idempotency keys. Updating or archiving a match, editing a venue, and deleting a venue use `If-Match` versions to prevent silent overwrites. A venue cannot be deleted while any match references it; existing matches remain unchanged.
+Administrator grants and revocations are idempotent by Telegram ID. Poll, match, and venue mutations use idempotency keys scoped to the acting account. Updating or archiving a match, editing a venue, and deleting a venue use `If-Match` versions to prevent silent overwrites. A venue cannot be deleted while any match references it; existing matches remain unchanged.
 
 ## Operational boundary
 

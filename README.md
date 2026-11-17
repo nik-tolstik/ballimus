@@ -1,13 +1,13 @@
 # Ballimus
 
-Ballimus publishes football match information cards through an owner-only Telegram Mini App. The maintained application is a pnpm workspace with a NestJS API, a React/Vite frontend, PostgreSQL persistence, generated OpenAPI client code, and short-lived background jobs.
+Ballimus publishes football match information cards through a Telegram Mini App for the owner and appointed administrators. The maintained application is a pnpm workspace with a NestJS API, a React/Vite frontend, PostgreSQL persistence, generated OpenAPI client code, and short-lived background jobs.
 
 Production is not claimed to be deployed. The Vercel/Railway topology, test-group validation, and clean production cutover are documented in [the production runbook](docs/railway.md). Deployment, migration, legacy webhook removal, Mini App URL changes, and BotFather changes require explicit owner authorization.
 
 ## Current architecture
 
 - `apps/api` — NestJS HTTP API, Mini App authentication, REST operations, Telegram card effects, current-weather delivery, and job composition.
-- `apps/web` — React/Vite Telegram Mini App for the configured owner.
+- `apps/web` — React/Vite Telegram Mini App for the owner and administrators.
 - `packages/domain` — pure information-card, venue, weather, and Telegram-card rules.
 - `packages/db` — PostgreSQL Drizzle schema, migrations, repositories, transactions, idempotency, outbox, and job leases.
 - `packages/api-client` — generated OpenAPI models and TanStack Query hooks plus the transport mutator.

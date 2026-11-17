@@ -9,11 +9,12 @@ import { TelegramBotService, TelegramEffects } from "./telegram-effects.js";
 import { TelegramPollController } from "./telegram-poll.controller.js";
 import { TelegramPollPublicationService } from "./telegram-poll-publication.service.js";
 import { TelegramPollUpdateService } from "./telegram-poll-update.service.js";
+import { TelegramGroupMembersService } from "./telegram-group-members.service.js";
 
 @Module({
   imports: [ApiConfigModule, DatabaseModule],
   controllers: [TelegramPollController],
-  providers: [TelegramBotService, TelegramEffects, TelegramCardService, TelegramPollPublicationService, TelegramPollUpdateService, OutboxDispatcher, OutboxBestEffortService],
-  exports: [TelegramEffects, TelegramCardService, TelegramPollPublicationService, TelegramPollUpdateService, OutboxDispatcher, OutboxBestEffortService],
+  providers: [TelegramBotService, TelegramEffects, TelegramCardService, TelegramPollPublicationService, TelegramPollUpdateService, OutboxDispatcher, OutboxBestEffortService, TelegramGroupMembersService],
+  exports: [TelegramBotService, TelegramEffects, TelegramCardService, TelegramPollPublicationService, TelegramPollUpdateService, OutboxDispatcher, OutboxBestEffortService, TelegramGroupMembersService],
 })
 export class TelegramModule {}

@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import {
   MatchMessagesRepository,
   MatchesRepository,
+  MiniAppAdminsRepository,
   OutboxRepository,
   TelegramPollsRepository,
   VenuesRepository,
@@ -34,7 +35,7 @@ describe("information-card PostgreSQL schema", () => {
     await database.close();
   }, TEST_TIMEOUT_MS);
 
-  it("contains only information-card application tables after the cleanup migration", async () => {
+  it("contains only the current application tables after migration", async () => {
     const tables = await database.sql<{ table_name: string }[]>`
       select table_name
       from information_schema.tables
@@ -46,12 +47,29 @@ describe("information-card PostgreSQL schema", () => {
       "job_claims",
       "match_messages",
       "matches",
+      "mini_app_admins",
       "outbox",
       "telegram_poll_vote_events",
       "telegram_poll_voter_answers",
       "telegram_polls",
       "venues",
     ]);
+  });
+
+  it("persists grants by Telegram ID and supports repeated grants and revocations", async () => {
+    const id = 5_000_700_002n;
+    const admins = new MiniAppAdminsRepository(database.db);
+    expect(await admins.has(id)).toBe(false);
+
+    await Promise.all([admins.grant(id), admins.grant(id)]);
+    const reloaded = new MiniAppAdminsRepository(database.db);
+    expect(await reloaded.list(OWNER_ID)).toEqual([id]);
+    expect(await reloaded.has(id)).toBe(true);
+
+    await reloaded.revoke(id);
+    await reloaded.revoke(id);
+    expect(await admins.has(id)).toBe(false);
+    expect(await admins.list(OWNER_ID)).toEqual([]);
   });
 
   it("requires a venue and supports idempotent deletion of a card", async () => {

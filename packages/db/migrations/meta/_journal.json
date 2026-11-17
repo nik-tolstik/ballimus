@@ -169,6 +169,13 @@
       "when": 1787670503165,
       "tag": "0023_dazzling_scream",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794954451306,
+      "tag": "0024_mini_app_admins",
+      "breakpoints": true
     }
   ]
 }

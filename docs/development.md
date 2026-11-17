@@ -34,6 +34,8 @@ Telegram Mini App is the only supported local development mode. First ensure tha
 
 The optional `pnpm dev -- --set-menu-button` command sets the menu button for the local test bot only. Use `pnpm dev -- --set-webhook` only with that bot to register `${CLOUDFLARE_TUNNEL_URL}/v1/telegram/webhook` for aggregate `poll` and individual `poll_answer` updates and exercise threshold notifications. The Cloudflare route targets Vite on port `6173`; Vite proxies `/v1` to the loopback API on port `6000`.
 
+To populate the **Admins** selector, add the Telegram application credentials `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` from `my.telegram.org` to the local environment and restart `pnpm dev`. Ballimus uses them to connect over MTProto as the configured test bot, which must be an administrator in the test group. Keep the credentials out of Git.
+
 ## Useful commands
 
 ```bash
