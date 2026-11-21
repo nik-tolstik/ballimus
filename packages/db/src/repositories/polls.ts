@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 
 import {
   telegramPollVoteEvents,
@@ -443,6 +443,18 @@ export class TelegramPollsRepository {
       ))
       .orderBy(desc(telegramPollVoteEvents.id))
       .limit(limit);
+  }
+
+  public async listOptionVoterUsernames(pollId: DatabaseIdentifier, optionIndex: number): Promise<(string | null)[]> {
+    const answers = await this.db.select({ username: telegramPollVoterAnswers.username })
+      .from(telegramPollVoterAnswers)
+      .where(and(
+        eq(telegramPollVoterAnswers.pollId, positiveBigInt(pollId, "pollId")),
+        eq(telegramPollVoterAnswers.voterKind, "user"),
+        sql`${telegramPollVoterAnswers.selectedOptionIndexes} @> ${JSON.stringify([optionIndex])}::jsonb`,
+      ))
+      .orderBy(telegramPollVoterAnswers.telegramVoterId);
+    return answers.map(({ username }) => username);
   }
 
   public async applyTelegramUpdate(

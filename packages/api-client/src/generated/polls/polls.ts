@@ -35,6 +35,7 @@ import type {
   PollEnvelopeResponseDto,
   PollListResponseDto,
   PollNotificationSettingsUpdateDto,
+  PollOptionVotersResponseDto,
   PollVoteHistoryResponseDto,
   UpdateOwnerPollNotificationSettingsHeaders
 } from '.././model/index.js';
@@ -297,6 +298,105 @@ export function useGetOwnerPollVoteHistory<TData = Awaited<ReturnType<typeof get
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetOwnerPollVoteHistoryQueryOptions(id,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * @summary List current voter usernames for one poll option
+ */
+export const getOwnerPollOptionVoters = (
+    id: string,
+    optionIndex: number,
+ options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
+) => {
+
+
+      return customInstance<PollOptionVotersResponseDto>(
+      {url: `/v1/polls/${id}/options/${optionIndex}/voters`, method: 'GET', ...(signal ? { signal }: {})
+    },
+      options);
+    }
+
+
+
+
+export const getGetOwnerPollOptionVotersQueryKey = (id?: string,
+    optionIndex?: number,) => {
+    return [
+    `/v1/polls/${id}/options/${optionIndex}/voters`
+    ] as const;
+    }
+
+
+export const getGetOwnerPollOptionVotersQueryOptions = <TData = Awaited<ReturnType<typeof getOwnerPollOptionVoters>>, TError = unknown>(id: string,
+    optionIndex: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerPollOptionVoters>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOwnerPollOptionVotersQueryKey(id,optionIndex);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOwnerPollOptionVoters>>> = ({ signal }) => getOwnerPollOptionVoters(id,optionIndex, requestOptions, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id && optionIndex),  retry: false,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOwnerPollOptionVoters>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetOwnerPollOptionVotersQueryResult = NonNullable<Awaited<ReturnType<typeof getOwnerPollOptionVoters>>>
+export type GetOwnerPollOptionVotersQueryError = unknown
+
+
+export function useGetOwnerPollOptionVoters<TData = Awaited<ReturnType<typeof getOwnerPollOptionVoters>>, TError = unknown>(
+ id: string,
+    optionIndex: number, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerPollOptionVoters>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getOwnerPollOptionVoters>>,
+          TError,
+          Awaited<ReturnType<typeof getOwnerPollOptionVoters>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetOwnerPollOptionVoters<TData = Awaited<ReturnType<typeof getOwnerPollOptionVoters>>, TError = unknown>(
+ id: string,
+    optionIndex: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerPollOptionVoters>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getOwnerPollOptionVoters>>,
+          TError,
+          Awaited<ReturnType<typeof getOwnerPollOptionVoters>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetOwnerPollOptionVoters<TData = Awaited<ReturnType<typeof getOwnerPollOptionVoters>>, TError = unknown>(
+ id: string,
+    optionIndex: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerPollOptionVoters>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List current voter usernames for one poll option
+ */
+
+export function useGetOwnerPollOptionVoters<TData = Awaited<ReturnType<typeof getOwnerPollOptionVoters>>, TError = unknown>(
+ id: string,
+    optionIndex: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerPollOptionVoters>>, TError, TData>>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetOwnerPollOptionVotersQueryOptions(id,optionIndex,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

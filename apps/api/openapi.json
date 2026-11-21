@@ -502,6 +502,51 @@
         ]
       }
     },
+    "/v1/polls/{id}/options/{optionIndex}/voters": {
+      "get": {
+        "operationId": "getOwnerPollOptionVoters",
+        "parameters": [
+          {
+            "name": "optionIndex",
+            "required": true,
+            "in": "path",
+            "description": "Zero-based option index",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PollOptionVotersResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "telegramMiniApp": []
+          }
+        ],
+        "summary": "List current voter usernames for one poll option",
+        "tags": [
+          "polls"
+        ]
+      }
+    },
     "/v1/polls/{id}/notification-settings": {
       "patch": {
         "operationId": "updateOwnerPollNotificationSettings",
@@ -1422,6 +1467,30 @@
           "events",
           "nextCursor",
           "timezone"
+        ]
+      },
+      "PollOptionVotersResponseDto": {
+        "type": "object",
+        "properties": {
+          "usernames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "withoutUsernameCount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "unidentifiedVoteCount": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "usernames",
+          "withoutUsernameCount",
+          "unidentifiedVoteCount"
         ]
       },
       "PollOptionCreateDto": {

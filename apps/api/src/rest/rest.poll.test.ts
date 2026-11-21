@@ -80,6 +80,7 @@ describe("native poll owner boundary", () => {
     for (const operation of [
       () => service.listPolls(200n, { archived: true }),
       () => service.listPollVoteHistory(200n, 1n, {}),
+      () => service.getPollOptionVoters(200n, 1n, 0),
       () => service.deleteArchivedPoll(200n, "test-key", 1n),
     ]) {
       try {
@@ -90,6 +91,48 @@ describe("native poll owner boundary", () => {
         expect((error as HttpException).getStatus()).toBe(403);
       }
     }
+  });
+});
+
+describe("native poll option voters", () => {
+  const poll = {
+    telegramChatId: -100n,
+    isAnonymous: false,
+    archivedAt: null,
+    publicationState: "published",
+    options: [{ voterCount: 0 }, { voterCount: 5 }],
+  };
+
+  it("returns mentionable usernames and reports votes that cannot be mentioned", async () => {
+    const listOptionVoterUsernames = vi.fn().mockResolvedValue(["anna_one", null, "Max_two", "max_two"]);
+    vi.mocked(TelegramPollsRepository).mockImplementation(() => ({
+      getById: vi.fn().mockResolvedValue(poll),
+      listOptionVoterUsernames,
+    }) as never);
+
+    await expect(createPollOwnerService().getPollOptionVoters(100n, 1n, 1)).resolves.toEqual({
+      usernames: ["anna_one", "max_two"],
+      withoutUsernameCount: 1,
+      unidentifiedVoteCount: 1,
+    });
+    expect(listOptionVoterUsernames).toHaveBeenCalledWith(1n, 1);
+  });
+
+  it("rejects requests for another group, archived or anonymous polls, and invalid options", async () => {
+    const getById = vi.fn()
+      .mockResolvedValueOnce({ ...poll, telegramChatId: -101n })
+      .mockResolvedValueOnce({ ...poll, archivedAt: new Date() })
+      .mockResolvedValueOnce({ ...poll, isAnonymous: true })
+      .mockResolvedValue(poll);
+    const listOptionVoterUsernames = vi.fn();
+    vi.mocked(TelegramPollsRepository).mockImplementation(() => ({ getById, listOptionVoterUsernames }) as never);
+    const service = createPollOwnerService();
+
+    await expect(service.getPollOptionVoters(100n, 1n, 0)).rejects.toMatchObject({ status: 404 });
+    await expect(service.getPollOptionVoters(100n, 1n, 0)).rejects.toMatchObject({ status: 409 });
+    await expect(service.getPollOptionVoters(100n, 1n, 0)).rejects.toMatchObject({ status: 409 });
+    await expect(service.getPollOptionVoters(100n, 1n, 2)).rejects.toMatchObject({ status: 400 });
+    expect(listOptionVoterUsernames).not.toHaveBeenCalled();
   });
 });
 

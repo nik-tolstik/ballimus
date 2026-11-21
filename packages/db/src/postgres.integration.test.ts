@@ -411,6 +411,8 @@ describe("information-card PostgreSQL schema", () => {
     expect((await applyAnswer(99n, [])).triggers).toEqual([]);
     expect(await polls.getVoterAnswer(poll.id, "user", 800_001n)).toBeUndefined();
     expect((await applyAnswer(100n, [0])).triggers).toEqual([]);
+    expect(await polls.listOptionVoterUsernames(poll.id, 0)).toEqual(["player_one"]);
+    expect(await polls.listOptionVoterUsernames(poll.id, 1)).toEqual([]);
     expect((await applyAnswer(101n, [1])).triggers).toEqual([{
       optionIndex: 0,
       optionText: "Буду",
@@ -421,9 +423,13 @@ describe("information-card PostgreSQL schema", () => {
       voterKind: "user",
       telegramVoterId: 800_001n,
     }]);
+    expect(await polls.listOptionVoterUsernames(poll.id, 0)).toEqual([]);
+    expect(await polls.listOptionVoterUsernames(poll.id, 1)).toEqual(["player_one"]);
     expect((await applyAnswer(102n, [])).triggers).toEqual([]);
     expect((await applyAnswer(102n, [])).triggers).toEqual([]);
     expect((await applyAnswer(98n, [0])).triggers).toEqual([]);
+    expect(await polls.listOptionVoterUsernames(poll.id, 0)).toEqual([]);
+    expect(await polls.listOptionVoterUsernames(poll.id, 1)).toEqual([]);
 
     expect(await polls.listVoteHistory(poll.id, { limit: 10 })).toMatchObject([
       { kind: "cancelled", previousSelectedOptionIndexes: [1], selectedOptionIndexes: [], telegramUpdateId: 102n },
@@ -441,6 +447,43 @@ describe("information-card PostgreSQL schema", () => {
     const retainedEvents = await database.db.select().from(telegramPollVoteEvents)
       .where(eq(telegramPollVoteEvents.pollId, poll.id));
     expect(retainedEvents).toEqual([]);
+  });
+
+  it("selects only individual voters for a specific option in a specific poll", async () => {
+    const polls = new TelegramPollsRepository(database.db);
+    const poll = await polls.create({
+      telegramChatId: CHAT_ID,
+      telegramTopicId: 2n,
+      question: "Когда удобно?",
+      options: ["Утро", "День", "Вечер"].map((text) => ({ text, notificationEnabled: false })),
+      isAnonymous: false,
+      allowsMultipleAnswers: true,
+      allowsRevoting: true,
+      creatorTelegramUserId: OWNER_ID,
+    });
+    const published = await polls.markPublished(poll.id, "telegram-option-voters", 206n, [
+      { text: "Утро", voterCount: 0 },
+      { text: "День", voterCount: 0 },
+      { text: "Вечер", voterCount: 0 },
+    ]);
+
+    await polls.applyTelegramVoterAnswer(published, {
+      telegramUpdateId: 110n, voterKind: "user", telegramVoterId: 800_001n,
+      displayName: "Named player", username: "player_one", selectedOptionIndexes: [0, 2],
+    });
+    await polls.applyTelegramVoterAnswer(published, {
+      telegramUpdateId: 111n, voterKind: "user", telegramVoterId: 800_002n,
+      displayName: "Player without username", selectedOptionIndexes: [2],
+    });
+    await polls.applyTelegramVoterAnswer(published, {
+      telegramUpdateId: 112n, voterKind: "chat", telegramVoterId: -100_800_003n,
+      displayName: "Voting chat", username: "voting_chat", selectedOptionIndexes: [2],
+    });
+
+    expect(await polls.listOptionVoterUsernames(poll.id, 0)).toEqual(["player_one"]);
+    expect(await polls.listOptionVoterUsernames(poll.id, 1)).toEqual([]);
+    expect(await polls.listOptionVoterUsernames(poll.id, 2)).toEqual(["player_one", null]);
+    expect(await polls.listOptionVoterUsernames(poll.id + 1n, 2)).toEqual([]);
   });
 
   it("emits a withdrawal alert on each distinct downward threshold crossing", async () => {

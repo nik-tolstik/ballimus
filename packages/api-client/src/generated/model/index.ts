@@ -35,6 +35,7 @@ export * from './pollNotificationOptionUpdateDto.js';
 export * from './pollNotificationSettingsUpdateDto.js';
 export * from './pollOptionCreateDto.js';
 export * from './pollOptionResponseDto.js';
+export * from './pollOptionVotersResponseDto.js';
 export * from './pollResponseDto.js';
 export * from './pollResponseDtoPublicationState.js';
 export * from './pollVoteHistoryEventResponseDto.js';

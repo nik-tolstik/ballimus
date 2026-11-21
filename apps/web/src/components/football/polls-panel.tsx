@@ -11,6 +11,7 @@ import { formatVoteHistoryDateTime } from '@/lib/date-format'
 import { cn } from '@/lib/utils'
 import { ConfirmationSheet } from './confirmation-sheet'
 import { PollEditor, type PollEditorValues } from './poll-editor'
+import { PollOptionVoters } from './poll-option-voters'
 
 function publicationLabel(poll: PollResponseDto): string {
   if (poll.publicationState === 'published') return poll.closedAt === null ? 'Активен' : 'Завершён'
@@ -78,9 +79,12 @@ function PollNotificationSettingsEditor({ poll, saving, onSave, onOpenActions, o
           <div className="flex flex-col gap-2 rounded-xl bg-card p-3 shadow-sm">
             {poll.options.map((option, index) => {
               const enabled = notificationEnabled[index] ?? false
-              return <div key={`${poll.id}-${String(index)}`} className="flex min-h-11 items-center gap-3 rounded-lg bg-muted/55 px-3 py-2">
+              return <div key={`${poll.id}-${String(index)}`} className="flex min-h-11 items-center gap-1.5 rounded-lg bg-muted/55 px-3 py-2">
                 <span className="min-w-0 flex-1 break-words">{option.text}</span>
                 <span className="shrink-0 font-semibold tabular-nums" aria-label={`${String(option.voterCount)} голосов`}>{option.voterCount}</span>
+                {poll.publicationState === 'published' && !poll.isAnonymous
+                  ? <PollOptionVoters pollId={poll.id} optionIndex={index} optionText={option.text} />
+                  : null}
                 <Button type="button" variant="ghost" size="icon" className="shrink-0" aria-label={`Оповещение для варианта ${String(index + 1)}`} aria-pressed={enabled} disabled={saving} onClick={() => setNotificationEnabled((current) => current.map((value, optionIndex) => optionIndex === index ? !value : value))}>
                   {enabled ? <Bell className="text-warning" /> : <BellOff className="text-muted-foreground" />}
                 </Button>
