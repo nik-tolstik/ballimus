@@ -41,6 +41,7 @@ import {
   type VenueUpdateDto,
 } from "./rest.dto.js";
 import { restRequestError, toRestHttpException } from "./rest.errors.js";
+import type { PollOptionVotersResponseDto } from "./rest.response.dto.js";
 import { serializeRestObject, type RestJsonValue } from "./rest.serialization.js";
 
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1_000;
@@ -194,6 +195,44 @@ export class OwnerRestService {
         nextCursor: page.length > limit ? events.at(-1)?.id ?? null : null,
         timezone: this.config.groupTimezone,
       });
+    } catch (error) {
+      throw toRestHttpException(error);
+    }
+  }
+
+  public async getPollOptionVoters(
+    ownerTelegramUserId: bigint,
+    pollId: bigint,
+    optionIndex: number,
+  ): Promise<PollOptionVotersResponseDto> {
+    this.assertOwner(ownerTelegramUserId);
+    try {
+      const polls = new TelegramPollsRepository(this.db);
+      const poll = await polls.getById(pollId);
+      this.assertAccessiblePoll(poll);
+      const option = poll.options[optionIndex];
+      if (!Number.isSafeInteger(optionIndex) || option === undefined) {
+        throw restRequestError(400, "POLL_OPTION_INVALID", "Select an existing poll option.");
+      }
+      if (poll.archivedAt !== null || poll.isAnonymous || poll.publicationState !== "published") {
+        throw restRequestError(409, "POLL_VOTERS_UNAVAILABLE", "Voters are available for published non-anonymous polls outside the archive.");
+      }
+
+      const answers = await polls.listOptionVoterUsernames(pollId, optionIndex);
+      const usernames = new Map<string, string>();
+      let withoutUsernameCount = 0;
+      for (const username of answers) {
+        if (username === null || !/^[a-z0-9_]+$/iu.test(username)) {
+          withoutUsernameCount += 1;
+          continue;
+        }
+        usernames.set(username.toLowerCase(), username);
+      }
+      return {
+        usernames: [...usernames.values()].sort((left, right) => left.localeCompare(right, "en")),
+        withoutUsernameCount,
+        unidentifiedVoteCount: Math.max(0, option.voterCount - answers.length),
+      };
     } catch (error) {
       throw toRestHttpException(error);
     }

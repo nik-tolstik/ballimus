@@ -508,6 +508,45 @@ test('repeats an active poll and an archived poll into the creation form', async
   await expect(creationForm.getByLabel('Новый вариант', { exact: true })).toBeVisible()
 })
 
+test('copies the current usernames for the selected poll option as Telegram mentions', async ({ page, context }) => {
+  await mockOwnerApp(page, { existingPoll: true })
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.route(/\/v1\/polls\/1\/options\/[01]\/voters$/, async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path.endsWith('/1/voters')) {
+      await route.fulfill({ json: { usernames: ['player_one', 'player_two'], withoutUsernameCount: 1, unidentifiedVoteCount: 1 } })
+    } else {
+      await route.fulfill({ json: { usernames: [], withoutUsernameCount: 0, unidentifiedVoteCount: 0 } })
+    }
+  })
+  await page.goto('/')
+  await page.getByRole('button', { name: `Открыть опрос ${poll.question}` }).click()
+  await page.getByRole('button', { name: 'Кто выбрал «Не буду»' }).click()
+  const mentions = page.getByRole('dialog', { name: 'Кто выбрал вариант' })
+  await expect(mentions.getByRole('textbox', { name: 'Упоминания' })).toHaveValue('@player_one @player_two')
+  await expect(mentions.getByText('Участники без @username — 1')).toBeVisible()
+  await expect(mentions.getByText('Голоса без данных об участнике — 1')).toBeVisible()
+  await mentions.getByRole('button', { name: 'Скопировать упоминания' }).click()
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('@player_one @player_two')
+
+  await page.evaluate(() => {
+    Object.defineProperty(navigator.clipboard, 'writeText', {
+      value: () => Promise.reject(new DOMException('Clipboard blocked', 'NotAllowedError')),
+    })
+  })
+  await mentions.getByRole('button', { name: 'Скопировать упоминания' }).click()
+  await expect(mentions.getByText('Скопируйте выделенный текст вручную.')).toBeVisible()
+  const selectedText = await mentions.locator('textarea').evaluate((input) =>
+    input.value.slice(input.selectionStart, input.selectionEnd),
+  )
+  expect(selectedText).toBe('@player_one @player_two')
+
+  await mentions.getByRole('button', { name: 'Закрыть' }).click()
+  await page.getByRole('button', { name: 'Кто выбрал «Буду»' }).click()
+  await expect(mentions.getByText('Нет упоминаний для копирования.')).toBeVisible()
+  await expect(mentions.getByRole('button', { name: 'Скопировать упоминания' })).toHaveCount(0)
+})
+
 test('shows paginated vote history for active polls and an empty archive history', async ({ page }) => {
   const mocked = await mockOwnerApp(page, { existingPoll: true })
   await page.goto('/')

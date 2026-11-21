@@ -155,6 +155,17 @@ export class PollVoteHistoryEventResponseDto {
   occurredAt!: string;
 }
 
+export class PollOptionVotersResponseDto {
+  @ApiProperty({ type: [String] })
+  usernames!: string[];
+
+  @ApiProperty({ type: Number, minimum: 0 })
+  withoutUsernameCount!: number;
+
+  @ApiProperty({ type: Number, minimum: 0 })
+  unidentifiedVoteCount!: number;
+}
+
 export class PollVoteHistoryResponseDto {
   @ApiProperty({ type: [PollVoteHistoryEventResponseDto] })
   events!: PollVoteHistoryEventResponseDto[];

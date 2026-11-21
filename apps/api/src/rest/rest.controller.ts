@@ -3,11 +3,13 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Headers,
   HttpCode,
   HttpStatus,
   Inject,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   Query,
@@ -45,6 +47,7 @@ import {
   MatchListResponseDto,
   PollEnvelopeResponseDto,
   PollListResponseDto,
+  PollOptionVotersResponseDto,
   PollVoteHistoryResponseDto,
   VenueEnvelopeResponseDto,
   VenueListResponseDto,
@@ -221,6 +224,20 @@ export class PollsController {
     @Query(new RestQueryPipe(PollVoteHistoryQueryDto)) query: PollVoteHistoryQueryDto,
   ): Promise<Record<string, unknown>> {
     return this.service.listPollVoteHistory(ownerTelegramUserId, pollId, query);
+  }
+
+  @Get(":id/options/:optionIndex/voters")
+  @Header("Cache-Control", "private, no-store")
+  @ApiOperation({ operationId: "getOwnerPollOptionVoters", summary: "List current voter usernames for one poll option" })
+  @ApiParam({ name: "id", type: String })
+  @ApiParam({ name: "optionIndex", type: Number, description: "Zero-based option index" })
+  @ApiOkResponse({ type: PollOptionVotersResponseDto })
+  public getOptionVoters(
+    @CurrentOwnerId() ownerTelegramUserId: bigint,
+    @Param("id", PositiveBigIntPipe) pollId: bigint,
+    @Param("optionIndex", ParseIntPipe) optionIndex: number,
+  ): Promise<PollOptionVotersResponseDto> {
+    return this.service.getPollOptionVoters(ownerTelegramUserId, pollId, optionIndex);
   }
 
   @Post()
